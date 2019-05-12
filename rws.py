@@ -8,10 +8,11 @@ class ReaderWritterSettigns():
     def __init__(self):
         self._Config = configparser.ConfigParser()
         self._sections = self._Config.sections()
+        self._Config.read(sf)
 
     # por ahora no necesitaremos acceder a Config ni sections 
     # desde fuera por eso comento los getters y setters.
-    
+
     # getters y setters:
     # @property
     # def config(self):
@@ -32,5 +33,4 @@ class ReaderWritterSettigns():
 
     # metodos:
     def reader(self, section, option):
-        self._Config.read(sf)
         print(self._Config.get(section, option))
