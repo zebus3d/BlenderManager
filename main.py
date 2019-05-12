@@ -1,5 +1,6 @@
 from rws import ReaderWritterSettigns
 
-# probando el reader de settings:
+# Probando el reader de settings:
 rw = ReaderWritterSettigns()
-rw.reader()
+# voy a leer en la seccion defaults la opcion BuilderServer:
+rw.reader('defaults', 'BuilderServer')
