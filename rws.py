@@ -1,7 +1,7 @@
 import configparser
 
 # Nuestra libreria para leer/escribir en settings.ini
-sf = "settings.ini"
+sf = "options.cfg"
 
 class ReaderWritterSettigns():
     # constructor:
