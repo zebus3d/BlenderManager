@@ -1,6 +1,6 @@
 import configparser
 
-# settings file:
+# Nuestra libreria para leer/escribir en settings.ini
 sf = "settings.ini"
 
 class ReaderWritterSettigns():
