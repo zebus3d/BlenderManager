@@ -4,11 +4,30 @@ import configparser
 sf = "settings.ini"
 
 class ReaderWritterSettigns():
-    def __init__(self, **kwargs):
-        super(ReaderWritterSettigns, self).__init__(**kwargs)
+    # constructor:
+    def __init__(self):
+        self._Config = configparser.ConfigParser()
+        self._sections = self._Config.sections()
 
+    # getters y setters:
+    @property
+    def config(self):
+        return self._Config
+
+    @config.setter
+    def set_config(self, config):
+        self._Config = config
+    
+    @property
+    def sections(self):
+        return self._sections
+
+    @sections.setter
+    def set_sections(self, sections):
+        self._sections = sections
+
+
+    # metodos:
     def reader(self, section, option):
-        Config = configparser.ConfigParser()
-        Config.read(sf)
-        sections = Config.sections() 
-        print(Config.get(section, option))
+        self._Config.read(sf)
+        print(self._Config.get(section, option))
