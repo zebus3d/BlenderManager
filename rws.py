@@ -11,5 +11,4 @@ class ReaderWritterSettigns():
         Config = configparser.ConfigParser()
         Config.read(sf)
         sections = Config.sections() 
-        for section in sections:
-            print(Config.get(section, option))
+        print(Config.get(section, option))
