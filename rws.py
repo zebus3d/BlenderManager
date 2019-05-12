@@ -9,22 +9,25 @@ class ReaderWritterSettigns():
         self._Config = configparser.ConfigParser()
         self._sections = self._Config.sections()
 
-    # getters y setters:
-    @property
-    def config(self):
-        return self._Config
-
-    @config.setter
-    def set_config(self, config):
-        self._Config = config
+    # por ahora no necesitaremos acceder a Config ni sections 
+    # desde fuera por eso comento los getters y setters.
     
-    @property
-    def sections(self):
-        return self._sections
+    # getters y setters:
+    # @property
+    # def config(self):
+    #     return self._Config
 
-    @sections.setter
-    def set_sections(self, sections):
-        self._sections = sections
+    # @config.setter
+    # def set_config(self, config):
+    #     self._Config = config
+    
+    # @property
+    # def sections(self):
+    #     return self._sections
+
+    # @sections.setter
+    # def set_sections(self, sections):
+    #     self._sections = sections
 
 
     # metodos:
