@@ -1,7 +1,7 @@
 import configparser
 
 # Nuestra libreria para leer/escribir las opciones
-sf = "options.cfg"
+sf = "settings.cfg"
 
 class ReaderWritterSettigns():
     # constructor:
