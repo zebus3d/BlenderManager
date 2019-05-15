@@ -1,19 +1,46 @@
 #:kivy 1.10.1
 
+# colores:
+#:import C kivy.utils.get_color_from_hex
+#:set normal_BT_COL C("222222")
+#:set press_BT_COL_BORD C("879D6E")
+#:set BLACK C("000000")
+#:set WHITE C("B9B9B9")
+#:set GREEN C("393c16")
+#:set ORANGE C("e2a226")
+#:set GREY C("444444")
+
+
 <Screen01>:
     BoxLayout:
         Button:
             text: 'Goto Screen 02'
             background_color: (0, 0, 1, .8)
             on_press:
-                # root.manager.transition.direction = 'left'
+                # el transition direction solo funciona si en ScreenManager no especificamos
+                # transition ni siquiera el notransition
+                root.manager.transition.direction = 'left'
                 root.manager.current = 'screen2'
 
 <Screen02>:
+    # # bg:
+    # canvas.before:
+    #     Color:
+    #         rgba: GREY
+    #     Rectangle:
+    #         pos: self.pos
+    #         size: self.size
+
     BoxLayout:
+        padding: "5sp"
+        spacing: "8sp"
         Button:
             text: 'Goto Screen 01'
             background_color: (1, 0, 0, .8)
             on_press:
-                # root.manager.transition.direction = 'right'
+                root.manager.transition.direction = 'right'
                 root.manager.current = 'home'
+        
+        Button:
+            text: 'boton2'
+            background_color: (0, 1, 0, .8)
