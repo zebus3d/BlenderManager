@@ -17,7 +17,7 @@
             text: 'Goto Screen 02'
             background_color: (0, 0, 1, .8)
             on_press:
-                root.manager.transition.direction = 'left'
+                root.manager.transition.direction = 'down'
                 root.manager.current = 'screen2'
 
 <Screen02>:
@@ -36,7 +36,7 @@
             text: 'Goto Screen 01'
             background_color: (1, 0, 0, .8)
             on_press:
-                root.manager.transition.direction = 'right'
+                root.manager.transition.direction = 'up'
                 root.manager.current = 'home'
         
         Button:
