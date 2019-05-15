@@ -1,0 +1,37 @@
+Intente que kivy tuviera acceso a los eventos (para evitar el warning)
+(Pero en realidad esto no lo resuelve, parece que es por el touch en los portatiles):
+sudo usermod -a -G input usuaruio
+
+
+Configuramos un custom task para visual studio code (dentro de la carpeta de tu proyeto .vscode/task.json):
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run my custom python in trerminal",
+            "command": "/usr/bin/python3",
+            "args": [
+                "${workspaceFolder}/main.py",
+                "-m",
+                "console"
+            ],
+            "console": "integratedTerminal",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
+
+De esta manera al presionar ctrl + shift + b se ejecutara el main.py con el module console 
+entonces podremos presional ctrl + e y ver los widgets de nuestra aplicación. 
+
+
+Instalar buildozer en linux mint/ubuntu:
+sudo aptitude install autoconf automake libtool
+pip3 install --upgrade pip
+pip3 install --user Cython
+pip3 install --user buildozer
