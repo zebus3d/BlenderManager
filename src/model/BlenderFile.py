@@ -1,4 +1,3 @@
-
 class BlenderFile:
 
     def __init__(self, name):
