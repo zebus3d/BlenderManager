@@ -6,7 +6,7 @@
 sudo apt-get remove --purge python3-kivy
 sudo pip3 uninstall cython kivy
 sudo apt autoremove
-sudo apt-get install python3.7 build-essential
+sudo apt-get install python3.7 build-essential python3-pip
 
 pip install --upgrade pip --user
 pip3 install Cython==0.28.6 --user
