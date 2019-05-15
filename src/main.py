@@ -8,7 +8,7 @@ from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTransition, SlideTransition
 # from kivy.core.window import Window
 
-Builder.load_file('gui.kv')
+Builder.load_file('views/gui.kv')
 
 # Declare both screens
 class Screen01(Screen):
