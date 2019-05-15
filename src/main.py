@@ -1,12 +1,7 @@
-# Config.set Debe utilizarse antes de importar cualquier otro módulo Kivy
-from kivy.config import Config
-Config.set('graphics', 'width', '600')
-Config.set('graphics', 'height', '400')
-
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTransition, SlideTransition
-# from kivy.core.window import Window
+from kivy.core.window import Window
 
 Builder.load_file('views/gui.kv')
 
@@ -40,5 +35,5 @@ class TestApp(App):
 
 if __name__ == '__main__':
     app = TestApp()
-    # Window.size = (1080/4, 1920/4)
+    Window.size = (600, 400)
     app.run()
