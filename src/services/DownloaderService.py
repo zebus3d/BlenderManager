@@ -16,14 +16,15 @@ class DownloaderService:
         html_page = urlopen(url)
         soup = BeautifulSoup(html_page)
         for link in soup.findAll('a'):
+            
+            print(link)
+            # blendName = link.get('href')[:-1]
 
-            blendName = link.get('href')[:-1]
+        #     if str.startswith(blendName, 'Blender'):
+        #         bf = BlenderFile(blendName)
+        #         bf.version = blendName[7:11]
+        #         tmpResult.append(bf)
 
-            if str.startswith(blendName, 'Blender'):
-                bf = BlenderFile(blendName)
-                bf.version = blendName[7:11]
-                tmpResult.append(bf)
+        # for item in tmpResult:
 
-        for item in tmpResult:
-
-            print(str(item.name) + "  " + str(item.version) + " " + str(item.builds))
+        #     print(str(item.name) + "  " + str(item.version) + " " + str(item.builds))
