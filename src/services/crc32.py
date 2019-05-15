@@ -8,5 +8,5 @@ def crc32_checker(fileName):
     return "%X"%(prev & 0xFFFFFFFF)
 
 
-crc = crc32_checker('settings.cfg')
+crc = crc32_checker('../data/settings.cfg')
 print(crc)
