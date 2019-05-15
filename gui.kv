@@ -17,8 +17,6 @@
             text: 'Goto Screen 02'
             background_color: (0, 0, 1, .8)
             on_press:
-                # el transition direction solo funciona si en ScreenManager no especificamos
-                # transition ni siquiera el notransition
                 root.manager.transition.direction = 'left'
                 root.manager.current = 'screen2'
 

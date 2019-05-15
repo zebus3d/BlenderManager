@@ -5,7 +5,7 @@ Config.set('graphics', 'height', '400')
 
 from kivy.app import App
 from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTransition
+from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTransition, SlideTransition
 # from kivy.core.window import Window
 
 Builder.load_file('gui.kv')
@@ -29,6 +29,8 @@ class Screen02(Screen):
 sm = ScreenManager()
 # sm = ScreenManager(transition=NoTransition())
 # sm = ScreenManager(transition=FadeTransition())
+sm = ScreenManager(transition=SlideTransition())
+
 sm.add_widget(Screen01(name='home'))
 sm.add_widget(Screen02(name='screen2'))
 
