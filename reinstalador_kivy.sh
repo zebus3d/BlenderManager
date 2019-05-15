@@ -9,5 +9,5 @@ sudo apt autoremove
 sudo apt-get install python3.7 build-essential
 
 pip install --upgrade pip --user
-pip3 install Cython==0.28.6
-pip3 install kivy==1.10.1
+pip3 install Cython==0.28.6 --user
+pip3 install kivy==1.10.1 --user
