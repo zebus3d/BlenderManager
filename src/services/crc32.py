@@ -11,6 +11,6 @@ def crc32_checker(fileName):
         print("No se encontro el archivo: " + str(fileName))
 
 
-crc = crc32_checker('../../data/settings.cfg')
+crc = crc32_checker('data/settings.cfg')
 if crc:
     print(crc)
