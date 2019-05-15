@@ -8,5 +8,6 @@ sudo pip3 uninstall cython kivy
 sudo apt autoremove
 sudo apt-get install python3.7 build-essential
 
-sudo pip3 install Cython==0.28.6
-sudo pip3 install kivy==1.10.1
+pip install --upgrade pip --user
+pip3 install Cython==0.28.6
+pip3 install kivy==1.10.1
