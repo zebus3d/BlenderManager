@@ -3,6 +3,7 @@ from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTransition, SlideTransition
 from kivy.core.window import Window
 
+
 Builder.load_file('views/gui.kv')
 
 # Declare both screens
@@ -30,6 +31,7 @@ sm.add_widget(Screen01(name='home'))
 sm.add_widget(Screen02(name='screen2'))
 
 class TestApp(App):
+
     def build(self):
         return sm
 
