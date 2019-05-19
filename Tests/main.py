@@ -8,6 +8,7 @@ from kivy.lang import Builder
 
 Builder.load_file('test_ui.kv')
 
+# test
 
 class CustomDropDown(DropDown):
     pass
@@ -15,10 +16,10 @@ class CustomDropDown(DropDown):
 class MainApp(App):
     def build(self):
         
-        # dropdown = CustomDropDown()
+        # self.dropdown = CustomDropDown()
         # mainbutton = Button(text='Hello', size_hint=(None, None))
-        # mainbutton.bind(on_release=dropdown.open)
-        # dropdown.bind(on_select=lambda instance, x: setattr(mainbutton, 'text', x))
+        # mainbutton.bind(on_release=self.dropdown.open)
+        # self.dropdown.bind(on_select=lambda instance, x: setattr(mainbutton, 'text', x))
         
         self.dropdown = DropDown()
 
@@ -28,7 +29,7 @@ class MainApp(App):
             self.dropdown.add_widget(btn)
 
         # create a big main button
-        mainbutton = Button(text='Hello', size_hint=('1dp', None), pos=(0, 470), height=30)
+        mainbutton = Button(text='Hello', size_hint=('1dp', None), pos=(0, 30), height=30)
         mainbutton.bind(on_release=self.dropdown.open)
         self.dropdown.bind(on_select=lambda instance, x: setattr(mainbutton, 'text', x))
 
