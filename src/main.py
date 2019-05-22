@@ -30,7 +30,7 @@ sm = ScreenManager(transition=NoTransition())
 s01 = Screen01(name='home')
 cdd = CustomDropDown()
 
-mainbutton = Button(text='Hello', size_hint=(None, None))
+mainbutton = Button(text='Hello', size_hint_y=None, height=30)
 mainbutton.bind(on_release=cdd.open)
 cdd.bind(on_select=lambda instance, x: setattr(mainbutton, 'text', x))
 
