@@ -15,9 +15,9 @@ class Screen02(Screen):
 
 # Create the screen manager
 sm = ScreenManager()
-# sm = ScreenManager(transition=NoTransition())
+sm = ScreenManager(transition=NoTransition())
 # sm = ScreenManager(transition=FadeTransition())
-sm = ScreenManager(transition=SlideTransition())
+# sm = ScreenManager(transition=SlideTransition())
 
 # agregamos al screen manager los screens:
 sm.add_widget(Screen01(name='home'))
