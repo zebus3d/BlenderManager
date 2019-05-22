@@ -21,6 +21,26 @@
                 root.manager.transition.direction = 'down'
                 root.manager.current = 'screen2'
 
+<CustomDropDown>:
+    # DropDown:
+    #     id: versionDropDown
+    #     on_parent: self.dismiss()
+    #     on_select: btn.text = '{}'.format(args[1])
+    Button:
+        text: 'First Item'
+        size_hint_y: None
+        height: '48dp'
+        on_release: root.select('First Item')
+    Label:
+        text: 'Second Item'
+        size_hint_y: None
+        height: '48dp'
+    Button:
+        text: 'Third Item'
+        size_hint_y: None
+        height: '48dp'
+        on_release: root.select('Third Item')
+
 <Screen02>:
     # # bg:
     # canvas.before:
