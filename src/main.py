@@ -6,7 +6,7 @@ from kivy.core.window import Window
 
 Builder.load_file('views/gui.kv')
 
-# Declare both screens
+# Declare both screens para que las reconozca el gui.kv
 class Screen01(Screen):
     pass
 
@@ -14,24 +14,16 @@ class Screen02(Screen):
     pass
 
 # Create the screen manager
-# NoTransition - switches screens instantly with no animation
-# SlideTransition - slide the screen in/out, from any direction
-# CardTransition - new screen slides on the previous or the old one slides off the new one depending on the mode
-# SwapTransition - implementation of the iOS swap transition
-# FadeTransition - shader to fade the screen in/out
-# WipeTransition - shader to wipe the screens from right to left
-# FallOutTransition - shader where the old screen ‘falls’ and becomes transparent, revealing the new one behind it.
-# RiseInTransition - shader where the new screen rises from the screen centre while fading from transparent to opaque.
 sm = ScreenManager()
 # sm = ScreenManager(transition=NoTransition())
 # sm = ScreenManager(transition=FadeTransition())
 sm = ScreenManager(transition=SlideTransition())
 
+# agregamos al screen manager los screens:
 sm.add_widget(Screen01(name='home'))
 sm.add_widget(Screen02(name='screen2'))
 
 class TestApp(App):
-
     def build(self):
         return sm
 
