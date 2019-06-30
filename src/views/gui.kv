@@ -52,12 +52,31 @@
             valign:'middle'
 
         Button:
+            id: "button01"
             text: 'Goto Screen 02'
             background_color: (0, 0, 1, .8)
             on_press:
                 root.manager.transition.direction = 'down'
                 root.manager.current = 'screen2'
 
+<TabbedPanelDemo>:
+    TabbedPanelItem:
+        text: 'first tab'
+        Label:
+            text: 'First tab content area'
+    TabbedPanelItem:
+        text: 'tab2'
+        BoxLayout:
+            Label:
+                text: 'Second tab content area'
+            Button:
+                text: 'Button that does nothing'
+    TabbedPanelItem:
+        text: 'tab3'
+        RstDocument:
+            text:
+                '\\n'.join(("Hello world", "-----------",
+                "You are in the third tab."))
 
 <Screen02>:
     canvas.before:
@@ -80,3 +99,4 @@
         Button:
             text: 'boton2'
             background_color: (0, 1, 0, .8)
+

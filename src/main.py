@@ -1,6 +1,7 @@
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTransition, SlideTransition
+from kivy.uix.tabbedpanel import TabbedPanel
 from kivy.core.window import Window
 import platform
 
@@ -31,6 +32,10 @@ class Screen02(Screen):
     pass
 
 
+class TabbedPanelDemo(TabbedPanel):
+    pass
+
+
 # Create the screen manager
 sm = ScreenManager()
 # sm = ScreenManager(transition=NoTransition())
@@ -38,6 +43,8 @@ sm = ScreenManager()
 sm = ScreenManager(transition=SlideTransition())
 
 s01 = Screen01(name='home')
+# s01.add_widget(TabbedPanelDemo())
+
 s02 = Screen02(name='screen2')
 
 sm.add_widget(s01)
