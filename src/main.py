@@ -7,15 +7,19 @@ from kivy.uix.button import Button
 
 Builder.load_file('views/gui.kv')
 
+
 # Declare both screens para que las reconozca el gui.kv
 class Screen01(Screen):
     pass
 
+
 class Screen02(Screen):
     pass
 
+
 class CustomDropDown(DropDown):
     pass
+
 
 # Create the screen manager
 sm = ScreenManager()
@@ -24,7 +28,6 @@ sm = ScreenManager(transition=NoTransition())
 # sm = ScreenManager(transition=SlideTransition())
 
 # agregamos al screen manager los screens:
-
 
 
 s01 = Screen01(name='home')
@@ -38,9 +41,11 @@ s01.add_widget(mainbutton)
 sm.add_widget(s01)
 sm.add_widget(Screen02(name='screen2'))
 
+
 class TestApp(App):
     def build(self):
         return sm
+
 
 if __name__ == '__main__':
     app = TestApp()
