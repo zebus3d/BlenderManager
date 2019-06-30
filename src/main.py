@@ -9,17 +9,19 @@ Builder.load_file('views/gui.kv')
 
 # Declare both screens para que las reconozca el gui.kv
 class Screen01(Screen):
-    def set_platform_name(self):
-        so_name = platform.system()
-        if so_name == "Linux":
-            so_name = "GNU/Linux"
-        elif so_name == "Darwin":
-            so_name = "Mac"
+    def set_platform_name(self) -> str:
+        os_name = platform.system()
+        if os_name == "Linux":
+            os_name = "GNU/Linux"
+        elif os_name == "Darwin":
+            os_name = "Mac"
+        elif:
+            os_name = "Windows"
         else:
-            so_name = "Windows"
+            print("unsupported system!")
 
-        print("auto detect so: ", so_name)
-        return so_name
+        print("auto detect os: ", os_name)
+        return os_name
 
     def print_current(self, current_value):
         print(current_value)
