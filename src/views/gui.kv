@@ -13,7 +13,8 @@
 
 
 <Screen01>:
-    BoxLayout:
+    GridLayout:
+        rows:2
         Button:
             text: 'Goto Screen 02'
             background_color: (0, 0, 1, .8)
@@ -27,20 +28,20 @@
     #     on_parent: self.dismiss()
     #     on_select: btn.text = '{}'.format(args[1])
     Button:
-        text: 'First Item'
+        text: 'Windows'
         size_hint_y: None
         height: '48dp'
-        on_release: root.select('First Item')
+        on_release: root.select('Windows')
     Button:
-        text: 'Second Item'
+        text: 'Mac'
         size_hint_y: None
         height: '48dp'
-        on_release: root.select('Second Item')
+        on_release: root.select('Mac')
     Button:
-        text: 'Third Item'
+        text: 'Linux'
         size_hint_y: None
         height: '48dp'
-        on_release: root.select('Third Item')
+        on_release: root.select('Linux')
 
 <Screen02>:
     # # bg:
