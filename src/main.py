@@ -4,12 +4,25 @@ from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTran
 from kivy.core.window import Window
 from kivy.uix.dropdown import DropDown
 from kivy.uix.button import Button
+import platform
 
 Builder.load_file('views/gui.kv')
 
 
 # Declare both screens para que las reconozca el gui.kv
 class Screen01(Screen):
+    def set_platform_name(self):
+        so_name = platform.system()
+        if so_name == "Linux":
+            so_name = "GNU/Linux"
+        elif so_name == "Darwin":
+            so_name = "Mac"
+        else:
+            so_name = "Windows"
+
+        print("auto detect so: ", so_name)
+        return so_name
+
     def print_current(self, current_value):
         print(current_value)
 

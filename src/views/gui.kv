@@ -10,6 +10,10 @@
 #:set ORANGE C("e2a226")
 #:set GREY C("444444")
 
+<SpinnerOption>:
+    size_hint: None, None
+    size: 100, 30
+
 <Screen01>:
     GridLayout:
         id: "gl"
@@ -17,8 +21,8 @@
 
         Spinner:
             id: "dropdown"
-            text: "OS"
-            values: "Windows", "Mac", "Linux"
+            text: root.set_platform_name()
+            values: "Windows", "Mac", "GNU/Linux"
             size_hint: (None, None)
             size: (100, 30)
             on_text: root.print_current(self.text)
