@@ -8,24 +8,46 @@
 #:set WHITE C("B9B9B9")
 #:set GREEN C("393c16")
 #:set ORANGE C("e2a226")
-#:set GREY C("444444")
+#:set SPINNERFG C("424242")
+#:set SPINNERBGOP C("212121")
 
 <SpinnerOption>:
     size_hint: None, None
-    size: 100, 30
+    size: 120, 21
+    background_normal: ""
+    background_down: ""
+    background_color: SPINNERBGOP
+    spacing: [0, 0]
+    border: [0, 0, 0, 0]
+    font_size: "10sp"
+    bold: True
 
 <Screen01>:
+    canvas.before:
+        Color:
+            rgb: (66/255.0, 66/255.0, 66/255.0)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
     GridLayout:
         id: "gl"
         rows:2
+        spacing: [5, 5]
+        padding: [5, 5, 5, 5]
 
         Spinner:
             id: "dropdown"
             text: root.set_platform_name()
             values: "Windows", "Mac", "GNU/Linux"
             size_hint: (None, None)
-            size: (100, 30)
+            size: (120, 21)
             on_text: root.print_current(self.text)
+            background_normal: "views/assets/dropdown.png"
+            background_down: "views/assets/dropdown.png"
+            border: [0, 0, 0, 0]
+            font_size: "10sp"
+            bold: True
 
         Button:
             text: 'Goto Screen 02'
@@ -37,13 +59,12 @@
 
 
 <Screen02>:
-    # # bg:
-    # canvas.before:
-    #     Color:
-    #         rgba: GREY
-    #     Rectangle:
-    #         pos: self.pos
-    #         size: self.size
+    canvas.before:
+        Color:
+            rgb: (66/255.0, 66/255.0, 66/255.0)
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
     BoxLayout:
         padding: "5sp"
