@@ -15,7 +15,7 @@ class Screen01(Screen):
             os_name = "GNU/Linux"
         elif os_name == "Darwin":
             os_name = "Mac"
-        elif:
+        elif os_name == "Windows":
             os_name = "Windows"
         else:
             print("unsupported system!")
