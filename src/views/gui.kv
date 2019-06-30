@@ -1,4 +1,4 @@
-#:kivy 1.10.1
+#:kivy 1.11.1
 
 # colores:
 #:import C kivy.utils.get_color_from_hex
@@ -10,11 +10,19 @@
 #:set ORANGE C("e2a226")
 #:set GREY C("444444")
 
-
-
 <Screen01>:
     GridLayout:
+        id: "gl"
         rows:2
+
+        Spinner:
+            id: "dropdown"
+            text: "OS"
+            values: "Windows", "Mac", "Linux"
+            size_hint: (None, None)
+            size: (100, 30)
+            on_text: root.print_current(self.text)
+
         Button:
             text: 'Goto Screen 02'
             background_color: (0, 0, 1, .8)
@@ -22,26 +30,7 @@
                 root.manager.transition.direction = 'down'
                 root.manager.current = 'screen2'
 
-<CustomDropDown>:
-    # DropDown:
-    #     id: versionDropDown
-    #     on_parent: self.dismiss()
-    #     on_select: btn.text = '{}'.format(args[1])
-    Button:
-        text: 'Windows'
-        size_hint_y: None
-        height: '48dp'
-        on_release: root.select('Windows')
-    Button:
-        text: 'Mac'
-        size_hint_y: None
-        height: '48dp'
-        on_release: root.select('Mac')
-    Button:
-        text: 'Linux'
-        size_hint_y: None
-        height: '48dp'
-        on_release: root.select('Linux')
+
 
 <Screen02>:
     # # bg:

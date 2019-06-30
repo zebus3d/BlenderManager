@@ -10,7 +10,8 @@ Builder.load_file('views/gui.kv')
 
 # Declare both screens para que las reconozca el gui.kv
 class Screen01(Screen):
-    pass
+    def print_current(self, current_value):
+        print(current_value)
 
 
 class Screen02(Screen):
@@ -32,12 +33,12 @@ sm = ScreenManager(transition=NoTransition())
 
 s01 = Screen01(name='home')
 
-cdd = CustomDropDown()
-mainbutton = Button(text='SO', size_hint_y=None, size_hint_x=None, pos=(0, 0), height=30, width=200)
-mainbutton.bind(on_release=cdd.open)
-cdd.bind(on_select=lambda instance, x: setattr(mainbutton, 'text', x))
+# cdd = CustomDropDown()
+# mainbutton = Button(text='SO', size_hint_y=None, size_hint_x=None, pos=(0, 0), height=30, width=200)
+# mainbutton.bind(on_release=cdd.open)
+# cdd.bind(on_select=lambda instance, x: setattr(mainbutton, 'text', x))
 
-s01.add_widget(mainbutton)
+# s01.add_widget(mainbutton)
 
 sm.add_widget(s01)
 sm.add_widget(Screen02(name='screen2'))
