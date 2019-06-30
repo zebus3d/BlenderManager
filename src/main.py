@@ -65,4 +65,8 @@ class TestApp(App):
 if __name__ == '__main__':
     app = TestApp()
     Window.size = (600, 400)
+    Window.exit_on_scape = 1
+    # el centro de mi ventana a ojo:
+    Window.top = 200
+    Window.left = 350
     app.run()
