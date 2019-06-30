@@ -2,18 +2,12 @@
 
 # colores:
 #:import C kivy.utils.get_color_from_hex
-#:set normal_BT_COL C("222222")
-#:set press_BT_COL_BORD C("879D6E")
-#:set BLACK C("000000")
-#:set WHITE C("B9B9B9")
-#:set GREEN C("393c16")
-#:set ORANGE C("e2a226")
 #:set SPINNERFG C("424242")
 #:set SPINNERBGOP C("212121")
 
 <SpinnerOption>:
     size_hint: None, None
-    size: 120, 21
+    size: 100, 24
     background_normal: ""
     background_down: ""
     background_color: SPINNERBGOP
@@ -21,6 +15,10 @@
     border: [0, 0, 0, 0]
     font_size: "10sp"
     bold: True
+    # texto alineado a la izquierda:
+    text_size: [80, 0]
+    halign:'left'
+    valign:'middle'
 
 <Screen01>:
     canvas.before:
@@ -41,13 +39,17 @@
             text: root.set_platform_name()
             values: "Windows", "Mac", "GNU/Linux"
             size_hint: (None, None)
-            size: (120, 21)
+            size: (100, 24)
             on_text: root.print_current(self.text)
             background_normal: "views/assets/dropdown.png"
             background_down: "views/assets/dropdown.png"
             border: [0, 0, 0, 0]
             font_size: "10sp"
             bold: True
+            # texto alineado a la izquierda:
+            text_size: [80, 0]
+            halign:'left'
+            valign:'middle'
 
         Button:
             text: 'Goto Screen 02'
@@ -55,7 +57,6 @@
             on_press:
                 root.manager.transition.direction = 'down'
                 root.manager.current = 'screen2'
-
 
 
 <Screen02>:
