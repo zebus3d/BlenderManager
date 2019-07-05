@@ -28,7 +28,7 @@ class Screen01(Screen):
         print(current_value)
 
 
-class Screen02(Screen):
+class PreferencesScreen(Screen):
     pass
 
 
@@ -45,7 +45,7 @@ sm = ScreenManager(transition=SlideTransition())
 s01 = Screen01(name='home')
 # s01.add_widget(TabbedPanelDemo())
 
-s02 = Screen02(name='screen2')
+s02 = PreferencesScreen(name='screen2')
 
 sm.add_widget(s01)
 sm.add_widget(s02)
