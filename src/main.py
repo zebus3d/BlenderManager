@@ -4,12 +4,12 @@ from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTran
 from kivy.uix.tabbedpanel import TabbedPanel
 from kivy.core.window import Window
 import platform
+from kivy.modules import inspector
 
 Builder.load_file('views/gui.kv')
 
 
-# Declare both screens para que las reconozca el gui.kv
-class Screen01(Screen):
+class MainScreen(Screen):
     def set_platform_name(self) -> str:
         os_name = platform.system()
         if os_name == "Linux":
@@ -36,28 +36,34 @@ class TabbedPanelDemo(TabbedPanel):
     pass
 
 
-# Create the screen manager
+# Screen manager
 sm = ScreenManager()
 # sm = ScreenManager(transition=NoTransition())
 # sm = ScreenManager(transition=FadeTransition())
 sm = ScreenManager(transition=SlideTransition())
 
-s01 = Screen01(name='home')
+s01 = MainScreen(name='home')
 # s01.add_widget(TabbedPanelDemo())
 
+# el inspector aun no se bien donde ponerlo para que salga entero:
+inspector.create_inspector(Window, s01)
+
 s02 = PreferencesScreen(name='screen2')
+
 
 sm.add_widget(s01)
 sm.add_widget(s02)
 
 
-class TestApp(App):
+
+class MainApp(App):
     def build(self):
+        self.title = 'Blender Downloader'
         return sm
 
 
 if __name__ == '__main__':
-    app = TestApp()
+    app = MainApp()
     Window.size = (600, 400)
     Window.exit_on_scape = 1
     # posicion de la ventana:
