@@ -4,6 +4,8 @@ from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition, NoTran
 from kivy.uix.tabbedpanel import TabbedPanel
 from kivy.core.window import Window
 import platform
+
+# Para el inspector:
 from kivy.modules import inspector
 
 Builder.load_file('views/gui.kv')
@@ -14,10 +16,10 @@ class MainScreen(Screen):
         os_name = platform.system()
         if os_name == "Linux":
             os_name = "GNU/Linux"
-        elif os_name == "Darwin":
-            os_name = "Mac"
         elif os_name == "Windows":
             os_name = "Windows"
+        elif os_name == "Darwin":
+            os_name = "Mac"
         else:
             print("unsupported system!")
 
@@ -38,15 +40,19 @@ class TabbedPanelDemo(TabbedPanel):
 
 # Screen manager
 sm = ScreenManager()
+# Effectos de transicion:
 # sm = ScreenManager(transition=NoTransition())
 # sm = ScreenManager(transition=FadeTransition())
 sm = ScreenManager(transition=SlideTransition())
 
+# Inspector:
+# Para mostrar el inspector hay que pulsar ctrl + e
+# Si seleccionas un item dale al boton grande (a la izquierda del boton x ) para expandir sus propiedades:
+inspector.create_inspector(Window, sm)
+
+
 s01 = MainScreen(name='home')
 # s01.add_widget(TabbedPanelDemo())
-
-# el inspector aun no se bien donde ponerlo para que salga entero:
-inspector.create_inspector(Window, s01)
 
 s02 = PreferencesScreen(name='screen2')
 
@@ -66,10 +72,10 @@ if __name__ == '__main__':
     app = MainApp()
     Window.size = (600, 400)
     Window.exit_on_scape = 1
-    # posicion de la ventana:
+    # posicion de la ventana ( no consigo centrarla correctamente y pongo valores a manopla):
     Window.top = 200
     Window.left = 350
-    # pongo este color por si usas transiciones que quede bien:
-    # color de background donde no hay screens:
+    # pongo este color por si usas transiciones que queden bien:
+    # el color de background donde no ocupa por completo un screen:
     Window.clearcolor = (66/255.0, 66/255.0, 66/255.0, 1)
     app.run()
