@@ -30,7 +30,7 @@
 
     GridLayout:
         cols: 2
-        rows: 1
+        rows: 2
         spacing: [5, 5]
         padding: [5, 5, 5, 5]
 
@@ -39,6 +39,10 @@
             rows: 1
             spacing: [5, 5]
             padding: [5, 5, 5, 5]
+            # 1.0 es igual a 100%
+            size_hint: (1.0, 0)
+            size_hint_max_y: 35
+
             Spinner:
                 id: "dropdown"
                 text: root.set_platform_name()
@@ -55,6 +59,7 @@
                 text_size: [80, 0]
                 halign:'left'
                 valign:'middle'
+
             Spinner:
                 id: "arch"
                 text: "64"
@@ -71,6 +76,7 @@
                 text_size: [25, 0]
                 halign:'left'
                 valign:'middle'
+
         GridLayout:
             cols: 1
             rows: 1
@@ -79,6 +85,7 @@
             # 1.0 es igual a 100%
             size_hint: (None, 1.0)
             width: 122
+
             Button:
                 id: "button01"
                 text: 'Settings'
@@ -91,27 +98,68 @@
                 bold: True
                 on_press:
                     root.manager.transition.direction = 'down'
-                    root.manager.current = 'screen2'
+                    root.manager.current = 'settings'
+
+        # Tabs:
+        GridLayout:
+            cols: 1
+            rows: 1
+            spacing: [5, 5]
+            padding: [5, 5, 5, 5]
+            # 1.0 es igual a 100%
+            size_hint: (1.0, 1.0)
+            TabbedPanel:
+                do_default_tab: False
+                size_hint: (1, 30)
+                height: 30
+                center_y: 0
+                tab_height: 30
+
+                TabbedPanelItem:
+                    text: 'Tab 01'
+                    font_size: "10sp"
+                    bold: True
+                    size_hint: (None, None)
+                    width: 112
+                    height: 30
+                    top: 28
+                    center_y: 11
+                    background_normal: "views/assets/tabs.png"
+                    background_down: "views/assets/tabs_down.png"
+                    Label:
+                        text: 'First tab content area'
+                TabbedPanelItem:
+                    text: 'Tab 02'
+                    font_size: "10sp"
+                    bold: True
+                    size_hint: (None, None)
+                    width: 112
+                    height: 30
+                    top: 28
+                    center_y: 11
+                    background_normal: "views/assets/tabs.png"
+                    background_down: "views/assets/tabs_down.png"
+                    BoxLayout:
+                        Label:
+                            text: 'Second tab content area'
+                        Button:
+                            text: 'Button that does nothing'
+                TabbedPanelItem:
+                    text: 'Tab 03'
+                    font_size: "10sp"
+                    bold: True
+                    size_hint: (None, None)
+                    width: 112
+                    height: 30
+                    top: 28
+                    center_y: 11
+                    background_normal: "views/assets/tabs.png"
+                    background_down: "views/assets/tabs_down.png"
+                    RstDocument:
+                        text: "this is an example text"
 
 
-<TabbedPanelDemo>:
-    TabbedPanelItem:
-        text: 'first tab'
-        Label:
-            text: 'First tab content area'
-    TabbedPanelItem:
-        text: 'tab2'
-        BoxLayout:
-            Label:
-                text: 'Second tab content area'
-            Button:
-                text: 'Button that does nothing'
-    TabbedPanelItem:
-        text: 'tab3'
-        RstDocument:
-            text:
-                '\\n'.join(("Hello world", "-----------",
-                "You are in the third tab."))
+
 
 
 <PreferencesScreen>:
@@ -130,7 +178,7 @@
             background_color: (1, 0, 0, .8)
             on_press:
                 root.manager.transition.direction = 'up'
-                root.manager.current = 'home'
+                root.manager.current = 'main_screen'
         
         Button:
             text: 'boton2'
