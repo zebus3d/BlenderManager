@@ -22,6 +22,7 @@ class MainScreen(Screen):
             os_name = "Mac"
         else:
             print("unsupported system!")
+            os_name = None
 
         print("auto detect os: ", os_name)
         return os_name
