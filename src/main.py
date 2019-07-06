@@ -12,7 +12,9 @@ Builder.load_file('views/gui.kv')
 
 
 class MainScreen(Screen):
+
     def set_platform_name(self) -> str:
+
         os_name = platform.system()
         if os_name == "Linux":
             os_name = "GNU/Linux"
@@ -38,7 +40,7 @@ class PreferencesScreen(Screen):
     pass
 
 
-class TabbedPanelDemo(TabbedPanel):
+class TabbedPanel(TabbedPanel):
     pass
 
 
@@ -55,10 +57,8 @@ sm = ScreenManager(transition=SlideTransition())
 inspector.create_inspector(Window, sm)
 
 
-s01 = MainScreen(name='home')
-# s01.add_widget(TabbedPanelDemo())
-
-s02 = PreferencesScreen(name='screen2')
+s01 = MainScreen(name='main_screen')
+s02 = PreferencesScreen(name='settings')
 
 
 sm.add_widget(s01)
