@@ -25,7 +25,10 @@ class MainScreen(Screen):
             os_name = None
 
         print("auto detect os: ", os_name)
-        return os_name
+        if os_name:
+            return os_name
+        else:
+            return "current system not supported"
 
     def print_current(self, current_value):
         print(current_value)
