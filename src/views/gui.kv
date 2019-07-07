@@ -104,17 +104,19 @@
         GridLayout:
             cols: 1
             rows: 1
-            spacing: [5, 5]
-            padding: [5, 5, 5, 5]
-            # 1.0 es igual a 100%
             size_hint: (1.0, 1.0)
             TabbedPanel:
                 do_default_tab: False
-                size_hint: (1, 30)
-                height: 30
-                center_y: 0
-                tab_height: 30
-
+                border: [0.0, 0.0, 0.0, 0.0]
+                pos: [0.0, 0.0]
+                tab_height: 28
+                #tab_pos: 'left_top'
+                #tab_pos: 'left_mid'
+                #tab_pos: 'right_top'
+                tab_pos: 'top_left'
+                #tab_pos: 'top_mid'
+                #tab_pos: 'top_right'
+                #tab_pos: 'bottom_mid'
                 TabbedPanelItem:
                     text: 'Tab 01'
                     font_size: "10sp"
@@ -122,8 +124,9 @@
                     size_hint: (None, None)
                     width: 112
                     height: 30
-                    top: 28
-                    center_y: 11
+                    top: 30
+                    border: [0.0, 0.0, 0.0, 0.0]
+                    pos: [100.0, 0]
                     background_normal: "views/assets/tabs.png"
                     background_down: "views/assets/tabs_down.png"
                     Label:
@@ -135,8 +138,9 @@
                     size_hint: (None, None)
                     width: 112
                     height: 30
-                    top: 28
-                    center_y: 11
+                    top: 30
+                    border: [0.0, 0.0, 0.0, 0.0]
+                    pos: [100.0, 0]
                     background_normal: "views/assets/tabs.png"
                     background_down: "views/assets/tabs_down.png"
                     BoxLayout:
@@ -151,8 +155,9 @@
                     size_hint: (None, None)
                     width: 112
                     height: 30
-                    top: 28
-                    center_y: 11
+                    top: 30
+                    border: [0.0, 0.0, 0.0, 0.0]
+                    pos: [100.0, 0]
                     background_normal: "views/assets/tabs.png"
                     background_down: "views/assets/tabs_down.png"
                     RstDocument:
