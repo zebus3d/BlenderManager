@@ -76,9 +76,9 @@ if __name__ == '__main__':
     app = MainApp()
     Window.size = (600, 400)
     Window.exit_on_scape = 1
-    # posicion de la ventana ( no consigo centrarla correctamente y pongo valores a manopla):
-    Window.top = 200
-    Window.left = 350
+    # centrando ventana:
+    Window.top = Window.top+50
+    Window.left = Window.left-600/3.6
     # pongo este color por si usas transiciones que queden bien:
     # el color de background donde no ocupa por completo un screen:
     Window.clearcolor = (66/255.0, 66/255.0, 66/255.0, 1)
