@@ -33,14 +33,14 @@
     GridLayout:
         cols: 1
         rows: 2
-        spacing: [5, 5]
-        padding: [5, 5, 5, 5]
+        spacing: [0, 0]
+        padding: [0, 0, 0, 0]
 
         GridLayout:
             cols: 2
             rows: 1
             size_hint: (1.0, 1.0) # 1.0 es igual a 100%
-            size_hint_max_y: 35
+            size_hint_max_y: 30
             spacing: [5, 5]
             padding: [5, 5, 5, 5]
 
@@ -98,7 +98,7 @@
                 #tab_pos: 'top_mid'
                 #tab_pos: 'top_right'
                 #tab_pos: 'bottom_mid'
-                size_hint_max_x: root.width-142
+                size_hint_max_x: root.width-136
 
                 TabbedPanelItem:
                     text: 'Installed'
