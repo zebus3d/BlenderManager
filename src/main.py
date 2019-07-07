@@ -4,11 +4,18 @@ from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition  # , F
 from kivy.uix.tabbedpanel import TabbedPanel
 from kivy.core.window import Window
 import platform
+import os, sys
 
 # Para el inspector:
 from kivy.modules import inspector
 
-Builder.load_file('views/gui.kv')
+
+# para que las builds de pyinstaller onefile encuentren los paths dentro del bundle:
+if hasattr(sys, "_MEIPASS"):
+    base_path = sys._MEIPASS
+    os.chdir(base_path)
+
+Builder.load_file(f'views/gui.kv')
 
 
 class MainScreen(Screen):
