@@ -4,3 +4,4 @@ venv/*
 .idea/*
 .vscode/*
 build/*
+dist/*
