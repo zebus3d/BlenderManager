@@ -146,24 +146,10 @@
                         text: 'List of buildbots versions avalidable in remote servers'
             GridLayout:
                 cols: 1
-                rows: 2
+                rows: 3
                 spacing: [5, 5]
                 padding: [5, 5, 5, 5]
                 size_hint: [0.1, 1.0]
-
-                Button:
-                    id: "button_settings"
-                    text: 'Settings'
-                    background_normal: "views/assets/button.png"
-                    background_down: "views/assets/button_down.png"
-                    size_hint: (None, None)
-                    width: 112
-                    height: 24
-                    font_size: "10sp"
-                    bold: True
-                    on_press:
-                        root.manager.transition.direction = 'down'
-                        root.manager.current = 'settings'
 
                 Button:
                     id: "button_download"
@@ -172,9 +158,34 @@
                     background_down: "views/assets/button_down.png"
                     size_hint: (None, None)
                     width: 112
-                    height: 24
+                    height: 28
                     font_size: "10sp"
                     bold: True
+
+                Button:
+                    id: "button_launch"
+                    text: 'Launch'
+                    background_normal: "views/assets/button.png"
+                    background_down: "views/assets/button_down.png"
+                    size_hint: (None, None)
+                    width: 112
+                    height: 28
+                    font_size: "10sp"
+                    bold: True
+
+                Button:
+                    id: "button_settings"
+                    text: 'Settings'
+                    background_normal: "views/assets/button.png"
+                    background_down: "views/assets/button_down.png"
+                    size_hint: (None, None)
+                    width: 112
+                    height: 28
+                    font_size: "10sp"
+                    bold: True
+                    on_press:
+                        root.manager.transition.direction = 'down'
+                        root.manager.current = 'settings'
 
 
 <PreferencesScreen>:
