@@ -28,8 +28,10 @@
             pos: self.pos
             size: self.size
 
+
+
     GridLayout:
-        cols: 2
+        cols: 1
         rows: 2
         spacing: [5, 5]
         padding: [5, 5, 5, 5]
@@ -37,11 +39,10 @@
         GridLayout:
             cols: 2
             rows: 1
+            size_hint: (1.0, 1.0) # 1.0 es igual a 100%
+            size_hint_max_y: 35
             spacing: [5, 5]
             padding: [5, 5, 5, 5]
-            # 1.0 es igual a 100%
-            size_hint: (1.0, 0)
-            size_hint_max_y: 35
 
             Spinner:
                 id: "dropdown"
@@ -77,14 +78,71 @@
                 halign:'left'
                 valign:'middle'
 
+
+        # Tabs:
         GridLayout:
-            cols: 1
+            cols: 2
             rows: 1
             spacing: [5, 5]
             padding: [5, 5, 5, 5]
-            # 1.0 es igual a 100%
-            size_hint: (None, 1.0)
-            width: 122
+
+            TabbedPanel:
+                do_default_tab: False
+                border: [0.0, 0.0, 0.0, 0.0]
+                pos: [0.0, 0.0]
+                tab_height: 28
+                #tab_pos: 'left_top'
+                #tab_pos: 'left_mid'
+                #tab_pos: 'right_top'
+                tab_pos: 'top_left'
+                #tab_pos: 'top_mid'
+                #tab_pos: 'top_right'
+                #tab_pos: 'bottom_mid'
+
+                TabbedPanelItem:
+                    text: 'Installed'
+                    font_size: "10sp"
+                    bold: True
+                    size_hint: (None, None)
+                    width: 112
+                    height: 30
+                    top: 30
+                    border: [0.0, 0.0, 0.0, 0.0]
+                    pos: [100.0, 0]
+                    background_normal: "views/assets/tabs.png"
+                    background_down: "views/assets/tabs_down.png"
+                    Label:
+                        text: 'List of installed versions'
+
+                TabbedPanelItem:
+                    text: 'Stable'
+                    font_size: "10sp"
+                    bold: True
+                    size_hint: (None, None)
+                    width: 112
+                    height: 30
+                    top: 30
+                    border: [0.0, 0.0, 0.0, 0.0]
+                    pos: [100.0, 0]
+                    background_normal: "views/assets/tabs.png"
+                    background_down: "views/assets/tabs_down.png"
+                    Label:
+                        text: 'List of stable versions avalidable in remote servers'
+
+                TabbedPanelItem:
+                    text: 'BuildBot'
+                    font_size: "10sp"
+                    bold: True
+                    size_hint: (None, None)
+                    width: 112
+                    height: 30
+                    top: 30
+                    border: [0.0, 0.0, 0.0, 0.0]
+                    pos: [100.0, 0]
+                    background_normal: "views/assets/tabs.png"
+                    background_down: "views/assets/tabs_down.png"
+                    Label:
+                        text: 'List of buildbots versions avalidable in remote servers'
 
             Button:
                 id: "button01"
@@ -99,70 +157,6 @@
                 on_press:
                     root.manager.transition.direction = 'down'
                     root.manager.current = 'settings'
-
-        # Tabs:
-        GridLayout:
-            cols: 1
-            rows: 1
-            size_hint: (1.0, 1.0)
-            TabbedPanel:
-                do_default_tab: False
-                border: [0.0, 0.0, 0.0, 0.0]
-                pos: [0.0, 0.0]
-                tab_height: 28
-                #tab_pos: 'left_top'
-                #tab_pos: 'left_mid'
-                #tab_pos: 'right_top'
-                tab_pos: 'top_left'
-                #tab_pos: 'top_mid'
-                #tab_pos: 'top_right'
-                #tab_pos: 'bottom_mid'
-                TabbedPanelItem:
-                    text: 'Tab 01'
-                    font_size: "10sp"
-                    bold: True
-                    size_hint: (None, None)
-                    width: 112
-                    height: 30
-                    top: 30
-                    border: [0.0, 0.0, 0.0, 0.0]
-                    pos: [100.0, 0]
-                    background_normal: "views/assets/tabs.png"
-                    background_down: "views/assets/tabs_down.png"
-                    Label:
-                        text: 'First tab content area'
-                TabbedPanelItem:
-                    text: 'Tab 02'
-                    font_size: "10sp"
-                    bold: True
-                    size_hint: (None, None)
-                    width: 112
-                    height: 30
-                    top: 30
-                    border: [0.0, 0.0, 0.0, 0.0]
-                    pos: [100.0, 0]
-                    background_normal: "views/assets/tabs.png"
-                    background_down: "views/assets/tabs_down.png"
-                    BoxLayout:
-                        Label:
-                            text: 'Second tab content area'
-                        Button:
-                            text: 'Button that does nothing'
-                TabbedPanelItem:
-                    text: 'Tab 03'
-                    font_size: "10sp"
-                    bold: True
-                    size_hint: (None, None)
-                    width: 112
-                    height: 30
-                    top: 30
-                    border: [0.0, 0.0, 0.0, 0.0]
-                    pos: [100.0, 0]
-                    background_normal: "views/assets/tabs.png"
-                    background_down: "views/assets/tabs_down.png"
-                    RstDocument:
-                        text: "this is an example text"
-
 
 
 
