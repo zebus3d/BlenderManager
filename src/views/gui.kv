@@ -98,6 +98,7 @@
                 #tab_pos: 'top_mid'
                 #tab_pos: 'top_right'
                 #tab_pos: 'bottom_mid'
+                size_hint_max_x: root.width-142
 
                 TabbedPanelItem:
                     text: 'Installed'
@@ -143,21 +144,40 @@
                     background_down: "views/assets/tabs_down.png"
                     Label:
                         text: 'List of buildbots versions avalidable in remote servers'
+            GridLayout:
+                cols: 1
+                rows: 2
+                spacing: [5, 5]
+                padding: [5, 5, 5, 5]
+                size_hint: [0.1, 1.0]
 
-            Button:
-                id: "button01"
-                text: 'Settings'
-                background_normal: "views/assets/button.png"
-                background_down: "views/assets/button_down.png"
-                size_hint: (None, None)
-                width: 112
-                height: 24
-                font_size: "10sp"
-                bold: True
-                on_press:
-                    root.manager.transition.direction = 'down'
-                    root.manager.current = 'settings'
+                Button:
+                    id: "button_settings"
+                    text: 'Settings'
+                    background_normal: "views/assets/button.png"
+                    background_down: "views/assets/button_down.png"
+                    size_hint: (None, None)
+                    width: 112
+                    height: 24
+                    font_size: "10sp"
+                    bold: True
+                    on_press:
+                        root.manager.transition.direction = 'down'
+                        root.manager.current = 'settings'
 
+                Button:
+                    id: "button_download"
+                    text: 'Download'
+                    background_normal: "views/assets/button.png"
+                    background_down: "views/assets/button_down.png"
+                    size_hint: (None, None)
+                    width: 112
+                    height: 24
+                    font_size: "10sp"
+                    bold: True
+                    on_press:
+                        root.manager.transition.direction = 'down'
+                        root.manager.current = 'settings'
 
 
 
