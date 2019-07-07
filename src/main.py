@@ -15,7 +15,7 @@ if hasattr(sys, "_MEIPASS"):
     base_path = sys._MEIPASS
     os.chdir(base_path)
 
-Builder.load_file(f'views/gui.kv')
+Builder.load_file('views/gui.kv')
 
 
 class MainScreen(Screen):
