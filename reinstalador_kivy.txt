@@ -1,3 +1,5 @@
+# Esto no es necesario si usas Pycharm y virtualenvs
+
 #!/bin/bash
 
 # Estoy usando Python 3.6.7
