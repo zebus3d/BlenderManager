@@ -12,3 +12,7 @@ pyinstaller --onefile --windowed src/main.py
 
 **Pero si editamos el main.spec usaremos esto:**  
 pyinstaller --onefile --windowed builder_lnx.spec  
+
+
+**Los requisitos minimos para que funciones el binario de linux:**  
+Una distro con glibc 2.25
