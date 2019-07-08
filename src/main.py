@@ -3,8 +3,8 @@ from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition  # , FadeTransition, NoTransition
 from kivy.uix.tabbedpanel import TabbedPanel
 from kivy.core.window import Window
-import platform
 import os, sys
+from services.detect_os import OsDetect
 
 # Para el inspector:
 from kivy.modules import inspector
@@ -17,27 +17,24 @@ if hasattr(sys, "_MEIPASS"):
 
 Builder.load_file('views/gui.kv')
 
+detection = OsDetect()
+detection.detect()
+
 
 class MainScreen(Screen):
-
     def set_platform_name(self) -> str:
-
-        os_name = platform.system()
-        if os_name == "Linux":
-            os_name = "GNU/Linux"
-        elif os_name == "Windows":
-            os_name = "Windows"
-        elif os_name == "Darwin":
-            os_name = "Mac"
-        else:
-            print("unsupported system!")
-            os_name = None
-
-        print("auto detect os: ", os_name)
-        if os_name:
-            return os_name
+        print("auto detect os: ", detection.os)
+        if detection.os:
+            return detection.os
         else:
             return "current system not supported"
+
+    def set_architecture(self) -> str:
+        print("auto detect architecture: ", detection.arch)
+        if detection.arch:
+            return detection.arch
+        else:
+            return "err"
 
     def print_current(self, current_value):
         print(current_value)
