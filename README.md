@@ -14,5 +14,7 @@ pyinstaller --onefile --windowed src/main.py
 pyinstaller --onefile --windowed builder_lnx.spec  
 
 
-**Los requisitos minimos para que funciones el binario de linux:**  
+**Los requisitos mínimos para que funciones el binario de linux:**  
 Una distro con glibc 2.25
+
+**Recomiendo usar Pycharm y virtualenvs, así no es necesario reinstalar kivy con el reinstalador.sh**
