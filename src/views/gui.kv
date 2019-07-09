@@ -99,6 +99,9 @@
                 #tab_pos: 'top_right'
                 #tab_pos: 'bottom_mid'
                 size_hint_max_x: root.width-136
+                # para evitar las esquinas feas en mac:
+                background_image: ""
+                background_color: SPINNERBGOP
 
                 TabbedPanelItem:
                     text: 'Installed'
