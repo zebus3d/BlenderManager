@@ -3,6 +3,7 @@
 # colores:
 #:import C kivy.utils.get_color_from_hex
 #:set SPINNERFG C("424242")
+#:set GREYSPINNER C("2c2c2c")
 #:set SPINNERBGOP C("212121")
 
 <SpinnerOption>:
@@ -101,7 +102,7 @@
                 size_hint_max_x: root.width-136
                 # para evitar las esquinas feas en mac:
                 background_image: ""
-                background_color: SPINNERBGOP
+                background_color: GREYSPINNER
 
                 TabbedPanelItem:
                     text: 'Installed'
