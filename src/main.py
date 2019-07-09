@@ -4,11 +4,7 @@ from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition  # , F
 from kivy.uix.tabbedpanel import TabbedPanel
 from kivy.core.window import Window
 import os, sys
-<<<<<<< HEAD
 from services.detector import OSDetector
-=======
-from services.detector import OsDetect
->>>>>>> 403b5e7226b69d3b40723b14ba532a73f09505a8
 
 # Para el inspector:
 from kivy.modules import inspector
