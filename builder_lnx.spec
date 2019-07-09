@@ -4,7 +4,9 @@ block_cipher = None
 
 added_files = [
          ( 'src/views', 'views' ),
-         ( 'src/model', 'model' )
+         ( 'src/services', 'srvices' ),
+         ( 'src/model', 'model' ),
+         ( 'src/controllers', 'controllers' ),
          ]
 
 a = Analysis(['src/main.py'],
