@@ -1,6 +1,6 @@
 from kivy.app import App
 from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition  # , FadeTransition, NoTransition
+from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition, # , SlideTransition , FadeTransition, 
 from kivy.uix.tabbedpanel import TabbedPanel
 from kivy.core.window import Window
 import os, sys
@@ -51,9 +51,9 @@ class TabbedPanel(TabbedPanel):
 # Screen manager
 sm = ScreenManager()
 # Effectos de transicion:
-# sm = ScreenManager(transition=NoTransition())
+sm = ScreenManager(transition=NoTransition())
 # sm = ScreenManager(transition=FadeTransition())
-sm = ScreenManager(transition=SlideTransition())
+# sm = ScreenManager(transition=SlideTransition())
 
 # Inspector:
 # Para mostrar el inspector hay que pulsar ctrl + e
