@@ -4,7 +4,7 @@ block_cipher = None
 
 added_files = [
          ( 'src/views', 'views' ),
-         ( 'src/services', 'srvices' ),
+         ( 'src/services', 'services' ),
          ( 'src/model', 'model' ),
          ( 'src/controllers', 'controllers' ),
          ]
