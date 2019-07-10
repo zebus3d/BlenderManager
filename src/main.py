@@ -1,6 +1,6 @@
 from kivy.app import App
 from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition, # , SlideTransition , FadeTransition, 
+from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition # , SlideTransition , FadeTransition, 
 from kivy.uix.tabbedpanel import TabbedPanel
 from kivy.core.window import Window
 import os, sys
