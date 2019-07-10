@@ -79,7 +79,6 @@ class MainApp(App):
 if __name__ == '__main__':
     app = MainApp()
     Window.size = (600, 400)
-    Window.exit_on_scape = 0
     # centrando ventana:
     Window.top = Window.top+50
     Window.left = Window.left-600/3.6
