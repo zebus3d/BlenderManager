@@ -11,7 +11,7 @@ NOTA: esto genera un main.spec en mi caso lo copio y renombro a builder_lnx.spec
 pyinstaller --onefile --windowed src/main.py  
 
 **Pero si editamos el main.spec usaremos esto:**  
-pyinstaller --onefile --windowed builder_lnx.spec  
+pyinstaller builder_lnx.spec  
 
 
 **Los requisitos mínimos para que funciones el binario de linux:**  
