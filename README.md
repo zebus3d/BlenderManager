@@ -3,7 +3,7 @@
 **Administra y gestiona tus versioens de blender.**  
 
 **Para instalar pyinstaller:**  
-pip install pypinstaller  
+pip install PyInstaller  
 apt-get install python3-dev  
 
 **La primera vez usamos, esto:**  
