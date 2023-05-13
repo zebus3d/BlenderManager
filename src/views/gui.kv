@@ -44,6 +44,7 @@
             size_hint_x: None # Ahora la propiedad width determina el ancho del widget
             size_hint_y: 1 # La altura se mantiene como una fracción de la altura de su contenedor
             width: 150 # Ancho deseado
+            padding: [1,2,0,1]
 
             Spinner:
                 id: "dropdown"
@@ -51,8 +52,7 @@
                 font_size: font_s
                 values: "Windows", "Mac", "GNU/Linux"
                 size_hint: (None, None)
-                size: (100, 33)
-                border: [4, 0, 0, 0]
+                size: (100, 30)
                 on_text: root.print_current(self.text)
                 background_normal: "views/assets/dropdown.png"
                 background_down: "views/assets/dropdown_down.png"
@@ -63,8 +63,7 @@
                 font_size: font_s
                 values: "64Bit", "32Bit"
                 size_hint: (None, None)
-                size: (50, 33)
-                border: [4, 0, 0, 0]
+                size: (50, 30)
                 on_text: root.print_current(self.text)
                 background_normal: "views/assets/dropdown_small.png"
                 background_down: "views/assets/dropdown_down_small.png"
@@ -76,6 +75,7 @@
             width: 355 # Ancho deseado
             size_hint_x: None # Desactiva la redimensión automática para el eje x
             size_hint_y: 1 # Permite la redimensión automática para el eje y
+            padding: [2, 0, 0, 0]
             
             TabbedPanel:
                 id: tab_panel
@@ -85,8 +85,7 @@
                 tab_height: 30
                 size: (350, root.height-4)
                 background_image: ""
-                background_color: [0,0,0,0]
-
+                background_color: [0, 0, 0, 0]
 
                 TabbedPanelItem:
                     text: 'Installed'
@@ -105,7 +104,6 @@
                                 rgba: GREYSPINNER
                             Rectangle:
                                 pos: 1, self.y - 307
-                                # size: self.size
                                 size: (500, 410)
 
                 TabbedPanelItem:
@@ -120,6 +118,12 @@
                         text: 'List of stable versions avalidable in remote servers'
                         size_hint: (None, None)
                         padding: [2, 2, 2, 2]
+                        canvas.before:
+                            Color:
+                                rgba: GREYSPINNER
+                            Rectangle:
+                                pos: 1, self.y - 307
+                                size: (500, 410)
 
                 
                 TabbedPanelItem:
@@ -134,6 +138,12 @@
                         text: 'List of buildbots versions avalidable in remote servers'
                         size_hint: (None, None)
                         padding: [2, 2, 2, 2]
+                        canvas.before:
+                            Color:
+                                rgba: GREYSPINNER
+                            Rectangle:
+                                pos: 1, self.y - 307
+                                size: (500, 410)
 
         
 
