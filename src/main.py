@@ -54,12 +54,13 @@ class MainApp(App):
         # Lee las configuraciones desde el archivo ini
         config = configparser.ConfigParser()
         config.read(initial_conf_path)
-        self.title = config['app']['title']
-        Window.size = (int(config['app']['width']), int(config['app']['height']))
-        Window.clearcolor = [float(c)/255.0 for c in config['app']['background_color'].split(",")]
+        cnf = config['app']
+        self.title = cnf['title']
+        Window.size = (int(cnf['width']), int(cnf['height']))
+        Window.clearcolor = [float(c)/255.0 for c in cnf['background_color'].split(",")]
 
-        Window.minimum_width = 574
-        Window.minimum_height = 250
+        Window.minimum_width = cnf['minimum_width']
+        Window.minimum_height = cnf['minimum_height']
 
         # Centra la ventana
         if self.root_window:
