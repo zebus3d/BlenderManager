@@ -30,7 +30,6 @@
             size: self.size
 
 
-
     GridLayout:
         cols: 1
         rows: 2
@@ -133,7 +132,7 @@
                     background_down: "views/assets/tabs_down.png"
                     Label:
                         text: 'List of stable versions avalidable in remote servers'
-
+                
                 TabbedPanelItem:
                     text: 'BuildBot'
                     font_size: "12sp"
@@ -148,48 +147,59 @@
                     background_down: "views/assets/tabs_down.png"
                     Label:
                         text: 'List of buildbots versions avalidable in remote servers'
+        
+
+            # offset y side bar
             GridLayout:
-                cols: 1
-                rows: 3
-                spacing: [5, 5]
-                padding: [5, 5, 5, 5]
+                cols: 0
+                rows: 1
+                spacing: [0, 5]
+                padding: [0, 28, 0, 28]
                 size_hint: [0.1, 1.0]
 
-                Button:
-                    id: "button_download"
-                    text: 'Download'
-                    background_normal: "views/assets/button.png"
-                    background_down: "views/assets/button_down.png"
-                    size_hint: (None, None)
-                    width: 112
-                    height: 28
-                    font_size: "10sp"
-                    bold: True
+                # side bar
+                GridLayout:
+                    cols: 1
+                    rows: 3
+                    spacing: [0, 5]
+                    padding: [5, 5, 5, 0]
+                    size_hint: [0.1, 1.0]
 
-                Button:
-                    id: "button_launch"
-                    text: 'Launch'
-                    background_normal: "views/assets/button.png"
-                    background_down: "views/assets/button_down.png"
-                    size_hint: (None, None)
-                    width: 112
-                    height: 28
-                    font_size: "10sp"
-                    bold: True
+                    Button:
+                        id: "button_download"
+                        text: 'Download'
+                        background_normal: "views/assets/button.png"
+                        background_down: "views/assets/button_down.png"
+                        size_hint: (None, None)
+                        width: 112
+                        height: 28
+                        font_size: "10sp"
+                        bold: True
 
-                Button:
-                    id: "button_settings"
-                    text: 'Settings'
-                    background_normal: "views/assets/button.png"
-                    background_down: "views/assets/button_down.png"
-                    size_hint: (None, None)
-                    width: 112
-                    height: 28
-                    font_size: "10sp"
-                    bold: True
-                    on_press:
-                        root.manager.transition.direction = 'down'
-                        root.manager.current = 'settings'
+                    Button:
+                        id: "button_launch"
+                        text: 'Launch'
+                        background_normal: "views/assets/button.png"
+                        background_down: "views/assets/button_down.png"
+                        size_hint: (None, None)
+                        width: 112
+                        height: 28
+                        font_size: "10sp"
+                        bold: True
+
+                    Button:
+                        id: "button_settings"
+                        text: 'Settings'
+                        background_normal: "views/assets/button.png"
+                        background_down: "views/assets/button_down.png"
+                        size_hint: (None, None)
+                        width: 112
+                        height: 28
+                        font_size: "10sp"
+                        bold: True
+                        on_press:
+                            root.manager.transition.direction = 'down'
+                            root.manager.current = 'settings'
 
 
 <PreferencesScreen>:

@@ -7,7 +7,6 @@ added_files = [
          ( 'src/views', 'views' ),
          ( 'src/services', 'services' ),
          ( 'src/model', 'model' ),
-         ( 'src/controllers', 'controllers' ),
          ]
 
 a = Analysis(['src/main.py'],

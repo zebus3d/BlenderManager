@@ -17,8 +17,9 @@ base_path = getattr(sys, "_MEIPASS", None)
 if base_path is not None:
     os.chdir(base_path)
 
-
-initial_conf_path = join("configs", "initial.cfg")
+    initial_conf_path = join("configs", "initial.cfg")
+else:
+    initial_conf_path = join("src", "configs", "initial.cfg")
 
 
 class PreferencesScreen(Screen):
@@ -28,7 +29,7 @@ class MyTabbedPanel(TabbedPanel):
     pass
 
 # Carga el archivo KV
-Builder.load_file('views/gui.kv')
+Builder.load_file(join("views", "gui.kv"))
 
 # Detecta el sistema operativo y la arquitectura
 sysi = detect()
