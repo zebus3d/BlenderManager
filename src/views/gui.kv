@@ -6,6 +6,8 @@
 #:set GREYSPINNER C("2c2c2c")
 #:set SPINNERBGOP C("212121")
 
+#:set font_s "14sp"
+
 <SpinnerOption>:
     size_hint: None, None
     size: 100, 24
@@ -14,8 +16,8 @@
     background_color: SPINNERBGOP
     spacing: [0, 0]
     border: [0, 0, 0, 0]
-    font_size: "10sp"
-    bold: True
+    font_size: font_s
+    # bold: True
     # texto alineado a la izquierda:
     text_size: [80, 0]
     halign:'left'
@@ -54,8 +56,8 @@
                 background_normal: "views/assets/dropdown.png"
                 background_down: "views/assets/dropdown_down.png"
                 # border: [0, 0, 0, 0]
-                font_size: "13sp"
-                bold: True
+                font_size: font_s
+                # bold: True
                 # texto alineado a la izquierda:
                 # text_size: [50, 50]
                 halign:'left'
@@ -71,8 +73,8 @@
                 background_normal: "views/assets/dropdown_small.png"
                 background_down: "views/assets/dropdown_down_small.png"
                 # border: [0, 0, 0, 0]
-                font_size: "13sp"
-                bold: True
+                font_size: font_s
+                # bold: True
                 # texto alineado a la izquierda:
                 # text_size: [50, 50]
                 halign:'left'
@@ -106,8 +108,8 @@
 
                 TabbedPanelItem:
                     text: 'Installed'
-                    font_size: "12sp"
-                    bold: True
+                    font_size: font_s
+                    # bold: True
                     size_hint: (None, None)
                     width: 112
                     height: 30
@@ -121,8 +123,8 @@
 
                 TabbedPanelItem:
                     text: 'Stable'
-                    font_size: "12sp"
-                    bold: True
+                    font_size: font_s
+                    # bold: True
                     size_hint: (None, None)
                     width: 112
                     height: 30
@@ -136,8 +138,8 @@
                 
                 TabbedPanelItem:
                     text: 'BuildBot'
-                    font_size: "12sp"
-                    bold: True
+                    font_size: font_s
+                    # bold: True
                     size_hint: (None, None)
                     width: 112
                     height: 30
@@ -174,8 +176,8 @@
                         size_hint: (None, None)
                         width: 112
                         height: 28
-                        font_size: "10sp"
-                        bold: True
+                        font_size: font_s
+                        # bold: True
 
                     Button:
                         id: "button_launch"
@@ -185,8 +187,8 @@
                         size_hint: (None, None)
                         width: 112
                         height: 28
-                        font_size: "10sp"
-                        bold: True
+                        font_size: font_s
+                        # bold: True
 
                     Button:
                         id: "button_settings"
@@ -196,8 +198,8 @@
                         size_hint: (None, None)
                         width: 112
                         height: 28
-                        font_size: "10sp"
-                        bold: True
+                        font_size: font_s
+                        # bold: True
                         on_press:
                             root.manager.transition.direction = 'down'
                             root.manager.current = 'settings'
