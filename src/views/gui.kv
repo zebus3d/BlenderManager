@@ -73,8 +73,6 @@
         GridLayout:
             cols: 1
             rows: 1
-            # border: [0, 0, 0, 0]
-            
             width: 355 # Ancho deseado
             size_hint_x: None # Desactiva la redimensión automática para el eje x
             size_hint_y: 1 # Permite la redimensión automática para el eje y
@@ -86,11 +84,9 @@
                 tab_pos: 'top_left'
                 tab_height: 30
                 size: (350, root.height-4)
-                # size_hint_max_x: root.width-136
-                # size_hint_max_y: root.height
-                # para evitar las esquinas feas en mac:
                 background_image: ""
-                background_color: GREYSPINNER
+                background_color: [0,0,0,0]
+
 
                 TabbedPanelItem:
                     text: 'Installed'
@@ -101,10 +97,16 @@
                     background_down: "views/assets/tabs_down.png"
                     
                     Label:
-                        width: 112
                         text: 'List of installed versions'
-                        # size: (350, root.height/2)
-                        x: -40
+                        size_hint: (None, None)
+                        padding: [2, 2, 2, 2]
+                        canvas.before:
+                            Color:
+                                rgba: GREYSPINNER
+                            Rectangle:
+                                pos: 1, self.y - 307
+                                # size: self.size
+                                size: (500, 410)
 
                 TabbedPanelItem:
                     text: 'Stable'
@@ -116,7 +118,8 @@
 
                     Label:
                         text: 'List of stable versions avalidable in remote servers'
-                        valign: "middle"
+                        size_hint: (None, None)
+                        padding: [2, 2, 2, 2]
 
                 
                 TabbedPanelItem:
@@ -129,6 +132,9 @@
 
                     Label:
                         text: 'List of buildbots versions avalidable in remote servers'
+                        size_hint: (None, None)
+                        padding: [2, 2, 2, 2]
+
         
 
         # buttons side bar
