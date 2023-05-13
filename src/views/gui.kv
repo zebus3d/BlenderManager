@@ -41,10 +41,21 @@
         GridLayout:
             cols: 2
             rows: 1
+            padding: [1,2,0,1]
+
             size_hint_x: None # Ahora la propiedad width determina el ancho del widget
             size_hint_y: 1 # La altura se mantiene como una fracción de la altura de su contenedor
-            width: 150 # Ancho deseado
-            padding: [1,2,0,1]
+            anchor_x: 'left'
+            anchor_y: 'top'
+            width: (root.width/(622/4))+150  #150
+
+            # canvas.before:
+            #     Color:
+            #         rgb: [0, 1, 0]
+            #     Rectangle:
+            #         pos: self.pos
+            #         size: self.size
+
 
             Spinner:
                 id: "dropdown"
@@ -72,11 +83,24 @@
         GridLayout:
             cols: 1
             rows: 1
-            width: 355 # Ancho deseado
+            padding: [2, 0, 0, 0]
+
             size_hint_x: None # Desactiva la redimensión automática para el eje x
             size_hint_y: 1 # Permite la redimensión automática para el eje y
-            padding: [2, 0, 0, 0]
-            
+            width: root.width-265 # 355 # Ancho deseado
+
+            anchor_x: 'left'
+            anchor_y: 'top'
+
+            # canvas.before:
+            #     Color:
+            #         rgb: [0, 1, 0]
+            #     Rectangle:
+            #         pos: self.pos
+            #         size: self.size
+
+            # background_color: GREYSPINNER
+
             TabbedPanel:
                 id: tab_panel
                 do_default_tab: False
@@ -95,16 +119,23 @@
                     background_normal: "views/assets/tabs.png"
                     background_down: "views/assets/tabs_down.png"
                     
-                    Label:
-                        text: 'List of installed versions'
+                    GridLayout:
+                        cols: 1
+                        rows: 1
                         size_hint: (None, None)
-                        padding: [2, 2, 2, 2]
+
+                        anchor_x: 'left'
+                        anchor_y: 'top'
+
                         canvas.before:
                             Color:
-                                rgba: GREYSPINNER
+                                rgb: GREYSPINNER
                             Rectangle:
-                                pos: 1, self.y - 307
-                                size: (500, 410)
+                                pos: (2, 2)
+                                size: (root.width-self.size[0]-18, root.height-self.size[1]+60)
+                        Label:
+                            text: 'List of installed versions'
+                            size_hint: (None, None)
 
                 TabbedPanelItem:
                     text: 'Stable'
@@ -114,17 +145,23 @@
                     background_normal: "views/assets/tabs.png"
                     background_down: "views/assets/tabs_down.png"
 
-                    Label:
-                        text: 'List of stable versions avalidable in remote servers'
+                    GridLayout:
+                        cols: 1
+                        rows: 1
                         size_hint: (None, None)
-                        padding: [2, 2, 2, 2]
+
+                        anchor_x: 'left'
+                        anchor_y: 'top'
+
                         canvas.before:
                             Color:
-                                rgba: GREYSPINNER
+                                rgb: GREYSPINNER
                             Rectangle:
-                                pos: 1, self.y - 307
-                                size: (500, 410)
-
+                                pos: (2, 2)
+                                size: (root.width-self.size[0]-18, root.height-self.size[1]+60)
+                        Label:
+                            text: 'List of stable versions avalidable in remote servers'
+                            size_hint: (None, None)
                 
                 TabbedPanelItem:
                     text: 'BuildBot'
@@ -134,17 +171,25 @@
                     background_normal: "views/assets/tabs.png"
                     background_down: "views/assets/tabs_down.png"
 
-                    Label:
-                        text: 'List of buildbots versions avalidable in remote servers'
+                    GridLayout:
+                        cols: 1
+                        rows: 1
                         size_hint: (None, None)
-                        padding: [2, 2, 2, 2]
+                        
+                        anchor_x: 'left'
+                        anchor_y: 'top'
+
                         canvas.before:
                             Color:
-                                rgba: GREYSPINNER
+                                rgb: GREYSPINNER
                             Rectangle:
-                                pos: 1, self.y - 307
-                                size: (500, 410)
-
+                                pos: (2, 2)
+                                size: (root.width-self.size[0]-18, root.height-self.size[1]+60)
+                        
+                        Label:
+                            text: 'List of buildbots versions avalidable in remote servers'
+                            size_hint: (None, None)
+ 
         
 
         # buttons side bar
@@ -152,19 +197,44 @@
             cols: 1
             rows: 1
 
-            width: 115
-            height: 84
             size_hint_x: None # Ahora la propiedad width determina el ancho del widget
             size_hint_y: 1 # La altura se mantiene como una fracción de la altura de su contenedor
-            padding: [0, 38, 0, 0]
+
+            padding: [-2, 38, 0, 0]
+
+            width: 116 # 115 # Ancho deseado
+            height: 84
+
+            anchor_x: 'left'
+            anchor_y: 'top'
+
+            # canvas.before:
+            #     Color:
+            #         rgb: [0, 1, 0]
+            #     Rectangle:
+            #         pos: self.pos
+            #         size: self.size
 
             GridLayout:
                 cols: 1
                 rows: 3
 
-                width: 115
+                size_hint: (1, None)
+                
+                # width: root.width-115 # 115 # Ancho deseado
                 height: 84
-                size_hint: (None, None)
+
+                anchor_x: 'left'
+                anchor_y: 'top'
+                
+                padding: [2, 2, 2, 2]
+
+                # canvas.before:
+                #     Color:
+                #         rgb: [1, 0, 0]
+                #     Rectangle:
+                #         pos: self.pos 
+                #         size: self.size
                 
                 Button:
                     id: "button_download"
@@ -174,7 +244,7 @@
                     background_down: "views/assets/button_down.png"
                     size_hint: (None, None)
                     width: 112
-                    height: 28
+                    height: 28                    
 
                 Button:
                     id: "button_launch"
