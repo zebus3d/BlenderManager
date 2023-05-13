@@ -57,7 +57,10 @@ class MainApp(App):
         self.title = config['app']['title']
         Window.size = (int(config['app']['width']), int(config['app']['height']))
         Window.clearcolor = [float(c)/255.0 for c in config['app']['background_color'].split(",")]
-               
+
+        Window.minimum_width = 574
+        Window.minimum_height = 250
+
         # Centra la ventana
         if self.root_window:
             Window.center = self.root_window.get_rect().center
