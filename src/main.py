@@ -1,6 +1,7 @@
 import os
 import sys
 import configparser
+from os.path import join
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition #, NoTransition
@@ -15,6 +16,9 @@ from mainscreen import MainScreen
 base_path = getattr(sys, "_MEIPASS", None)
 if base_path is not None:
     os.chdir(base_path)
+
+
+initial_conf_path = join("configs", "initial.cfg")
 
 
 class PreferencesScreen(Screen):
@@ -48,7 +52,7 @@ class MainApp(App):
 
         # Lee las configuraciones desde el archivo ini
         config = configparser.ConfigParser()
-        config.read('src/config.ini')
+        config.read(initial_conf_path)
         self.title = config['app']['title']
         Window.size = (int(config['app']['width']), int(config['app']['height']))
         Window.clearcolor = [float(c)/255.0 for c in config['app']['background_color'].split(",")]
