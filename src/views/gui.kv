@@ -526,9 +526,9 @@
 
     BoxLayout:
         size_hint_y: None
-        height: dp(64)
-        padding: [dp(16), dp(10), dp(16), dp(6)]
-        spacing: dp(12)
+        height: dp(72)
+        padding: [dp(16), dp(10), dp(16), dp(8)]
+        spacing: dp(14)
         canvas.before:
             Color:
                 rgba: theme.CHROME
@@ -538,7 +538,7 @@
         Image:
             source: "images/app_icon.png"
             size_hint: (None, None)
-            size: dp(40), dp(40)
+            size: dp(52), dp(52)
             pos_hint: {"center_y": .5}
             allow_stretch: True
             keep_ratio: True
