@@ -314,9 +314,11 @@ class RootWidget(BoxLayout):
         # Vista a la que volver al cerrar los ajustes (interruptor).
         self._previous_view = self.view if self.view != "settings" else "store"
         # on_kv_post ya se ejecutó (durante super().__init__) y dejó la pantalla
-        # en "store"; aplicamos ahora la vista inicial correcta.
+        # en "store"; aplicamos ahora la vista inicial correcta SIN animación,
+        # para que al abrir no se vea ningún deslizamiento.
         manager = self.ids.get("view_manager")
         if manager is not None:
+            manager.transition = NoTransition()
             manager.current = self.view
         self._status_event = None
         self._zoom_save_event = None
@@ -339,10 +341,6 @@ class RootWidget(BoxLayout):
         installed_container = self.ids.get("installed_list")
         if installed_container is not None:
             installed_container.bind(width=lambda *_: self._update_installed_cols())
-        # Fijamos la vista inicial (el ScreenManager debe tener ya sus pantallas).
-        manager = self.ids.get("view_manager")
-        if manager is not None:
-            manager.current = self.view if self.view in ("store", "installed", "settings") else "store"
         Clock.schedule_once(lambda dt: self.refresh(force=False), 0.1)
         Clock.schedule_once(lambda dt: self.refresh_installed(), 0.2)
 
