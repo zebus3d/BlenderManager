@@ -5,8 +5,12 @@ venv/
 .idea/
 .vscode/
 build/
-dist/
 *.spec.bak
+
+# Los binarios de dist/ no se versionan, pero sí su documentación.
+dist/*
+!dist/README.md
+!dist/.gitkeep
 
 # Datos locales (modo portable / caché / registros)
 cache/
