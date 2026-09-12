@@ -33,6 +33,7 @@ _TRANSLATIONS = {
         "Launch": "Lanzar",
         "Launching": "Lanzando",
         "Delete": "Borrar",
+        "Uninstall": "Desinstalar",
         "Cancel": "Cancelar",
         "Close": "Cerrar",
         "Save": "Guardar",
