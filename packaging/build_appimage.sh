@@ -22,7 +22,7 @@ mkdir -p "${APPDIR}/usr/bin"
 cp -r "${DIST}/${APP_NAME}/." "${APPDIR}/usr/bin/"
 
 cp "${PACKAGING_DIR}/blendermanager.desktop" "${APPDIR}/blendermanager.desktop"
-cp "${PACKAGING_DIR}/../src/assets/images/blender_logo.png" "${APPDIR}/blendermanager.png"
+cp "${PACKAGING_DIR}/../src/assets/images/app_icon.png" "${APPDIR}/blendermanager.png"
 
 cat > "${APPDIR}/AppRun" <<'EOF'
 #!/bin/sh
