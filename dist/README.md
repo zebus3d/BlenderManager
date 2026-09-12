@@ -1,29 +1,29 @@
-# Carpeta de distribución
+# Distribution folder
 
-Aquí se colocan los paquetes finales listos para el usuario. Los binarios no se
-guardan en el repositorio (están en `.gitignore`); esta carpeta se genera al
-compilar con `packaging/build.sh` o la descarga el flujo de GitHub Actions.
+This folder holds the final packages ready for users. The binaries are **not**
+stored in the repository (they are in `.gitignore`); they are produced by
+`packaging/build.sh` or by the GitHub Actions workflow.
 
-Contenido esperado:
+Expected contents:
 
-| Plataforma | Archivo                             | Cómo se genera |
-|------------|-------------------------------------|----------------|
-| Linux      | `BlenderManager-x86_64.AppImage`    | `packaging/build.sh --appimage` / CI |
-| Windows    | `BlenderManager-windows-x86_64.zip` | CI |
-| macOS      | `BlenderManager-macos.zip`          | CI |
+| Platform | File                                | How it is built |
+|----------|-------------------------------------|-----------------|
+| Linux    | `BlenderManager-x86_64.AppImage`    | `packaging/build.sh --appimage` / CI |
+| Windows  | `BlenderManager-windows-x86_64.zip` | CI |
+| macOS    | `BlenderManager-macos.zip`          | CI |
 
-En CI, el artefacto `BlenderManager-linux` contiene únicamente el
-`BlenderManager-x86_64.AppImage` (sin carpeta `dist/` ni `.tar.gz`).
+On CI, the `BlenderManager-linux` artifact contains only the
+`BlenderManager-x86_64.AppImage` (no `dist/` folder, no `.tar.gz`).
 
-### Modo portable
+### Portable mode
 
-Al descomprimir el binario, crea un archivo vacío llamado `portable` junto al
-ejecutable y los ajustes, el caché y los registros se guardarán en esa misma
-carpeta (ideal para llevar en un pendrive).
+After extracting the binary, create an empty file named `portable` next to the
+executable and the settings, cache and logs will be stored in that same folder
+(handy for a USB stick).
 
-### Notas
+### Notes
 
-- El AppImage puede necesitar `libfuse2`; si no está, se ejecuta con
+- The AppImage may need `libfuse2`; if it is not available, run it with
   `./BlenderManager-x86_64.AppImage --appimage-extract-and-run`.
-- Los binarios de Windows y macOS se compilan en CI y todavía no se han podido
-  probar en su sistema real.
+- Windows and macOS binaries are built on CI and have not been tested on real
+  systems yet.
