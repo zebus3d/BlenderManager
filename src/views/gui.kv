@@ -21,7 +21,7 @@
     background_normal: ""
     background_down: ""
     background_color: 0, 0, 0, 0
-    color: theme.BG if self.state == "down" else theme.TEXT
+    color: theme.TEXT_SEL if self.state == "down" else theme.TEXT
     font_size: sp(13)
     bold: True
     allow_no_selection: False
@@ -41,7 +41,7 @@
     background_color: 0, 0, 0, 0
     font_name: theme.ICON_FONT
     font_size: sp(20)
-    color: theme.BG if self.state == "down" else theme.TEXT
+    color: theme.TEXT_SEL if self.state == "down" else theme.TEXT
     allow_no_selection: False
     canvas.before:
         Color:
@@ -68,6 +68,25 @@
             pos: self.pos
             size: self.size
             radius: [dp(8)]
+
+# --- Interruptor de sí/no con el mismo aspecto que los botones ---
+<SwitchPill>:
+    size_hint: None, None
+    height: dp(28)
+    width: dp(64)
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: theme.TEXT_SEL if self.active else theme.TEXT
+    font_size: sp(12)
+    bold: True
+    canvas.before:
+        Color:
+            rgba: theme.ACCENT if self.active else theme.SURFACE_ALT
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(14)]
 
 # --- Tarjeta en modo lista: una compilación por fila ---
 <BuildCard>:
@@ -111,7 +130,7 @@
                 valign: "middle"
             Label:
                 text: root.channel_text
-                color: theme.ACCENT if root.is_lts else theme.INFO
+                color: theme.WARNING if root.is_lts else theme.INFO_TEXT
                 font_size: sp(12)
                 bold: True
                 size_hint_x: None
@@ -134,7 +153,7 @@
         spacing: dp(2)
         Label:
             text: tr("Installed build") if root.installed else ""
-            color: theme.SUCCESS
+            color: theme.SUCCESS_TEXT
             bold: True
             font_size: sp(12)
         CardButton:
@@ -181,7 +200,7 @@
 
     Label:
         text: root.channel_text + ("  ·  " + root.meta_text if root.meta_text else "")
-        color: theme.ACCENT if root.is_lts else theme.INFO
+        color: theme.WARNING if root.is_lts else theme.INFO_TEXT
         font_size: sp(11) * root.zoom
         opacity: 1 if root.installed else 0.45
         size_hint_y: None
@@ -192,7 +211,7 @@
 
     Label:
         text: tr("Installed build") if root.installed else ""
-        color: theme.SUCCESS
+        color: theme.SUCCESS_TEXT
         bold: True
         font_size: sp(12) * root.zoom
         size_hint_y: None
@@ -298,7 +317,7 @@
         spacing: dp(12)
         canvas.before:
             Color:
-                rgba: theme.SURFACE
+                rgba: theme.BG
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -310,7 +329,7 @@
             allow_stretch: True
             keep_ratio: True
         Label:
-            text: tr("Blender Manager")
+            text: tr("Blender Downloads Manager")
             font_size: sp(19)
             bold: True
             color: theme.TEXT
@@ -324,7 +343,7 @@
             pos_hint: {"center_y": .5}
             canvas.before:
                 Color:
-                    rgba: theme.SURFACE_ALT
+                    rgba: theme.FIELD
                 RoundedRectangle:
                     pos: self.pos
                     size: self.size
@@ -530,7 +549,7 @@
                     text: root.dest_folder
                     background_normal: ""
                     background_active: ""
-                    background_color: theme.SURFACE_ALT
+                    background_color: theme.FIELD
                     foreground_color: theme.TEXT
                     cursor_color: theme.ACCENT
                     padding: [dp(10), dp(10)]
@@ -568,11 +587,12 @@
                     halign: "left"
                     valign: "middle"
                     text_size: self.size
-                Switch:
+                SwitchPill:
                     id: archive_switch
+                    text: tr("Yes") if self.active else tr("No")
                     active: root.delete_archive
-                    size_hint_x: None
-                    width: dp(60)
+                    tooltip_text: tr("Delete archive after extraction")
+                    on_release: root.delete_archive = self.active
             Label:
                 text: tr("Launch arguments")
                 color: theme.TEXT
@@ -587,7 +607,7 @@
                 hint_text: "--background --python script.py"
                 background_normal: ""
                 background_active: ""
-                background_color: theme.SURFACE_ALT
+                background_color: theme.FIELD
                 foreground_color: theme.TEXT
                 hint_text_color: theme.MUTED
                 cursor_color: theme.ACCENT
@@ -630,10 +650,11 @@
             # Solo se muestra mientras hay una descarga en curso.
             opacity: 1 if root.downloading else 0
             disabled: not root.downloading
-        Button:
+        CardButton:
             text: tr("Cancel")
             size_hint_x: None
             width: dp(100)
+            height: dp(30)
             opacity: 1 if root.downloading else 0
             disabled: not root.downloading
             on_release: root.cancel_download()

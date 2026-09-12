@@ -28,11 +28,12 @@ class Tooltip(Label):
         self.size_hint = (None, None)
         self.padding = (dp(9), dp(5))
         self.font_size = "13sp"
-        self.color = (1, 1, 1, 1)
+        # Colores del tooltip de Blender (#1d1d1d de fondo, texto #d9d9d9).
+        self.color = (0xD9 / 255, 0xD9 / 255, 0xD9 / 255, 1)
         self.opacity = 0
         self.disabled = True  # que no capture clics
         with self.canvas.before:
-            Color(0.09, 0.09, 0.09, 0.96)
+            Color(0x1D / 255, 0x1D / 255, 0x1D / 255, 0.96)
             self._background = RoundedRectangle(radius=[dp(6)])
         self.bind(texture_size=self._resize, pos=self._move)
 
