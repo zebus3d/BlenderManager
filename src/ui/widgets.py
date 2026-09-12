@@ -146,7 +146,7 @@ class InstalledCard(BoxLayout):
         if entry is None:
             return
         self.title = entry.name
-        self.meta_text = f"Blender {entry.version}"
+        self.meta_text = f"Blender {entry.version}   ·   {entry.path}"
         self.is_lts = entry.is_lts
         self.can_launch = entry.can_launch
         self.action_text = tr("Launch")
@@ -171,6 +171,7 @@ class RootWidget(BoxLayout):
     launch_args = StringProperty("")
     delete_archive = BooleanProperty(True)
     busy = BooleanProperty(False)
+    downloading = BooleanProperty(False)
     progress = NumericProperty(0)
     builds = ListProperty([])
     has_builds = BooleanProperty(False)
@@ -409,6 +410,7 @@ class RootWidget(BoxLayout):
                 self._show_message(tr("No executable found"))
             return
         self.busy = True
+        self.downloading = True
         self.progress = 0
         self.status_text = tr("Downloading {name}", name=build.filename)
         self.downloader.start(
@@ -445,12 +447,14 @@ class RootWidget(BoxLayout):
 
     def _on_extract_done(self, target):
         self.busy = False
+        self.downloading = False
         self.progress = 0
         self.refresh_installed()
         self._show_message(tr("Extraction complete"))
 
     def _on_download_error(self, message):
         self.busy = False
+        self.downloading = False
         self.progress = 0
         if message == "cancelled":
             self._show_message(tr("Cancelled"))
