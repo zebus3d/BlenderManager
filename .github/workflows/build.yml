@@ -1,0 +1,80 @@
+name: build
+
+# Se ejecuta al empujar una etiqueta de versión (v1.0, v1.0.1...) o a mano.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  # Pruebas unitarias sin interfaz gráfica.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover -t . -s tests -v
+
+  # Linux: se compila dentro de un contenedor con glibc antigua para que el
+  # binario funcione en el mayor número de distribuciones posible.
+  linux:
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar binario portable y AppImage
+        env:
+          # Evita que Kivy necesite una pantalla durante el empaquetado.
+          SDL_VIDEODRIVER: dummy
+        run: |
+          export PATH=/opt/python/cp312-cp312/bin:$PATH
+          pip install --upgrade pip
+          pip install -r requirements-build.txt
+          pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+          tar -C dist -czf BlenderManager-linux-x86_64.tar.gz BlenderManager
+          packaging/build_appimage.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlenderManager-linux
+          path: |
+            BlenderManager-linux-x86_64.tar.gz
+            dist/BlenderManager-x86_64.AppImage
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compilar binario portable
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+          pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+          Compress-Archive -Path dist/BlenderManager -DestinationPath BlenderManager-windows-x86_64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlenderManager-windows
+          path: BlenderManager-windows-x86_64.zip
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compilar bundle .app
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+          pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+          cd dist && zip -r ../BlenderManager-macos.zip BlenderManager.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlenderManager-macos
+          path: BlenderManager-macos.zip
