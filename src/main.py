@@ -59,6 +59,7 @@ def run_ui(debug: bool = False, screenshot: str = None) -> None:
         Pill,
         RootWidget,
         SideButton,
+        SwitchPill,
     )
 
     if debug:
@@ -76,6 +77,7 @@ def run_ui(debug: bool = False, screenshot: str = None) -> None:
         GridBuildCard,
         InstalledCard,
         RootWidget,
+        SwitchPill,
     )
     for widget in widgets:
         Factory.register(widget.__name__, cls=widget)
@@ -88,7 +90,7 @@ def run_ui(debug: bool = False, screenshot: str = None) -> None:
         def build(self):
             app_settings = settings_service.Settings.load()
             i18n.set_language(app_settings.language)
-            self.title = i18n.tr("Blender Manager")
+            self.title = i18n.tr("Blender Downloads Manager")
             Window.clearcolor = theme.BG
             Window.size = (1060, 680)
             Window.minimum_width = 880

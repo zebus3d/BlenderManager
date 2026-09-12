@@ -34,7 +34,7 @@ from services import api, detector, installed as installed_service, settings as 
 from services.downloader import Downloader
 from services.extractor import extract
 from services.launcher import Launcher
-from ui.theme import MUTED
+from ui.theme import MUTED, SURFACE_ALT
 from ui.tooltip import HoverBehavior
 
 # Etiquetas visibles del selector de sistema operativo -> identificador interno
@@ -64,14 +64,31 @@ class SideButton(HoverBehavior, ToggleButton):
 class CardButton(HoverBehavior, Button):
     """Botón de acción dentro de las tarjetas (descargar, lanzar, examinar...)."""
 
-    # Color de fondo configurable: naranja para descargar, verde para lanzar, etc.
-    button_color = ListProperty([0.918, 0.463, 0.0, 1])
+    # Color de fondo configurable. Por defecto gris (como los widgets de
+    # Blender); descargar usa azul, lanzar verde y desinstalar rojo.
+    button_color = ListProperty(list(SURFACE_ALT))
 
 
 class HoverButton(HoverBehavior, Button):
     """Botón normal con tooltip (por ejemplo, actualizar o borrar)."""
 
     pass
+
+
+class SwitchPill(HoverBehavior, ToggleButton):
+    """Interruptor de sí/no con el mismo aspecto que los botones del tema.
+
+    ToggleButton trabaja con `state` ('normal'/'down'); exponemos además un
+    booleano `active` para que sea cómodo de usar desde el .kv y los ajustes.
+    """
+
+    active = BooleanProperty(False)
+
+    def on_state(self, *_):
+        self.active = self.state == "down"
+
+    def on_active(self, *_):
+        self.state = "down" if self.active else "normal"
 
 
 class HoverSpinner(HoverBehavior, Spinner):

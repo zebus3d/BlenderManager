@@ -16,6 +16,7 @@ DEFAULT = "en"
 _TRANSLATIONS = {
     "es": {
         "Blender Manager": "Gestor de Blender",
+        "Blender Downloads Manager": "Gestor de descargas de Blender",
         "Store": "Tienda",
         "Installed": "Instaladas",
         "Settings": "Ajustes",
@@ -47,6 +48,8 @@ _TRANSLATIONS = {
         "English": "Ingles",
         "Spanish": "Espanol",
         "Delete archive after extraction": "Borrar el archivo tras extraer",
+        "Yes": "Sí",
+        "No": "No",
         "Launch arguments": "Argumentos de lanzamiento",
         "Installed versions": "Versiones instaladas",
         "Installed build": "Instalada",
