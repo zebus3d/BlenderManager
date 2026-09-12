@@ -382,6 +382,11 @@
             state: "down" if root.channel == "stable" else "normal"
             on_release: root.set_channel("stable")
         Pill:
+            text: tr("LTS + Stable")
+            tooltip_text: tr("Filter: LTS and stable")
+            state: "down" if root.channel == "lts_stable" else "normal"
+            on_release: root.set_channel("lts_stable")
+        Pill:
             text: tr("Daily")
             tooltip_text: tr("Filter: daily and alpha")
             state: "down" if root.channel == "daily" else "normal"
