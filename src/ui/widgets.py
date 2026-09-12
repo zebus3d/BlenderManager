@@ -322,8 +322,8 @@ class RootWidget(BoxLayout):
         self._zoom_save_event = None
         # Cada vez que cambia un filtro o el modo de vista volvemos a montar la lista.
         self.bind(builds=lambda *_: self._rebuild_store(),
-                  channel=lambda *_: self._rebuild_store(),
-                  search=lambda *_: self._rebuild_store(),
+                  channel=lambda *_: self._on_filter_changed(),
+                  search=lambda *_: self._on_filter_changed(),
                   layout_mode=lambda *_: self._on_layout_mode_changed(),
                   zoom=lambda *_: self._apply_zoom(),
                   platform_label=lambda *_: self._rebuild_store(),
@@ -348,6 +348,11 @@ class RootWidget(BoxLayout):
 
     def _on_layout_mode_changed(self):
         # El modo cuadrícula/lista afecta tanto a la tienda como a las instaladas.
+        self._rebuild_store()
+        self._rebuild_installed()
+
+    def _on_filter_changed(self):
+        # Los filtros (canal y búsqueda) afectan a la tienda y a las instaladas.
         self._rebuild_store()
         self._rebuild_installed()
 
@@ -529,19 +534,49 @@ class RootWidget(BoxLayout):
         # Al cambiar las instaladas también cambian los botones de la tienda.
         self._rebuild_store()
 
+    def _filtered_installed(self):
+        """Aplica el canal y la búsqueda a las versiones instaladas.
+
+        Las instaladas no guardan el "riesgo" de la compilación, así que lo
+        deducimos del nombre de la carpeta: las de builder/diarias llevan
+        'alpha', 'beta' o 'main'; el resto son estables.
+        """
+        entries = self.installed
+        channel = self.channel
+        if channel == "lts":
+            entries = [entry for entry in entries if entry.is_lts]
+        elif channel == "stable":
+            entries = [entry for entry in entries if not entry.is_lts]
+        elif channel == "daily":
+            tokens = ("alpha", "beta", "main")
+            entries = [
+                entry for entry in entries
+                if any(token in entry.name.lower() for token in tokens)
+            ]
+        # "all" y "lts_stable" muestran todas las instaladas.
+        text = (self.search or "").strip().lower()
+        if text:
+            entries = [
+                entry for entry in entries
+                if text in entry.name.lower() or text in entry.version.lower()
+            ]
+        return entries
+
     def _rebuild_installed(self):
-        """Construye la lista de instaladas según el modo cuadrícula/lista."""
+        """Construye la lista de instaladas según filtros y modo cuadrícula/lista."""
         container = self.ids.get("installed_list")
         if container is None:
             return
+        entries = self._filtered_installed()
         container.clear_widgets()
+        self.has_installed = bool(entries)
         self._update_installed_cols()
-        if not self.installed:
+        if not entries:
             container.cols = 1
             container.add_widget(self._placeholder(tr("No installed versions found")))
             return
         card_class = InstalledCard if self.layout_mode == "list" else GridInstalledCard
-        for index, entry in enumerate(self.installed):
+        for index, entry in enumerate(entries):
             card = card_class()
             card.owner = self
             card.zoom = self.zoom
