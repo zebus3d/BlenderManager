@@ -6,12 +6,14 @@ compilar con `packaging/build.sh` o la descarga el flujo de GitHub Actions.
 
 Contenido esperado:
 
-| Plataforma | Archivo                                  | Cómo se genera |
-|------------|------------------------------------------|----------------|
-| Linux      | `BlenderManager-x86_64.AppImage`         | `packaging/build.sh --appimage` |
-| Linux      | `BlenderManager-linux-x86_64.tar.gz`     | CI (manylinux) |
-| Windows    | `BlenderManager-windows-x86_64.zip`      | CI |
-| macOS      | `BlenderManager-macos.zip`               | CI |
+| Plataforma | Archivo                             | Cómo se genera |
+|------------|-------------------------------------|----------------|
+| Linux      | `BlenderManager-x86_64.AppImage`    | `packaging/build.sh --appimage` / CI |
+| Windows    | `BlenderManager-windows-x86_64.zip` | CI |
+| macOS      | `BlenderManager-macos.zip`          | CI |
+
+En CI, el artefacto `BlenderManager-linux` contiene únicamente el
+`BlenderManager-x86_64.AppImage` (sin carpeta `dist/` ni `.tar.gz`).
 
 ### Modo portable
 
