@@ -255,8 +255,13 @@ class RootWidget(BoxLayout):
         builds = api.available_for(self.builds, self.platform, self.arch)
         channel = self.channel
         if channel == "lts":
+            # Solo las versiones con soporte de larga duración.
             builds = [build for build in builds if build.is_lts]
         elif channel == "stable":
+            # Estables que no son LTS.
+            builds = [build for build in builds if build.risk == "stable" and not build.is_lts]
+        elif channel == "lts_stable":
+            # LTS y estables a la vez (todo lo estable).
             builds = [build for build in builds if build.risk == "stable"]
         elif channel == "daily":
             builds = [build for build in builds if build.risk != "stable"]
