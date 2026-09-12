@@ -1,37 +1,27 @@
-Intente que kivy tuviera acceso a los eventos (para evitar el warning)
-(Pero en realidad esto no lo resuelve, parece que es por el touch en los portatiles):
-sudo usermod -a -G input usuaruio
+Notes from the original Kivy experiments (kept for reference)
 
+I tried to give Kivy access to the input events (to silence a warning).
+It does not actually fix it; it seems related to touch devices on laptops:
+    sudo usermod -a -G input <user>
 
-Configuramos un custom task para visual studio code (dentro de la carpeta de tu proyeto .vscode/task.json):
+Custom task for Visual Studio Code (inside .vscode/tasks.json of the project):
 {
-    // See https://go.microsoft.com/fwlink/?LinkId=733558
-    // for the documentation about the tasks.json format
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run my custom python in trerminal",
+            "label": "Run my custom python in terminal",
             "command": "/usr/bin/python3",
-            "args": [
-                "${workspaceFolder}/main.py",
-                "-m",
-                "console"
-            ],
+            "args": ["${workspaceFolder}/main.py", "-m", "console"],
             "console": "integratedTerminal",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+            "group": { "kind": "build", "isDefault": true }
         }
     ]
 }
+Then pressing Ctrl+Shift+B runs main.py with the console module, so you can
+press Ctrl+E and inspect the widgets of the app.
 
-De esta manera al presionar ctrl + shift + b se ejecutara el main.py con el module console 
-entonces podremos presional ctrl + e y ver los widgets de nuestra aplicación. 
-
-
-Instalar buildozer en linux mint/ubuntu:
-sudo aptitude install autoconf automake libtool
-pip3 install --upgrade pip
-pip3 install --user Cython
-pip3 install --user buildozer
+Installing buildozer on Linux Mint/Ubuntu:
+    sudo aptitude install autoconf automake libtool
+    pip3 install --upgrade pip
+    pip3 install --user Cython
+    pip3 install --user buildozer
