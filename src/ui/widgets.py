@@ -42,7 +42,7 @@ from services import api, detector, installed as installed_service, settings as 
 from services.downloader import Downloader
 from services.extractor import extract
 from services.launcher import Launcher
-from ui.theme import ACCENT, BUTTON, MUTED
+from ui.theme import ACCENT, BUTTON, CARD_DIM, CARD_DIM_ALT, MUTED, ROW_ALT, SURFACE
 from ui.tooltip import HoverBehavior
 
 # Etiquetas visibles del selector de sistema operativo -> identificador interno
@@ -185,6 +185,9 @@ class BaseBuildCard(HoverBehavior, BoxLayout):
     is_lts = BooleanProperty(False)
     installed = BooleanProperty(False)
     zoom = NumericProperty(1.0)
+    # Fondo normal de la tarjeta (sin contar el resaltado al pasar el ratón).
+    # Se calcula en Python para poder alternar filas claras/oscuras en modo lista.
+    row_color = ListProperty(list(SURFACE))
 
     def on_build(self, *_):
         """Traduce los datos del modelo a las cadenas que pinta la tarjeta."""
@@ -232,6 +235,7 @@ class BaseInstalledCard(HoverBehavior, BoxLayout):
     is_lts = BooleanProperty(False)
     can_launch = BooleanProperty(False)
     zoom = NumericProperty(1.0)
+    row_color = ListProperty(list(SURFACE))
 
     def on_entry(self, *_):
         entry = self.entry
@@ -480,6 +484,19 @@ class RootWidget(BoxLayout):
         if container is not None:
             container.cols = self._columns_for(container, self.has_installed)
 
+    def _row_color(self, installed, index, zebra=False):
+        """Color de fondo de una tarjeta.
+
+        El salteado (cebra) es opcional: solo se usa en la pestaña de
+        instaladas y en modo lista, para no confundir con las que aún no se
+        han descargado.
+        """
+        base = SURFACE if installed else CARD_DIM
+        if zebra and self.layout_mode == "list":
+            alternate = ROW_ALT if installed else CARD_DIM_ALT
+            return list(alternate if index % 2 else base)
+        return list(base)
+
     def _rebuild_store(self):
         """Reconstruye la lista de compilaciones disponibles."""
         container = self.ids.get("store_list")
@@ -494,11 +511,14 @@ class RootWidget(BoxLayout):
             container.add_widget(self._placeholder(tr("No builds found")))
             return
         card_class = BuildCard if self.layout_mode == "list" else GridBuildCard
-        for build in builds:
+        for index, build in enumerate(builds):
+            is_installed = installed_service.is_version_installed(self.installed, build.version)
             card = card_class()
             card.owner = self
             card.zoom = self.zoom
-            card.installed = installed_service.is_version_installed(self.installed, build.version)
+            # La tienda no lleva salteado; solo la pestaña de instaladas.
+            card.row_color = self._row_color(is_installed, index)
+            card.installed = is_installed
             card.build = build
             container.add_widget(card)
 
@@ -522,10 +542,11 @@ class RootWidget(BoxLayout):
             container.add_widget(self._placeholder(tr("No installed versions found")))
             return
         card_class = InstalledCard if self.layout_mode == "list" else GridInstalledCard
-        for entry in self.installed:
+        for index, entry in enumerate(self.installed):
             card = card_class()
             card.owner = self
             card.zoom = self.zoom
+            card.row_color = self._row_color(True, index, zebra=True)
             card.entry = entry
             container.add_widget(card)
 

@@ -208,7 +208,7 @@
     spacing: dp(12)
     canvas.before:
         Color:
-            rgba: theme.SURFACE_ALT if self.hovered else (theme.SURFACE if root.installed else (0.125, 0.125, 0.125, 1))
+            rgba: theme.SURFACE_ALT if self.hovered else self.row_color
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -289,7 +289,7 @@
     spacing: dp(6) * root.zoom
     canvas.before:
         Color:
-            rgba: theme.SURFACE_ALT if self.hovered else (theme.SURFACE if root.installed else (0.125, 0.125, 0.125, 1))
+            rgba: theme.SURFACE_ALT if self.hovered else self.row_color
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -368,7 +368,7 @@
     spacing: dp(10)
     canvas.before:
         Color:
-            rgba: theme.SURFACE_ALT if self.hovered else theme.SURFACE
+            rgba: theme.SURFACE_ALT if self.hovered else self.row_color
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -440,7 +440,7 @@
     spacing: dp(6) * root.zoom
     canvas.before:
         Color:
-            rgba: theme.SURFACE_ALT if self.hovered else theme.SURFACE
+            rgba: theme.SURFACE_ALT if self.hovered else self.row_color
         RoundedRectangle:
             pos: self.pos
             size: self.size
