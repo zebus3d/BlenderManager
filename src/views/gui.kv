@@ -156,6 +156,49 @@
             rounded_rectangle: (self.thumb_x + 0.5, self.center_y - self.thumb_size / 2 + 0.5, self.thumb_size - 1, self.thumb_size - 1, self.thumb_size / 2)
             width: 1
 
+# --- Desplegables oscuros (estilo Blender) ---
+<HoverSpinner>:
+    size_hint: None, None
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: theme.TEXT
+    font_size: sp(12)
+    option_cls: "DarkSpinnerOption"
+    canvas.before:
+        Color:
+            rgba: theme.ACCENT_DARK if (self.hovered or self.is_open) else theme.FILTER
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(5)]
+        Color:
+            rgba: 0, 0, 0, 0.35
+        Line:
+            rounded_rectangle: (self.x + 0.5, self.y + 0.5, self.width - 1, self.height - 1, dp(5))
+            width: 1
+    Label:
+        text: icons.CHEVRON
+        font_name: theme.ICON_FONT
+        font_size: sp(10)
+        color: theme.MUTED
+        size_hint: None, None
+        size: dp(12), dp(12)
+        pos: (self.parent.right - self.width - dp(5), self.parent.center_y - self.height / 2)
+
+<DarkSpinnerOption>:
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: theme.TEXT
+    font_size: sp(12)
+    canvas.before:
+        Color:
+            rgba: theme.ACCENT if (self.state == "down" or self.hovered) else theme.FIELD
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
 # --- Tarjeta en modo lista: una compilación por fila ---
 <BuildCard>:
     orientation: "horizontal"
@@ -229,10 +272,11 @@
             bold: True
             font_size: sp(12)
         CardButton:
-            text: root.action_text
+            text: (("[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  ") + root.action_text) if root.installed else root.action_text
+            markup: True
             tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
-            button_color: theme.SUCCESS if root.installed else theme.ACCENT
-            pressed_color: theme.SUCCESS_DARK if root.installed else theme.ACCENT_DARK
+            button_color: theme.FILTER if root.installed else theme.ACCENT
+            pressed_color: theme.SURFACE_ALT if root.installed else theme.ACCENT_DARK
             use_gradient: True
             on_release: root.owner.install_build(root.build)
 
@@ -299,10 +343,11 @@
     Widget:
 
     CardButton:
-        text: root.action_text
+        text: (("[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  ") + root.action_text) if root.installed else root.action_text
+        markup: True
         tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
-        button_color: theme.SUCCESS if root.installed else theme.ACCENT
-        pressed_color: theme.SUCCESS_DARK if root.installed else theme.ACCENT_DARK
+        button_color: theme.FILTER if root.installed else theme.ACCENT
+        pressed_color: theme.SURFACE_ALT if root.installed else theme.ACCENT_DARK
         use_gradient: True
         font_size: sp(13) * root.zoom
         size_hint: (None, None)
@@ -364,11 +409,11 @@
             shorten: True
 
     CardButton:
-        text: root.action_text
+        text: "[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  " + root.action_text
+        markup: True
         tooltip_text: tr("Launch this installed version")
-        button_color: theme.SUCCESS
-        pressed_color: theme.SUCCESS_DARK
-        use_gradient: True
+        button_color: theme.FILTER
+        pressed_color: theme.SURFACE_ALT
         disabled: not root.can_launch
         size_hint: (None, None)
         width: dp(104)
@@ -443,10 +488,11 @@
         height: dp(32) * root.zoom
         spacing: dp(6) * root.zoom
         CardButton:
-            text: root.action_text
+            text: "[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  " + root.action_text
+            markup: True
             tooltip_text: tr("Launch this installed version")
-            button_color: theme.SUCCESS
-            pressed_color: theme.SUCCESS_DARK
+            button_color: theme.FILTER
+            pressed_color: theme.SURFACE_ALT
             use_gradient: True
             disabled: not root.can_launch
             font_size: sp(12) * root.zoom
@@ -743,17 +789,12 @@
                         halign: "left"
                         valign: "middle"
                         text_size: self.size
-                    Spinner:
+                    HoverSpinner:
                         id: language_spinner
                         text: root.language_label
                         values: root.language_values()
-                        size_hint_y: None
+                        size_hint_x: 1
                         height: dp(38)
-                        background_normal: ""
-                        background_down: ""
-                        background_color: theme.BUTTON
-                        color: theme.TEXT
-                        font_size: sp(13)
                     BoxLayout:
                         size_hint_y: None
                         height: dp(40)
