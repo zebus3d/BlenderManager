@@ -156,9 +156,15 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
             i18n.set_language(app_settings.language)
             self.title = i18n.tr("Blender Downloads Manager")
             Window.clearcolor = theme.BG
-            Window.size = (1060, 680)
+            # Restauramos el tamaño que dejó el usuario en la sesión anterior.
+            width = max(880, app_settings.window_width or 1060)
+            height = max(540, app_settings.window_height or 680)
             Window.minimum_width = 880
             Window.minimum_height = 540
+            # Nos suscribimos ANTES de fijar el tamaño para no perder eventos.
+            self._resize_event = None
+            Window.bind(on_resize=self._on_resize)
+            Window.size = (width, height)
             # Permite que el .kv encuentre "images/blender_logo.png".
             resource_add_path(str(ASSETS_DIR))
             # Icono de la ventana / barra de tareas (en vez del de Kivy).
@@ -176,6 +182,23 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
                     SRC_DIR / "ui" / "icons.py",
                     SRC_DIR / "i18n.py",
                 ])
+
+        def _on_resize(self, window, width, height):
+            # Guardamos con un pequeño retardo para no escribir en cada píxel.
+            if self._resize_event is not None:
+                self._resize_event.cancel()
+            self._resize_event = Clock.schedule_once(
+                lambda dt: self._save_window_size(width, height), 0.6
+            )
+
+        def _save_window_size(self, width, height):
+            try:
+                settings = settings_service.Settings.load()
+                settings.window_width = int(width)
+                settings.window_height = int(height)
+                settings.save()
+            except OSError:
+                pass
 
     # Modo de captura automática (útil para generar imágenes de documentación).
     if screenshot:

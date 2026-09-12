@@ -137,6 +137,8 @@ class SettingsTests(unittest.TestCase):
             launch_args="--background",
             layout_mode="list",
             zoom=1.4,
+            window_width=1200,
+            window_height=700,
         )
         settings.save()
         loaded = settings_module.Settings.load()
@@ -145,6 +147,8 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(loaded.delete_archive)
         self.assertEqual(loaded.layout_mode, "list")
         self.assertAlmostEqual(loaded.zoom, 1.4)
+        self.assertEqual(loaded.window_width, 1200)
+        self.assertEqual(loaded.window_height, 700)
 
     def test_defaults_fill_destination(self):
         loaded = settings_module.Settings.load()
