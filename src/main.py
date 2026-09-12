@@ -1,73 +1,129 @@
+"""Punto de entrada de Blender Manager.
+
+Modos de uso:
+
+* ``python3 src/main.py``               -> abre la interfaz.
+* ``python3 src/main.py --debug``       -> interfaz con registro detallado.
+* ``python3 src/main.py --smoke``       -> lista compilaciones por consola (sin ventana).
+* ``python3 src/main.py --screenshot RUTA.png`` -> arranca, captura y sale.
+"""
+
+import argparse
 import os
 import sys
-import configparser
-from os.path import join
-from kivy.app import App
-from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager, Screen, SlideTransition #, NoTransition
-from kivy.uix.tabbedpanel import TabbedPanel
-from kivy.core.window import Window
-from kivy.modules import inspector
-from services.osdetector import detect
-from mainscreen import MainScreen
+from pathlib import Path
+
+# Hay que fijarlo ANTES de importar Kivy, o Kivy intentará procesar
+# nuestros argumentos de línea de comandos y se hará un lío.
+os.environ.setdefault("KIVY_NO_ARGS", "1")
+
+# Aseguramos que 'src' esté en el path para poder importar services/ui/model.
+SRC_DIR = Path(__file__).resolve().parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+import i18n
+from paths import ASSETS_DIR, VIEWS_DIR
+from services import api, detector, settings as settings_service
 
 
-# Para que las builds de pyinstaller onefile encuentren los paths dentro del bundle:
-base_path = getattr(sys, "_MEIPASS", None)
-if base_path is not None:
-    os.chdir(base_path)
+def smoke():
+    """Comprobación rápida sin interfaz: descarga el listado y lo imprime."""
+    info = detector.detect()
+    builds = api.get_builds(force=True)
+    print("system:", info)
+    print("total builds:", len(builds))
+    for build in api.available_for(builds, info.os_name, info.arch)[:12]:
+        tag = "LTS" if build.is_lts else build.risk
+        print(f"  {build.version:<8} {tag:<7} {build.branch:<5} {build.human_size:>10}  {build.filename}")
 
-    initial_conf_path = join("configs", "initial.cfg")
-else:
-    initial_conf_path = join("src", "configs", "initial.cfg")
+
+def run_ui(debug: bool = False, screenshot: str = None) -> None:
+    """Arranca la aplicación Kivy."""
+    from kivy.app import App
+    from kivy.clock import Clock
+    from kivy.core.window import Window
+    from kivy.factory import Factory
+    from kivy.lang import Builder
+    from kivy.logger import Logger, LOG_LEVELS
+    from kivy.resources import resource_add_path
+
+    from ui import theme
+    from ui.widgets import (
+        BuildCard,
+        CardButton,
+        GridBuildCard,
+        HoverButton,
+        HoverSpinner,
+        InstalledCard,
+        Pill,
+        RootWidget,
+        SideButton,
+    )
+
+    if debug:
+        Logger.setLevel(LOG_LEVELS["debug"])
+
+    # Las clases propias que aparecen dentro del .kv deben estar registradas
+    # en la Factory para que el parser de Kivy sepa construirlas.
+    widgets = (
+        Pill,
+        SideButton,
+        CardButton,
+        HoverButton,
+        HoverSpinner,
+        BuildCard,
+        GridBuildCard,
+        InstalledCard,
+        RootWidget,
+    )
+    for widget in widgets:
+        Factory.register(widget.__name__, cls=widget)
+
+    # Registramos la fuente de iconos y cargamos la vista.
+    theme.init()
+    Builder.load_file(str(VIEWS_DIR / "gui.kv"))
+
+    class MainApp(App):
+        def build(self):
+            app_settings = settings_service.Settings.load()
+            i18n.set_language(app_settings.language)
+            self.title = i18n.tr("Blender Manager")
+            Window.clearcolor = theme.BG
+            Window.size = (1060, 680)
+            Window.minimum_width = 880
+            Window.minimum_height = 540
+            # Permite que el .kv encuentre "images/blender_logo.png".
+            resource_add_path(str(ASSETS_DIR))
+            return RootWidget()
+
+    # Modo de captura automática (útil para generar imágenes de documentación).
+    if screenshot:
+        def capture(dt):
+            Window.screenshot(name=str(screenshot))
+
+        def stop(dt):
+            App.get_running_app().stop()
+
+        Clock.schedule_once(capture, 6)
+        Clock.schedule_once(stop, 8)
+
+    MainApp().run()
 
 
-class PreferencesScreen(Screen):
-    pass
+def main():
+    parser = argparse.ArgumentParser(description="Blender Manager")
+    parser.add_argument("--smoke", action="store_true", help="List builds without opening the UI")
+    parser.add_argument("--debug", action="store_true", help="Enable verbose logging")
+    parser.add_argument("--screenshot", metavar="PATH", help="Save a screenshot after startup and quit")
+    args = parser.parse_args()
 
-class MyTabbedPanel(TabbedPanel):
-    pass
+    if args.smoke:
+        smoke()
+        return
 
-# Carga el archivo KV
-Builder.load_file(join("views", "gui.kv"))
+    run_ui(debug=args.debug, screenshot=args.screenshot)
 
-# Detecta el sistema operativo y la arquitectura
-sysi = detect()
 
-# Define la pantalla principal
-mainscreen = MainScreen(name='main_screen')
-
-# Agrega las pantallas al manejador de pantallas (ScreenManager)
-# sm = ScreenManager(transition=NoTransition())
-sm = ScreenManager(transition=SlideTransition(direction='down'))
-
-sm.add_widget(mainscreen)
-sm.add_widget(PreferencesScreen(name='settings'))
-
-# Crea un inspector para la ventana principal
-inspector.create_inspector(Window, sm)
-
-# Define la aplicación principal
-class MainApp(App):
-    def build(self):
-
-        # Lee las configuraciones desde el archivo ini
-        config = configparser.ConfigParser()
-        config.read(initial_conf_path)
-        cnf = config['app']
-        self.title = cnf['title']
-        Window.size = (int(cnf['width']), int(cnf['height']))
-        Window.clearcolor = [float(c)/255.0 for c in cnf['background_color'].split(",")]
-
-        Window.minimum_width = cnf['minimum_width']
-        Window.minimum_height = cnf['minimum_height']
-
-        # Centra la ventana
-        if self.root_window:
-            Window.center = self.root_window.get_rect().center
-        
-        return sm
-
-if __name__ == '__main__':
-    app = MainApp()
-    app.run()
+if __name__ == "__main__":
+    main()
