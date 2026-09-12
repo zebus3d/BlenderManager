@@ -38,7 +38,65 @@ def smoke():
         print(f"  {build.version:<8} {tag:<7} {build.branch:<5} {build.human_size:>10}  {build.filename}")
 
 
-def run_ui(debug: bool = False, screenshot: str = None) -> None:
+class DevReloader:
+    """Recarga en caliente el .kv y el tema cuando se guardan los archivos.
+
+    Es una ayuda de desarrollo: los cambios de estilo (gui.kv, theme.py,
+    icons.py, i18n.py) se aplican sin reiniciar. Los cambios de lógica en
+    Python siguen necesitando reiniciar la aplicación.
+    """
+
+    def __init__(self, app, kv_path, files):
+        from kivy.clock import Clock
+
+        self.app = app
+        self.kv_path = kv_path
+        self.files = files
+        self.mtimes = {}
+        for path in files:
+            try:
+                self.mtimes[path] = os.path.getmtime(path)
+            except OSError:
+                pass
+        Clock.schedule_interval(self._check, 1.0)
+
+    def _check(self, dt):
+        changed = False
+        for path in self.files:
+            try:
+                mtime = os.path.getmtime(path)
+            except OSError:
+                continue
+            if mtime != self.mtimes.get(path):
+                self.mtimes[path] = mtime
+                changed = True
+        if changed:
+            self._reload()
+
+    def _reload(self):
+        import importlib
+
+        import i18n
+        from kivy.lang import Builder
+        from kivy.logger import Logger
+        from ui import icons, theme
+
+        try:
+            importlib.reload(i18n)
+            importlib.reload(theme)
+            importlib.reload(icons)
+            theme.init()
+            Builder.unload_file(str(self.kv_path))
+            Builder.load_file(str(self.kv_path))
+            self.app.root._reload_ui()
+            Logger.info("Watch: interfaz recargada")
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+
+
+def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> None:
     """Arranca la aplicación Kivy."""
     from kivy.app import App
     from kivy.clock import Clock
@@ -53,6 +111,7 @@ def run_ui(debug: bool = False, screenshot: str = None) -> None:
         BuildCard,
         CardButton,
         GridBuildCard,
+        GridInstalledCard,
         HoverButton,
         HoverSpinner,
         InstalledCard,
@@ -60,6 +119,7 @@ def run_ui(debug: bool = False, screenshot: str = None) -> None:
         RootWidget,
         SideButton,
         SwitchPill,
+        ZoomSlider,
     )
 
     if debug:
@@ -75,9 +135,11 @@ def run_ui(debug: bool = False, screenshot: str = None) -> None:
         HoverSpinner,
         BuildCard,
         GridBuildCard,
+        GridInstalledCard,
         InstalledCard,
         RootWidget,
         SwitchPill,
+        ZoomSlider,
     )
     for widget in widgets:
         Factory.register(widget.__name__, cls=widget)
@@ -99,6 +161,15 @@ def run_ui(debug: bool = False, screenshot: str = None) -> None:
             resource_add_path(str(ASSETS_DIR))
             return RootWidget()
 
+        def on_start(self):
+            if watch:
+                DevReloader(self, VIEWS_DIR / "gui.kv", [
+                    VIEWS_DIR / "gui.kv",
+                    SRC_DIR / "ui" / "theme.py",
+                    SRC_DIR / "ui" / "icons.py",
+                    SRC_DIR / "i18n.py",
+                ])
+
     # Modo de captura automática (útil para generar imágenes de documentación).
     if screenshot:
         def capture(dt):
@@ -118,13 +189,14 @@ def main():
     parser.add_argument("--smoke", action="store_true", help="List builds without opening the UI")
     parser.add_argument("--debug", action="store_true", help="Enable verbose logging")
     parser.add_argument("--screenshot", metavar="PATH", help="Save a screenshot after startup and quit")
+    parser.add_argument("--watch", action="store_true", help="Recargar .kv/tema al guardar (desarrollo)")
     args = parser.parse_args()
 
     if args.smoke:
         smoke()
         return
 
-    run_ui(debug=args.debug, screenshot=args.screenshot)
+    run_ui(debug=args.debug, screenshot=args.screenshot, watch=args.watch)
 
 
 if __name__ == "__main__":

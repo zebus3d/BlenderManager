@@ -17,7 +17,14 @@ from pathlib import Path
 
 from kivy.clock import Clock
 from kivy.metrics import dp
-from kivy.properties import BooleanProperty, ListProperty, NumericProperty, ObjectProperty, StringProperty
+from kivy.properties import (
+    AliasProperty,
+    BooleanProperty,
+    ListProperty,
+    NumericProperty,
+    ObjectProperty,
+    StringProperty,
+)
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.filechooser import FileChooserListView
@@ -26,6 +33,7 @@ from kivy.uix.modalview import ModalView
 from kivy.uix.popup import Popup
 from kivy.uix.spinner import Spinner
 from kivy.uix.togglebutton import ToggleButton
+from kivy.uix.widget import Widget
 
 import i18n
 from i18n import tr
@@ -69,6 +77,9 @@ class CardButton(HoverBehavior, Button):
     # lanzar y desinstalar sobrescriben ambos colores.
     button_color = ListProperty(list(BUTTON))
     pressed_color = ListProperty(list(ACCENT))
+    # El degradado claro solo se usa en los botones de color (descargar/lanzar);
+    # en los grises enturbia el texto blanco.
+    use_gradient = BooleanProperty(False)
 
 
 class HoverButton(HoverBehavior, Button):
@@ -99,7 +110,63 @@ class HoverSpinner(HoverBehavior, Spinner):
     pass
 
 
-class BaseBuildCard(BoxLayout):
+class ZoomSlider(HoverBehavior, Widget):
+    """Barra de zoom propia, dibujada con el estilo del resto de la interfaz.
+
+    No usamos el Slider de Kivy porque trae una "bolita" con su propio aspecto.
+    Aquí pintamos una pista, la parte rellena y un tirador redondeado.
+    """
+
+    min = NumericProperty(0.6)
+    max = NumericProperty(1.8)
+    value = NumericProperty(1.0)
+    step = NumericProperty(0.0)
+    thumb_size = NumericProperty(dp(16))
+    dragging = BooleanProperty(False)
+
+    def _get_thumb_x(self):
+        span = max(0.0001, self.max - self.min)
+        fraction = min(1.0, max(0.0, (self.value - self.min) / span))
+        usable = max(0.0, self.width - self.thumb_size)
+        return self.x + fraction * usable
+
+    # Posición horizontal del tirador; se recalcula al cambiar valor o tamaño.
+    thumb_x = AliasProperty(
+        _get_thumb_x, None,
+        bind=("value", "min", "max", "width", "x", "thumb_size"),
+    )
+
+    def _set_from_x(self, x):
+        usable = max(1.0, self.width - self.thumb_size)
+        fraction = min(1.0, max(0.0, (x - self.x - self.thumb_size / 2.0) / usable))
+        value = self.min + fraction * (self.max - self.min)
+        if self.step:
+            value = round(value / self.step) * self.step
+        self.value = min(self.max, max(self.min, value))
+
+    def on_touch_down(self, touch):
+        if self.disabled or not self.collide_point(*touch.pos):
+            return super().on_touch_down(touch)
+        touch.grab(self)
+        self.dragging = True
+        self._set_from_x(touch.x)
+        return True
+
+    def on_touch_move(self, touch):
+        if touch.grab_current is self:
+            self._set_from_x(touch.x)
+            return True
+        return super().on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        if touch.grab_current is self:
+            touch.ungrab(self)
+            self.dragging = False
+            return True
+        return super().on_touch_up(touch)
+
+
+class BaseBuildCard(HoverBehavior, BoxLayout):
     """Base común para las tarjetas de compilaciones (vista lista y rejilla)."""
 
     build = ObjectProperty(None, allownone=True)
@@ -148,8 +215,8 @@ class GridBuildCard(BaseBuildCard):
     pass
 
 
-class InstalledCard(BoxLayout):
-    """Tarjeta de una versión ya extraída en la carpeta destino."""
+class BaseInstalledCard(HoverBehavior, BoxLayout):
+    """Base común para las tarjetas de versiones instaladas (lista y rejilla)."""
 
     entry = ObjectProperty(None, allownone=True)
     owner = ObjectProperty(None, allownone=True)
@@ -169,6 +236,18 @@ class InstalledCard(BoxLayout):
         self.is_lts = entry.is_lts
         self.can_launch = entry.can_launch
         self.action_text = tr("Launch")
+
+
+class InstalledCard(BaseInstalledCard):
+    """Versión instalada en modo lista (una fila)."""
+
+    pass
+
+
+class GridInstalledCard(BaseInstalledCard):
+    """Versión instalada en modo rejilla (icono grande y botones debajo)."""
+
+    pass
 
 
 class RootWidget(BoxLayout):
@@ -217,14 +296,24 @@ class RootWidget(BoxLayout):
             self.zoom = 1.0
         self.downloader = Downloader()
         self.launcher = Launcher()
-        self.installed = []
+        # Escaneo inicial: si ya hay versiones instaladas abrimos esa pestaña;
+        # si no hay ninguna, abrimos la tienda de descargas.
+        self.installed = installed_service.scan(self.settings.dest_folder, self.platform)
+        self.view = "installed" if self.installed else "store"
+        # Vista a la que volver al cerrar los ajustes (interruptor).
+        self._previous_view = self.view if self.view != "settings" else "store"
+        # on_kv_post ya se ejecutó (durante super().__init__) y dejó la pantalla
+        # en "store"; aplicamos ahora la vista inicial correcta.
+        manager = self.ids.get("view_manager")
+        if manager is not None:
+            manager.current = self.view
         self._status_event = None
         self._zoom_save_event = None
         # Cada vez que cambia un filtro o el modo de vista volvemos a montar la lista.
         self.bind(builds=lambda *_: self._rebuild_store(),
                   channel=lambda *_: self._rebuild_store(),
                   search=lambda *_: self._rebuild_store(),
-                  layout_mode=lambda *_: self._rebuild_store(),
+                  layout_mode=lambda *_: self._on_layout_mode_changed(),
                   zoom=lambda *_: self._apply_zoom(),
                   platform_label=lambda *_: self._rebuild_store(),
                   arch_label=lambda *_: self._rebuild_store())
@@ -236,8 +325,20 @@ class RootWidget(BoxLayout):
         if container is not None:
             # Al redimensionar la ventana recalculamos el número de columnas.
             container.bind(width=lambda *_: self._update_cols())
+        installed_container = self.ids.get("installed_list")
+        if installed_container is not None:
+            installed_container.bind(width=lambda *_: self._update_installed_cols())
+        # Fijamos la vista inicial (el ScreenManager debe tener ya sus pantallas).
+        manager = self.ids.get("view_manager")
+        if manager is not None:
+            manager.current = self.view if self.view in ("store", "installed", "settings") else "store"
         Clock.schedule_once(lambda dt: self.refresh(force=False), 0.1)
         Clock.schedule_once(lambda dt: self.refresh_installed(), 0.2)
+
+    def _on_layout_mode_changed(self):
+        # El modo cuadrícula/lista afecta tanto a la tienda como a las instaladas.
+        self._rebuild_store()
+        self._rebuild_installed()
 
     @property
     def platform(self):
@@ -264,7 +365,32 @@ class RootWidget(BoxLayout):
         self.search = text
 
     def set_view(self, view):
-        """Cambia entre la tienda, las instaladas y los ajustes."""
+        """Cambia entre la tienda, las instaladas y los ajustes.
+
+        El botón de ajustes funciona como un interruptor: si ya estamos en
+        ajustes, vuelve a la vista anterior. Además fijamos la dirección del
+        deslizamiento (hacia ajustes baja, al salir sube, y entre tienda e
+        instaladas va de lado).
+        """
+        previous = self.view
+        if view == "settings" and previous == "settings":
+            # Segundo clic en ajustes: regresamos a donde estábamos.
+            view = self._previous_view
+        elif view != "settings":
+            # Recordamos la última vista que no era ajustes.
+            self._previous_view = view
+        manager = self.ids.get("view_manager")
+        if manager is not None and hasattr(manager, "transition"):
+            if view == "settings":
+                manager.transition.direction = "down"
+            elif previous == "settings":
+                manager.transition.direction = "up"
+            else:
+                order = {"store": 0, "installed": 1}
+                manager.transition.direction = (
+                    "left" if order.get(view, 0) > order.get(previous, 0) else "right"
+                )
+            manager.current = view
         self.view = view
         if view == "installed":
             self.refresh_installed()
@@ -321,21 +447,32 @@ class RootWidget(BoxLayout):
         installed_container = self.ids.get("installed_list")
         if installed_container is not None:
             for card in installed_container.children:
-                if isinstance(card, InstalledCard):
+                if isinstance(card, (InstalledCard, GridInstalledCard)):
                     card.zoom = self.zoom
         self._update_cols()
+        self._update_installed_cols()
+
+    def _columns_for(self, container, has_items):
+        """Número de columnas para una rejilla según ancho, zoom y modo."""
+        if container is None:
+            return 1
+        if self.layout_mode == "list" or not has_items:
+            return 1
+        available = max(0, container.width - dp(28))
+        cell = max(dp(140), dp(240) * self.zoom)
+        return max(1, int(available // cell))
 
     def _update_cols(self):
-        """Calcula cuántas columnas caben en la rejilla según el ancho y el zoom."""
+        """Recalcula las columnas de la tienda."""
         container = self.ids.get("store_list")
-        if container is None:
-            return
-        if self.layout_mode == "list" or not self.has_builds:
-            container.cols = 1
-        else:
-            available = max(0, container.width - dp(28))
-            cell = max(dp(140), dp(240) * self.zoom)
-            container.cols = max(1, int(available // cell))
+        if container is not None:
+            container.cols = self._columns_for(container, self.has_builds)
+
+    def _update_installed_cols(self):
+        """Recalcula las columnas de la lista de instaladas."""
+        container = self.ids.get("installed_list")
+        if container is not None:
+            container.cols = self._columns_for(container, self.has_installed)
 
     def _rebuild_store(self):
         """Reconstruye la lista de compilaciones disponibles."""
@@ -362,20 +499,29 @@ class RootWidget(BoxLayout):
     def refresh_installed(self):
         """Escanea la carpeta destino y monta la pestaña de versiones instaladas."""
         self.installed = installed_service.scan(self.settings.dest_folder, self.platform)
-        container = self.ids.get("installed_list")
-        if container is not None:
-            container.clear_widgets()
-            if not self.installed:
-                container.add_widget(self._placeholder(tr("No installed versions found")))
-            for entry in self.installed:
-                card = InstalledCard()
-                card.owner = self
-                card.zoom = self.zoom
-                card.entry = entry
-                container.add_widget(card)
         self.has_installed = bool(self.installed)
+        self._rebuild_installed()
         # Al cambiar las instaladas también cambian los botones de la tienda.
         self._rebuild_store()
+
+    def _rebuild_installed(self):
+        """Construye la lista de instaladas según el modo cuadrícula/lista."""
+        container = self.ids.get("installed_list")
+        if container is None:
+            return
+        container.clear_widgets()
+        self._update_installed_cols()
+        if not self.installed:
+            container.cols = 1
+            container.add_widget(self._placeholder(tr("No installed versions found")))
+            return
+        card_class = InstalledCard if self.layout_mode == "list" else GridInstalledCard
+        for entry in self.installed:
+            card = card_class()
+            card.owner = self
+            card.zoom = self.zoom
+            card.entry = entry
+            container.add_widget(card)
 
     def _placeholder(self, text):
         """Etiqueta que se muestra cuando una lista está vacía."""

@@ -101,6 +101,8 @@ class HoverBehavior:
     tooltip_text = StringProperty("")
     tooltip_delay = NumericProperty(0.45)
     _hovering = BooleanProperty(False)
+    # `hovered` se puede usar desde el .kv para resaltar el widget bajo el ratón.
+    hovered = BooleanProperty(False)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -112,6 +114,7 @@ class HoverBehavior:
         if parent is None:
             self._unbind_tooltip()
             self._hovering = False
+            self.hovered = False
             self._cancel_tooltip()
             TooltipManager.get().hide()
         else:
@@ -137,6 +140,7 @@ class HoverBehavior:
             inside = self.collide_point(*self.to_widget(*position))
         except Exception:
             inside = False
+        self.hovered = inside
         if inside:
             if not self._hovering:
                 self._hovering = True
