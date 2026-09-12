@@ -1,7 +1,0 @@
-# En arch linux:
-sudo pacman -S ffmpeg portmidi libavc1394 ccache mesa zlib cython sdl2 sdl2_image sdl2_mixer sdl2_ttf gstreamer gst-plugins-base-libs gst-plugins-good gst-plugins-bad gst-plugins-ugly freetype2 libpng openal
-
-
-(venv)$ pip install --upgrade pip
-(venv)$ pip install PyInstaller 
-(venv)$ pip install kivy[base] kivy_examples --pre --extra-index-url https://kivy.org/downloads/simple/

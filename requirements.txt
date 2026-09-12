@@ -1,0 +1,4 @@
+# Dependencias en tiempo de ejecución.
+# La aplicación solo necesita Kivy: para todo lo demás usamos la librería
+# estándar de Python (urllib, tarfile, zipfile...).
+kivy==2.3.1
