@@ -1,295 +1,633 @@
-#:kivy 2.0.0
+# Interfaz declarativa de Blender Manager (Kivy Language).
+# La lógica está en src/ui/widgets.py; aquí solo se describe el aspecto.
+#
+# Orden del archivo:
+#   1. Estilos de botones (Pill, SideButton, CardButton).
+#   2. Tarjetas de compilación (BuildCard, GridBuildCard, InstalledCard).
+#   3. Pantalla principal (RootWidget): cabecera, filtros, listas y pie.
 
-# colores:
-#:import C kivy.utils.get_color_from_hex
-#:set SPINNERFG C("424242")
-#:set GREYSPINNER C("2c2c2c")
-#:set SPINNERBGOP C("212121")
+#:import dp kivy.metrics.dp
+#:import sp kivy.metrics.sp
+#:import theme ui.theme
+#:import icons ui.icons
+#:import tr i18n.tr
 
-#:set font_s "14sp"
-
-<SpinnerOption>:
+# --- Botón tipo pastilla (filtros de canal, selector de vista) ---
+<Pill>:
     size_hint: None, None
-    size: 100, 24
+    height: dp(30)
+    width: self.texture_size[0] + dp(26)
     background_normal: ""
     background_down: ""
-    background_color: SPINNERBGOP
-    spacing: [0, 0]
-    border: [0, 0, 0, 0]
-    font_size: font_s
-    # bold: True
-    # texto alineado a la izquierda:
-    text_size: [80, 0]
-    halign:'left'
-    valign:'middle'
-
-<MainScreen>:
+    background_color: 0, 0, 0, 0
+    color: theme.BG if self.state == "down" else theme.TEXT
+    font_size: sp(13)
+    bold: True
+    allow_no_selection: False
     canvas.before:
         Color:
-            rgb: SPINNERFG
-        Rectangle:
+            rgba: theme.ACCENT if self.state == "down" else theme.SURFACE_ALT
+        RoundedRectangle:
             pos: self.pos
             size: self.size
+            radius: [dp(15)]
 
-    GridLayout:
-        cols: 3
-        rows: 1
-        size_hint_x: None # Ahora la propiedad width determina el ancho del widget
-        size_hint_y: 1 # La altura se mantiene como una fracción de la altura de su contenedor
-
-
-        GridLayout:
-            cols: 2
-            rows: 1
-            padding: [1,2,0,1]
-
-            size_hint_x: None # Ahora la propiedad width determina el ancho del widget
-            size_hint_y: 1 # La altura se mantiene como una fracción de la altura de su contenedor
-            anchor_x: 'left'
-            anchor_y: 'top'
-            width: (root.width/(622/4))+150  #150
-
-            # canvas.before:
-            #     Color:
-            #         rgb: [0, 1, 0]
-            #     Rectangle:
-            #         pos: self.pos
-            #         size: self.size
-
-
-            Spinner:
-                id: "dropdown"
-                text: "GNU/" + root.set_platform_name()
-                font_size: font_s
-                values: "Windows", "Mac", "GNU/Linux"
-                size_hint: (None, None)
-                size: (100, 30)
-                on_text: root.print_current(self.text)
-                background_normal: "views/assets/dropdown.png"
-                background_down: "views/assets/dropdown_down.png"
-                
-            Spinner:
-                id: "arch"
-                text: root.set_architecture()
-                font_size: font_s
-                values: "64Bit", "32Bit"
-                size_hint: (None, None)
-                size: (50, 30)
-                on_text: root.print_current(self.text)
-                background_normal: "views/assets/dropdown_small.png"
-                background_down: "views/assets/dropdown_down_small.png"
-            
-        # Tabs:
-        GridLayout:
-            cols: 1
-            rows: 1
-            padding: [2, 0, 0, 0]
-
-            size_hint_x: None # Desactiva la redimensión automática para el eje x
-            size_hint_y: 1 # Permite la redimensión automática para el eje y
-            width: root.width-265 # 355 # Ancho deseado
-
-            anchor_x: 'left'
-            anchor_y: 'top'
-
-            # canvas.before:
-            #     Color:
-            #         rgb: [0, 1, 0]
-            #     Rectangle:
-            #         pos: self.pos
-            #         size: self.size
-
-            # background_color: GREYSPINNER
-
-            TabbedPanel:
-                id: tab_panel
-                do_default_tab: False
-                size_hint: (None, None)
-                tab_pos: 'top_left'
-                tab_height: 30
-                size: (350, root.height-4)
-                background_image: ""
-                background_color: [0, 0, 0, 0]
-
-                TabbedPanelItem:
-                    text: 'Installed'
-                    font_size: font_s
-                    width: 112
-                    height: 30
-                    background_normal: "views/assets/tabs.png"
-                    background_down: "views/assets/tabs_down.png"
-                    
-                    GridLayout:
-                        cols: 1
-                        rows: 1
-                        size_hint: (None, None)
-
-                        anchor_x: 'left'
-                        anchor_y: 'top'
-
-                        canvas.before:
-                            Color:
-                                rgb: GREYSPINNER
-                            Rectangle:
-                                pos: (2, 4)
-                                size: (root.width-self.size[0]-20, root.height-self.size[1]+60)
-                        Label:
-                            text: 'List of installed versions'
-                            size_hint: (None, None)
-
-                TabbedPanelItem:
-                    text: 'Stable'
-                    font_size: font_s
-                    width: 112
-                    height: 30
-                    background_normal: "views/assets/tabs.png"
-                    background_down: "views/assets/tabs_down.png"
-
-                    GridLayout:
-                        cols: 1
-                        rows: 1
-                        size_hint: (None, None)
-
-                        anchor_x: 'left'
-                        anchor_y: 'top'
-
-                        canvas.before:
-                            Color:
-                                rgb: GREYSPINNER
-                            Rectangle:
-                                pos: (2, 4)
-                                size: (root.width-self.size[0]-20, root.height-self.size[1]+60)
-                        Label:
-                            text: 'List of stable versions avalidable in remote servers'
-                            size_hint: (None, None)
-                
-                TabbedPanelItem:
-                    text: 'BuildBot'
-                    font_size: font_s
-                    width: 112
-                    height: 30
-                    background_normal: "views/assets/tabs.png"
-                    background_down: "views/assets/tabs_down.png"
-
-                    GridLayout:
-                        cols: 1
-                        rows: 1
-                        size_hint: (None, None)
-                        
-                        anchor_x: 'left'
-                        anchor_y: 'top'
-
-                        canvas.before:
-                            Color:
-                                rgb: GREYSPINNER
-                            Rectangle:
-                                pos: (2, 4)
-                                size: (root.width-self.size[0]-20, root.height-self.size[1]+60)
-                        
-                        Label:
-                            text: 'List of buildbots versions avalidable in remote servers'
-                            size_hint: (None, None)
- 
-        
-
-        # buttons side bar
-        GridLayout:
-            cols: 1
-            rows: 1
-
-            size_hint_x: None # Ahora la propiedad width determina el ancho del widget
-            size_hint_y: 1 # La altura se mantiene como una fracción de la altura de su contenedor
-
-            padding: [-6, 35, 0, 0]
-
-            width: 116 # 115 # Ancho deseado
-            height: 84
-
-            anchor_x: 'left'
-            anchor_y: 'top'
-
-            # canvas.before:
-            #     Color:
-            #         rgb: [0, 1, 0]
-            #     Rectangle:
-            #         pos: self.pos
-            #         size: self.size
-
-            GridLayout:
-                cols: 1
-                rows: 3
-
-                size_hint: (1, None)
-                
-                # width: root.width-115 # 115 # Ancho deseado
-                height: 84
-
-                anchor_x: 'left'
-                anchor_y: 'top'
-                
-                padding: [2, 2, 2, 2]
-
-                # canvas.before:
-                #     Color:
-                #         rgb: [1, 0, 0]
-                #     Rectangle:
-                #         pos: self.pos 
-                #         size: self.size
-                
-                Button:
-                    id: "button_download"
-                    text: 'Download'
-                    font_size: font_s
-                    background_normal: "views/assets/button.png"
-                    background_down: "views/assets/button_down.png"
-                    size_hint: (None, None)
-                    width: 112
-                    height: 28                    
-
-                Button:
-                    id: "button_launch"
-                    text: 'Launch'
-                    font_size: font_s
-                    background_normal: "views/assets/button.png"
-                    background_down: "views/assets/button_down.png"
-                    size_hint: (None, None)
-                    width: 112
-                    height: 28
-
-                Button:
-                    id: "button_settings"
-                    text: 'Settings'
-                    font_size: font_s
-                    background_normal: "views/assets/button.png"
-                    background_down: "views/assets/button_down.png"
-                    size_hint: (None, None)
-                    width: 112
-                    height: 28
-                    on_press:
-                        root.manager.transition.direction = 'down'
-                        root.manager.current = 'settings'
-
-
-
-<PreferencesScreen>:
+<SideButton>:
+    size_hint: None, None
+    size: dp(50), dp(50)
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    font_name: theme.ICON_FONT
+    font_size: sp(20)
+    color: theme.BG if self.state == "down" else theme.TEXT
+    allow_no_selection: False
     canvas.before:
         Color:
-            rgb: SPINNERFG
+            rgba: theme.ACCENT if self.state == "down" else theme.SURFACE_ALT
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(12)]
+
+<CardButton>:
+    size_hint: None, None
+    height: dp(36)
+    width: dp(118)
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: theme.TEXT
+    font_size: sp(13)
+    bold: True
+    canvas.before:
+        Color:
+            rgba: (self.button_color[0] * 0.78, self.button_color[1] * 0.78, self.button_color[2] * 0.78, 1) if self.state == "down" else self.button_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+
+# --- Tarjeta en modo lista: una compilación por fila ---
+<BuildCard>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: dp(78)
+    padding: [dp(16), dp(11), dp(12), dp(11)]
+    spacing: dp(12)
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE if root.installed else (0.125, 0.125, 0.125, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(12)]
+
+    Image:
+        source: "images/blender_logo.png"
+        size_hint: (None, None)
+        size: dp(44), dp(44)
+        pos_hint: {"center_y": .5}
+        opacity: 1 if root.installed else 0.32
+        allow_stretch: True
+        keep_ratio: True
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(3)
+        opacity: 1 if root.installed else 0.45
+        BoxLayout:
+            size_hint_y: None
+            height: dp(24)
+            spacing: dp(10)
+            Label:
+                text: "Blender " + root.version_text
+                color: theme.TEXT
+                font_size: sp(16)
+                bold: True
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: "middle"
+            Label:
+                text: root.channel_text
+                color: theme.ACCENT if root.is_lts else theme.INFO
+                font_size: sp(12)
+                bold: True
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: "middle"
+            Widget:
+        Label:
+            text: root.meta_text
+            color: theme.MUTED
+            font_size: sp(12)
+            halign: "left"
+            valign: "middle"
+            text_size: self.width, None
+
+    BoxLayout:
+        size_hint_x: None
+        width: dp(140)
+        orientation: "vertical"
+        spacing: dp(2)
+        Label:
+            text: tr("Installed build") if root.installed else ""
+            color: theme.SUCCESS
+            bold: True
+            font_size: sp(12)
+        CardButton:
+            text: root.action_text
+            tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
+            button_color: theme.SUCCESS if root.installed else theme.ACCENT
+            on_release: root.owner.install_build(root.build)
+
+# --- Tarjeta en rejilla: icono grande y botón debajo (escala con el zoom) ---
+<GridBuildCard>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: dp(196) * root.zoom
+    padding: [dp(12) * root.zoom, dp(14) * root.zoom]
+    spacing: dp(6) * root.zoom
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE if root.installed else (0.125, 0.125, 0.125, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(12)]
+
+    Image:
+        source: "images/blender_logo.png"
+        size_hint: (None, None)
+        size: dp(68) * root.zoom, dp(68) * root.zoom
+        pos_hint: {"center_x": .5}
+        opacity: 1 if root.installed else 0.32
+        allow_stretch: True
+        keep_ratio: True
+
+    Label:
+        text: "Blender " + root.version_text
+        color: theme.TEXT
+        font_size: sp(15) * root.zoom
+        bold: True
+        opacity: 1 if root.installed else 0.45
+        size_hint_y: None
+        height: dp(22) * root.zoom
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+
+    Label:
+        text: root.channel_text + ("  ·  " + root.meta_text if root.meta_text else "")
+        color: theme.ACCENT if root.is_lts else theme.INFO
+        font_size: sp(11) * root.zoom
+        opacity: 1 if root.installed else 0.45
+        size_hint_y: None
+        height: dp(18) * root.zoom
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+
+    Label:
+        text: tr("Installed build") if root.installed else ""
+        color: theme.SUCCESS
+        bold: True
+        font_size: sp(12) * root.zoom
+        size_hint_y: None
+        height: dp(16) * root.zoom
+        halign: "center"
+
+    Widget:
+
+    CardButton:
+        text: root.action_text
+        tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
+        button_color: theme.SUCCESS if root.installed else theme.ACCENT
+        font_size: sp(13) * root.zoom
+        size_hint: (None, None)
+        size: dp(120) * root.zoom, dp(34) * root.zoom
+        pos_hint: {"center_x": .5}
+        on_release: root.owner.install_build(root.build)
+
+# --- Tarjeta de una versión ya instalada (lanzar / borrar) ---
+<InstalledCard>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: dp(70)
+    padding: [dp(16), dp(11), dp(12), dp(11)]
+    spacing: dp(12)
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(12)]
+
+    Image:
+        source: "images/blender_logo.png"
+        size_hint: (None, None)
+        size: dp(42), dp(42)
+        pos_hint: {"center_y": .5}
+        allow_stretch: True
+        keep_ratio: True
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(3)
+        Label:
+            text: root.title
+            color: theme.TEXT
+            font_size: sp(15)
+            bold: True
+            halign: "left"
+            valign: "middle"
+            text_size: self.width, None
+        Label:
+            text: root.meta_text
+            color: theme.MUTED
+            font_size: sp(12)
+            halign: "left"
+            valign: "middle"
+            text_size: self.width, None
+
+    CardButton:
+        text: root.action_text
+        tooltip_text: tr("Launch this installed version")
+        button_color: theme.SUCCESS
+        disabled: not root.can_launch
+        on_release: root.owner.launch_installed(root.entry)
+
+    HoverButton:
+        size_hint: None, None
+        size: dp(42), dp(36)
+        text: icons.DELETE
+        tooltip_text: tr("Remove this installed version")
+        font_name: theme.ICON_FONT
+        font_size: sp(15)
+        color: theme.DANGER
+        background_normal: ""
+        background_down: ""
+        background_color: 0, 0, 0, 0
+        on_release: root.owner.delete_installed(root.entry)
+
+# --- Pantalla principal ---
+# Cabecera (logo, título, búsqueda y actualizar), barra de filtros, cuerpo con
+# barra lateral + vistas (tienda/instaladas/ajustes) y pie con estado y zoom.
+<RootWidget>:
+    orientation: "vertical"
+    canvas.before:
+        Color:
+            rgba: theme.BG
         Rectangle:
             pos: self.pos
             size: self.size
 
     BoxLayout:
-        padding: "5sp"
-        spacing: "8sp"
-        Button:
-            text: 'Come back'
-            background_color: (1, 0, 0, .8)
-            on_press:
-                root.manager.transition.direction = 'up'
-                root.manager.current = 'main_screen'
-        
-        Button:
-            text: 'boton2'
-            background_color: (0, 1, 0, .8)
+        size_hint_y: None
+        height: dp(64)
+        padding: [dp(16), dp(10), dp(16), dp(6)]
+        spacing: dp(12)
+        canvas.before:
+            Color:
+                rgba: theme.SURFACE
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Image:
+            source: "images/blender_logo.png"
+            size_hint: (None, None)
+            size: dp(42), dp(42)
+            pos_hint: {"center_y": .5}
+            allow_stretch: True
+            keep_ratio: True
+        Label:
+            text: tr("Blender Manager")
+            font_size: sp(19)
+            bold: True
+            color: theme.TEXT
+            size_hint_x: None
+            width: self.texture_size[0]
+            pos_hint: {"center_y": .5}
+        Widget:
+        BoxLayout:
+            size_hint_x: None
+            width: dp(240)
+            pos_hint: {"center_y": .5}
+            canvas.before:
+                Color:
+                    rgba: theme.SURFACE_ALT
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [dp(8)]
+            Label:
+                text: icons.SEARCH
+                font_name: theme.ICON_FONT
+                font_size: sp(13)
+                color: theme.MUTED
+                size_hint_x: None
+                width: dp(32)
+            TextInput:
+                id: search_input
+                hint_text: tr("Search...")
+                background_normal: ""
+                background_active: ""
+                background_color: 0, 0, 0, 0
+                foreground_color: theme.TEXT
+                hint_text_color: theme.MUTED
+                cursor_color: theme.ACCENT
+                multiline: False
+                on_text: root.set_search(self.text)
+        HoverButton:
+            size_hint: None, None
+            size: dp(38), dp(38)
+            text: icons.REFRESH
+            tooltip_text: tr("Refresh the list of builds")
+            font_name: theme.ICON_FONT
+            font_size: sp(16)
+            color: theme.TEXT
+            background_normal: ""
+            background_down: ""
+            background_color: 0, 0, 0, 0
+            pos_hint: {"center_y": .5}
+            on_release: root.refresh(force=True)
 
+    BoxLayout:
+        size_hint_y: None
+        height: dp(44)
+        padding: [dp(16), dp(4)]
+        spacing: dp(8)
+        Pill:
+            text: tr("All")
+            tooltip_text: tr("Filter: all channels")
+            state: "down" if root.channel == "all" else "normal"
+            on_release: root.set_channel("all")
+        Pill:
+            text: tr("LTS")
+            tooltip_text: tr("Filter: LTS only")
+            state: "down" if root.channel == "lts" else "normal"
+            on_release: root.set_channel("lts")
+        Pill:
+            text: tr("Stable")
+            tooltip_text: tr("Filter: stable only")
+            state: "down" if root.channel == "stable" else "normal"
+            on_release: root.set_channel("stable")
+        Pill:
+            text: tr("Daily")
+            tooltip_text: tr("Filter: daily and alpha")
+            state: "down" if root.channel == "daily" else "normal"
+            on_release: root.set_channel("daily")
+        Widget:
+        Pill:
+            text: icons.GRID
+            tooltip_text: tr("Grid view")
+            font_name: theme.ICON_FONT
+            font_size: sp(14)
+            state: "down" if root.layout_mode == "grid" else "normal"
+            on_release: root.set_layout_mode("grid")
+        Pill:
+            text: icons.LIST
+            tooltip_text: tr("List view")
+            font_name: theme.ICON_FONT
+            font_size: sp(14)
+            state: "down" if root.layout_mode == "list" else "normal"
+            on_release: root.set_layout_mode("list")
+        HoverSpinner:
+            text: root.platform_label
+            values: root.platform_labels
+            tooltip_text: tr("Target operating system")
+            size_hint: None, None
+            width: dp(118)
+            height: dp(32)
+            pos_hint: {"center_y": .5}
+            background_normal: ""
+            background_down: ""
+            background_color: theme.SURFACE_ALT
+            color: theme.TEXT
+            font_size: sp(12)
+            on_text: root.set_platform(self.text)
+        HoverSpinner:
+            text: root.arch_label
+            values: root.arch_labels
+            tooltip_text: tr("Target architecture")
+            size_hint: None, None
+            width: dp(96)
+            height: dp(32)
+            pos_hint: {"center_y": .5}
+            background_normal: ""
+            background_down: ""
+            background_color: theme.SURFACE_ALT
+            color: theme.TEXT
+            font_size: sp(12)
+            on_text: root.set_arch(self.text)
+
+    BoxLayout:
+        orientation: "horizontal"
+        BoxLayout:
+            size_hint_x: None
+            width: dp(74)
+            orientation: "vertical"
+            padding: [dp(11), dp(14)]
+            spacing: dp(10)
+            canvas.before:
+                Color:
+                    rgba: theme.SURFACE
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+            SideButton:
+                text: icons.STORE
+                tooltip_text: tr("Show the store")
+                state: "down" if root.view == "store" else "normal"
+                on_release: root.set_view("store")
+            SideButton:
+                text: icons.INSTALLED
+                tooltip_text: tr("Show installed versions")
+                state: "down" if root.view == "installed" else "normal"
+                on_release: root.set_view("installed")
+            Widget:
+            SideButton:
+                text: icons.SETTINGS
+                tooltip_text: tr("Open settings")
+                state: "down" if root.view == "settings" else "normal"
+                on_release: root.set_view("settings")
+
+        ScrollView:
+            opacity: 1 if root.view == "store" else 0
+            disabled: root.view != "store"
+            size_hint_x: 1 if root.view == "store" else 0
+            size_hint_y: 1 if root.view == "store" else 0
+            GridLayout:
+                id: store_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(10)
+                padding: [dp(14), dp(14)]
+
+        ScrollView:
+            opacity: 1 if root.view == "installed" else 0
+            disabled: root.view != "installed"
+            size_hint_x: 1 if root.view == "installed" else 0
+            size_hint_y: 1 if root.view == "installed" else 0
+            BoxLayout:
+                id: installed_list
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(10)
+                padding: [dp(14), dp(14)]
+
+        BoxLayout:
+            orientation: "vertical"
+            opacity: 1 if root.view == "settings" else 0
+            disabled: root.view != "settings"
+            size_hint_x: 1 if root.view == "settings" else 0
+            size_hint_y: 1 if root.view == "settings" else 0
+            padding: dp(22)
+            spacing: dp(12)
+            Label:
+                text: tr("Destination folder")
+                color: theme.TEXT
+                size_hint_y: None
+                height: dp(22)
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            BoxLayout:
+                size_hint_y: None
+                height: dp(40)
+                spacing: dp(8)
+                TextInput:
+                    id: dest_input
+                    text: root.dest_folder
+                    background_normal: ""
+                    background_active: ""
+                    background_color: theme.SURFACE_ALT
+                    foreground_color: theme.TEXT
+                    cursor_color: theme.ACCENT
+                    padding: [dp(10), dp(10)]
+                    multiline: False
+                CardButton:
+                    text: tr("Browse...")
+                    tooltip_text: tr("Choose destination folder")
+                    width: dp(120)
+                    on_release: root.browse_dest()
+            Label:
+                text: tr("Language")
+                color: theme.TEXT
+                size_hint_y: None
+                height: dp(22)
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            Spinner:
+                id: language_spinner
+                text: root.language_label
+                values: root.language_values()
+                size_hint_y: None
+                height: dp(38)
+                background_normal: ""
+                background_down: ""
+                background_color: theme.SURFACE_ALT
+                color: theme.TEXT
+                font_size: sp(13)
+            BoxLayout:
+                size_hint_y: None
+                height: dp(40)
+                Label:
+                    text: tr("Delete archive after extraction")
+                    color: theme.TEXT
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                Switch:
+                    id: archive_switch
+                    active: root.delete_archive
+                    size_hint_x: None
+                    width: dp(60)
+            Label:
+                text: tr("Launch arguments")
+                color: theme.TEXT
+                size_hint_y: None
+                height: dp(22)
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            TextInput:
+                id: args_input
+                text: root.launch_args
+                hint_text: "--background --python script.py"
+                background_normal: ""
+                background_active: ""
+                background_color: theme.SURFACE_ALT
+                foreground_color: theme.TEXT
+                hint_text_color: theme.MUTED
+                cursor_color: theme.ACCENT
+                padding: [dp(10), dp(10)]
+                size_hint_y: None
+                height: dp(40)
+                multiline: False
+            Widget:
+            CardButton:
+                text: tr("Save")
+                size_hint_x: None
+                width: dp(140)
+                pos_hint: {"right": 1}
+                on_release: root.save_settings(dest_input.text, language_spinner.text, archive_switch.active, args_input.text)
+
+    BoxLayout:
+        size_hint_y: None
+        height: dp(44)
+        padding: [dp(16), dp(6)]
+        spacing: dp(12)
+        canvas.before:
+            Color:
+                rgba: theme.SURFACE
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: root.status_text
+            color: theme.MUTED
+            font_size: sp(12)
+            size_hint_x: None
+            width: dp(360)
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+        ProgressBar:
+            id: progress_bar
+            max: 100
+            value: root.progress
+        Button:
+            text: tr("Cancel")
+            size_hint_x: None
+            width: dp(100)
+            opacity: 1 if root.busy else 0
+            disabled: not root.busy
+            on_release: root.cancel_download()
+        Label:
+            text: icons.MINUS
+            font_name: theme.ICON_FONT
+            font_size: sp(13)
+            color: theme.MUTED
+            size_hint_x: None
+            width: dp(20)
+        Slider:
+            id: zoom_slider
+            min: 0.6
+            max: 1.8
+            value: root.zoom
+            size_hint_x: None
+            width: dp(130)
+            cursor_size: dp(18), dp(18)
+            on_value: root.set_zoom(self.value)
+        Label:
+            text: icons.PLUS
+            font_name: theme.ICON_FONT
+            font_size: sp(13)
+            color: theme.MUTED
+            size_hint_x: None
+            width: dp(20)
