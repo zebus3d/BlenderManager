@@ -31,7 +31,7 @@ from kivy.uix.filechooser import FileChooserListView
 from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.uix.popup import Popup
-from kivy.uix.spinner import Spinner
+from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 
@@ -106,6 +106,12 @@ class SwitchPill(HoverBehavior, ToggleButton):
 
 class HoverSpinner(HoverBehavior, Spinner):
     """Selector con tooltip (sistema operativo y arquitectura)."""
+
+    pass
+
+
+class DarkSpinnerOption(HoverBehavior, SpinnerOption):
+    """Opción del desplegable de un Spinner, con el estilo oscuro de la app."""
 
     pass
 

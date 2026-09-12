@@ -46,6 +46,12 @@ DANGER_DARK = (0x6E / 255, 0x10 / 255, 0x10 / 255, 1)
 INFO = (0x28 / 255, 0x48 / 255, 0x7D / 255, 1)        # azul apagado (fondos)
 WARNING = (0xFF / 255, 0xAF / 255, 0x23 / 255, 1)     # naranja (LTS)
 
+# "Chrome" carbón de la extensión blender-dev-vscode, usado en el botón Lanzar.
+CHARCOAL = (0x1C / 255, 0x1F / 255, 0x28 / 255, 1)
+CHARCOAL_HOVER = (0x24 / 255, 0x28 / 255, 0x33 / 255, 1)
+CHARCOAL_LINE = (0x2C / 255, 0x30 / 255, 0x3C / 255, 1)
+PLAY_GREEN = (0x22 / 255, 0xC5 / 255, 0x5E / 255, 1)  # icono de play
+
 # Variantes claras de verde/azul para usar como TEXTO sobre fondo oscuro
 # (las de arriba son demasiado oscuras para leerlas en una tarjeta).
 SUCCESS_TEXT = (0x6F / 255, 0xCF / 255, 0x7A / 255, 1)
