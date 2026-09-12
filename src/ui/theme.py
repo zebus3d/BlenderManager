@@ -41,8 +41,8 @@ ACCENT = (0x50 / 255, 0x85 / 255, 0xB1 / 255, 1)      # azul de selección/resal
 ACCENT_DARK = (0x3F / 255, 0x6F / 255, 0x96 / 255, 1)
 SUCCESS = (0x18 / 255, 0x86 / 255, 0x25 / 255, 1)     # verde (lanzar)
 SUCCESS_DARK = (0x0F / 255, 0x5A / 255, 0x19 / 255, 1)
-DANGER = (0x99 / 255, 0x16 / 255, 0x16 / 255, 1)      # rojo (desinstalar)
-DANGER_DARK = (0x6E / 255, 0x10 / 255, 0x10 / 255, 1)
+DANGER = (0xC6 / 255, 0x5A / 255, 0x5A / 255, 1)      # rojo pastel (desinstalar)
+DANGER_DARK = (0xA9 / 255, 0x4A / 255, 0x4A / 255, 1)
 INFO = (0x28 / 255, 0x48 / 255, 0x7D / 255, 1)        # azul apagado (fondos)
 WARNING = (0xFF / 255, 0xAF / 255, 0x23 / 255, 1)     # naranja (LTS)
 
