@@ -32,6 +32,7 @@ from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.uix.popup import Popup
 from kivy.uix.spinner import Spinner, SpinnerOption
+from kivy.uix.screenmanager import NoTransition, SlideTransition
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 
@@ -378,9 +379,9 @@ class RootWidget(BoxLayout):
         """Cambia entre la tienda, las instaladas y los ajustes.
 
         El botón de ajustes funciona como un interruptor: si ya estamos en
-        ajustes, vuelve a la vista anterior. Además fijamos la dirección del
-        deslizamiento (hacia ajustes baja, al salir sube, y entre tienda e
-        instaladas va de lado).
+        ajustes, vuelve a la vista anterior. Solo al entrar y salir de ajustes
+        hay deslizamiento (hacia abajo al entrar, hacia arriba al salir); entre
+        la tienda y las instaladas el cambio es instantáneo, sin deslizar.
         """
         previous = self.view
         if view == "settings" and previous == "settings":
@@ -392,14 +393,12 @@ class RootWidget(BoxLayout):
         manager = self.ids.get("view_manager")
         if manager is not None and hasattr(manager, "transition"):
             if view == "settings":
-                manager.transition.direction = "down"
+                manager.transition = SlideTransition(direction="down")
             elif previous == "settings":
-                manager.transition.direction = "up"
+                manager.transition = SlideTransition(direction="up")
             else:
-                order = {"store": 0, "installed": 1}
-                manager.transition.direction = (
-                    "left" if order.get(view, 0) > order.get(previous, 0) else "right"
-                )
+                # Tienda <-> instaladas: sin animación.
+                manager.transition = NoTransition()
             manager.current = view
         self.view = view
         if view == "installed":
