@@ -34,7 +34,7 @@ from services import api, detector, installed as installed_service, settings as 
 from services.downloader import Downloader
 from services.extractor import extract
 from services.launcher import Launcher
-from ui.theme import MUTED, SURFACE_ALT
+from ui.theme import ACCENT, BUTTON, MUTED
 from ui.tooltip import HoverBehavior
 
 # Etiquetas visibles del selector de sistema operativo -> identificador interno
@@ -64,9 +64,11 @@ class SideButton(HoverBehavior, ToggleButton):
 class CardButton(HoverBehavior, Button):
     """Botón de acción dentro de las tarjetas (descargar, lanzar, examinar...)."""
 
-    # Color de fondo configurable. Por defecto gris (como los widgets de
-    # Blender); descargar usa azul, lanzar verde y desinstalar rojo.
-    button_color = ListProperty(list(SURFACE_ALT))
+    # Colores configurables: por defecto un botón neutro oscuro (como las
+    # pestañas de Blender) que se ilumina en azul al pulsarlo. Descargar,
+    # lanzar y desinstalar sobrescriben ambos colores.
+    button_color = ListProperty(list(BUTTON))
+    pressed_color = ListProperty(list(ACCENT))
 
 
 class HoverButton(HoverBehavior, Button):
