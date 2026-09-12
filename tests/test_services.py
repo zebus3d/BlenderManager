@@ -136,6 +136,7 @@ class SettingsTests(unittest.TestCase):
             delete_archive=False,
             launch_args="--background",
             layout_mode="list",
+            zoom=1.4,
         )
         settings.save()
         loaded = settings_module.Settings.load()
@@ -143,6 +144,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(loaded.language, "es")
         self.assertFalse(loaded.delete_archive)
         self.assertEqual(loaded.layout_mode, "list")
+        self.assertAlmostEqual(loaded.zoom, 1.4)
 
     def test_defaults_fill_destination(self):
         loaded = settings_module.Settings.load()
