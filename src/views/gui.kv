@@ -601,6 +601,9 @@
             id: progress_bar
             max: 100
             value: root.progress
+            # Solo se muestra mientras hay una descarga en curso.
+            opacity: 1 if root.busy else 0
+            disabled: not root.busy
         Button:
             text: tr("Cancel")
             size_hint_x: None
