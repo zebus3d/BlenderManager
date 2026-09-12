@@ -28,6 +28,12 @@ BUTTON = (0x58 / 255, 0x58 / 255, 0x58 / 255, 1)    # botones neutros (gris del 
 FILTER = (0x1D / 255, 0x1D / 255, 0x1D / 255, 1)    # botones de filtro (gris oscuro)
 SURFACE = (0x30 / 255, 0x30 / 255, 0x30 / 255, 1)   # paneles y tarjetas
 CHROME = (0x30 / 255, 0x30 / 255, 0x30 / 255, 1)    # cabecera, barra lateral y de estado
+# Filas alternas (cebra) para la vista en lista. Los rangos de las tarjetas
+# instaladas (SURFACE/ROW_ALT) y de las que faltan por descargar
+# (CARD_DIM/CARD_DIM_ALT) NO se solapan, para que no se confundan entre sí.
+CARD_DIM = (0x1E / 255, 0x1E / 255, 0x1E / 255, 1)  # por descargar (clara)
+CARD_DIM_ALT = (0x16 / 255, 0x16 / 255, 0x16 / 255, 1)  # por descargar (oscura)
+ROW_ALT = (0x2A / 255, 0x2A / 255, 0x2A / 255, 1)   # instalada (oscura)
 SURFACE_ALT = (0x3D / 255, 0x3D / 255, 0x3D / 255, 1)  # hover / contornos suaves
 BORDER = (0x3D / 255, 0x3D / 255, 0x3D / 255, 1)
 
