@@ -5,7 +5,7 @@ A desktop app (built with Kivy) to **discover, download, organize and launch**
 (daily/alpha) versions. It is cross-platform (Linux, Windows and macOS) and
 designed to be **portable**: once packaged, users don't need to install anything.
 
-![Grid view](docs/img/store.png)
+![Grid view](docs/img/store_grid.png)
 
 ## Features
 
@@ -26,7 +26,7 @@ designed to be **portable**: once packaged, users don't need to install anything
 - **Tooltips** on the controls.
 - **Portable mode**: settings live next to the executable.
 
-![List view](docs/img/installed.png)
+![List view](docs/img/installed_list.png)
 
 ## Running from source
 
