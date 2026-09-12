@@ -4,8 +4,8 @@ Cada constante es un carácter Unicode privado de la fuente. Se usan desde el
 .kv así:  text: icons.STORE  y  font_name: theme.ICON_FONT
 """
 
-STORE = "\uf54e"
-INSTALLED = "\uf466"
+STORE = "\uf0ed"      # nube con flecha de descarga
+INSTALLED = "\uf108"  # ordenador de sobremesa
 SETTINGS = "\uf013"
 DOWNLOAD = "\uf019"
 LAUNCH = "\uf04b"

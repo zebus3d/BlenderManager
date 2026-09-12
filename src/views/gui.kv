@@ -27,7 +27,7 @@
     allow_no_selection: False
     canvas.before:
         Color:
-            rgba: theme.ACCENT if self.state == "down" else theme.SURFACE_ALT
+            rgba: theme.ACCENT if self.state == "down" else theme.BUTTON
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -45,7 +45,7 @@
     allow_no_selection: False
     canvas.before:
         Color:
-            rgba: theme.ACCENT if self.state == "down" else theme.SURFACE_ALT
+            rgba: theme.ACCENT if self.state == "down" else theme.BUTTON
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -63,7 +63,7 @@
     bold: True
     canvas.before:
         Color:
-            rgba: (self.button_color[0] * 0.78, self.button_color[1] * 0.78, self.button_color[2] * 0.78, 1) if self.state == "down" else self.button_color
+            rgba: self.pressed_color if self.state == "down" else self.button_color
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -82,7 +82,7 @@
     bold: True
     canvas.before:
         Color:
-            rgba: theme.ACCENT if self.active else theme.SURFACE_ALT
+            rgba: theme.ACCENT if self.active else theme.BUTTON
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -317,7 +317,7 @@
         spacing: dp(12)
         canvas.before:
             Color:
-                rgba: theme.BG
+                rgba: theme.CHROME
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -338,8 +338,9 @@
             pos_hint: {"center_y": .5}
         Widget:
         BoxLayout:
-            size_hint_x: None
+            size_hint: None, None
             width: dp(240)
+            height: dp(34)
             pos_hint: {"center_y": .5}
             canvas.before:
                 Color:
@@ -380,11 +381,19 @@
             pos_hint: {"center_y": .5}
             on_release: root.refresh(force=True)
 
+    # Barra de filtros: fondo gris claro con los botones oscuros encima,
+    # al estilo de las pestañas de Blender.
     BoxLayout:
         size_hint_y: None
         height: dp(44)
-        padding: [dp(16), dp(4)]
+        padding: [dp(16), dp(6)]
         spacing: dp(8)
+        canvas.before:
+            Color:
+                rgba: theme.SURFACE_ALT
+            Rectangle:
+                pos: self.pos
+                size: self.size
         Pill:
             text: tr("All")
             tooltip_text: tr("Filter: all channels")
@@ -435,7 +444,7 @@
             pos_hint: {"center_y": .5}
             background_normal: ""
             background_down: ""
-            background_color: theme.SURFACE_ALT
+            background_color: theme.BUTTON
             color: theme.TEXT
             font_size: sp(12)
             on_text: root.set_platform(self.text)
@@ -449,7 +458,7 @@
             pos_hint: {"center_y": .5}
             background_normal: ""
             background_down: ""
-            background_color: theme.SURFACE_ALT
+            background_color: theme.BUTTON
             color: theme.TEXT
             font_size: sp(12)
             on_text: root.set_arch(self.text)
@@ -532,6 +541,12 @@
             height: 1 if root.view == "settings" else 0
             padding: dp(22)
             spacing: dp(12)
+            canvas.before:
+                Color:
+                    rgba: theme.SURFACE
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
             Label:
                 text: tr("Destination folder")
                 color: theme.TEXT
@@ -575,7 +590,7 @@
                 height: dp(38)
                 background_normal: ""
                 background_down: ""
-                background_color: theme.SURFACE_ALT
+                background_color: theme.BUTTON
                 color: theme.TEXT
                 font_size: sp(13)
             BoxLayout:
