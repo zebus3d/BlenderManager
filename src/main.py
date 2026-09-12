@@ -161,6 +161,11 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
             Window.minimum_height = 540
             # Permite que el .kv encuentre "images/blender_logo.png".
             resource_add_path(str(ASSETS_DIR))
+            # Icono de la ventana / barra de tareas (en vez del de Kivy).
+            try:
+                Window.set_icon(str(ASSETS_DIR / "images" / "app_icon.png"))
+            except Exception:
+                pass
             return RootWidget()
 
         def on_start(self):
