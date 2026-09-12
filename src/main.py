@@ -110,6 +110,7 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
     from ui.widgets import (
         BuildCard,
         CardButton,
+        DarkSpinnerOption,
         GridBuildCard,
         GridInstalledCard,
         HoverButton,
@@ -131,6 +132,7 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
         Pill,
         SideButton,
         CardButton,
+        DarkSpinnerOption,
         HoverButton,
         HoverSpinner,
         BuildCard,
