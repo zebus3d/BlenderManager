@@ -1,0 +1,3 @@
+# Dependencias para generar los binarios portables.
+-r requirements.txt
+pyinstaller>=6.6
