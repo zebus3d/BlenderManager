@@ -43,7 +43,17 @@ from services import api, detector, installed as installed_service, settings as 
 from services.downloader import Downloader
 from services.extractor import extract
 from services.launcher import Launcher
-from ui.theme import ACCENT, BUTTON, CARD_DIM, CARD_DIM_ALT, MUTED, ROW_ALT, SURFACE
+from ui.theme import (
+    ACCENT,
+    BUTTON,
+    CARD_DIM,
+    CARD_DIM_ALT,
+    DANGER,
+    DANGER_DARK,
+    MUTED,
+    ROW_ALT,
+    SURFACE,
+)
 from ui.tooltip import HoverBehavior
 
 # Etiquetas visibles del selector de sistema operativo -> identificador interno
@@ -693,11 +703,22 @@ class RootWidget(BoxLayout):
             self._show_message(tr("Download failed"))
             self._show_error(message)
 
+    def _dialog_button(self, text, color=None, pressed=None):
+        """Botón de diálogo con el mismo aspecto que el resto de la interfaz."""
+        button = CardButton(text=text)
+        button.size_hint_x = 1
+        button.height = dp(36)
+        if color is not None:
+            button.button_color = list(color)
+        if pressed is not None:
+            button.pressed_color = list(pressed)
+        return button
+
     def _show_error(self, message):
         """Ventana modal con el detalle técnico de un error."""
         content = BoxLayout(orientation="vertical", padding=12, spacing=8)
         content.add_widget(Label(text=str(message)))
-        button = Button(text=tr("Close"), size_hint_y=None, height=40)
+        button = self._dialog_button(tr("Close"))
         content.add_widget(button)
         popup = Popup(title=tr("Error"), content=content, size_hint=(0.7, 0.4))
         button.bind(on_release=popup.dismiss)
@@ -741,8 +762,8 @@ class RootWidget(BoxLayout):
         content = BoxLayout(orientation="vertical", padding=12, spacing=10)
         content.add_widget(Label(text=message))
         buttons = BoxLayout(size_hint_y=None, height=40, spacing=8)
-        cancel = Button(text=tr("Cancel"))
-        accept = Button(text=tr("Delete"))
+        cancel = self._dialog_button(tr("Cancel"))
+        accept = self._dialog_button(tr("Delete"), DANGER, DANGER_DARK)
         buttons.add_widget(cancel)
         buttons.add_widget(accept)
         content.add_widget(buttons)
@@ -774,8 +795,8 @@ class RootWidget(BoxLayout):
         chooser = FileChooserListView(path=str(Path(current).expanduser().parent), dirselect=True)
         layout.add_widget(chooser)
         buttons = BoxLayout(size_hint_y=None, height=44, spacing=8)
-        cancel = Button(text=tr("Cancel"))
-        select = Button(text=tr("Save"))
+        cancel = self._dialog_button(tr("Cancel"))
+        select = self._dialog_button(tr("Save"), ACCENT, ACCENT_DARK)
         buttons.add_widget(cancel)
         buttons.add_widget(select)
         layout.add_widget(buttons)

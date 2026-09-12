@@ -833,7 +833,7 @@
 
     BoxLayout:
         size_hint_y: None
-        height: dp(44)
+        height: dp(52)
         padding: [dp(16), dp(6)]
         spacing: dp(12)
         canvas.before:
@@ -847,10 +847,11 @@
             color: theme.MUTED
             font_size: sp(12)
             size_hint_x: None
-            width: dp(360)
+            width: dp(470)
             halign: "left"
             valign: "middle"
             text_size: self.size
+            shorten: True
         ProgressBar:
             id: progress_bar
             max: 100

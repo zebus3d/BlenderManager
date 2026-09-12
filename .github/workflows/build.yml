@@ -19,20 +19,22 @@ jobs:
       - run: python -m unittest discover -t . -s tests -v
 
   # Linux: se compila dentro de un contenedor con glibc antigua para que el
-  # binario funcione en el mayor número de distribuciones posible.
+  # Nota: usamos ubuntu-22.04 (glibc 2.35) porque los contenedores manylinux
+  # traen un Python sin librería compartida y PyInstaller no puede empaquetarlo.
   linux:
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux_2_28_x86_64
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Compilar binario portable y AppImage
         env:
           # Evita que Kivy necesite una pantalla durante el empaquetado.
           SDL_VIDEODRIVER: dummy
         run: |
-          export PATH=/opt/python/cp312-cp312/bin:$PATH
-          pip install --upgrade pip
-          pip install -r requirements-build.txt
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
           pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
           tar -C dist -czf BlenderManager-linux-x86_64.tar.gz BlenderManager
           packaging/build_appimage.sh dist
