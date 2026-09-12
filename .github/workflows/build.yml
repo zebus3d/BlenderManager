@@ -43,14 +43,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
           xvfb-run -a pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
-          tar -C dist -czf BlenderManager-linux-x86_64.tar.gz BlenderManager
           packaging/build_appimage.sh dist
+          # Copiamos el AppImage a la raíz para que el artefacto contenga
+          # únicamente el archivo, sin la carpeta dist/.
+          cp dist/BlenderManager-x86_64.AppImage BlenderManager-x86_64.AppImage
       - uses: actions/upload-artifact@v4
         with:
           name: BlenderManager-linux
-          path: |
-            BlenderManager-linux-x86_64.tar.gz
-            dist/BlenderManager-x86_64.AppImage
+          path: BlenderManager-x86_64.AppImage
 
   windows:
     runs-on: windows-latest

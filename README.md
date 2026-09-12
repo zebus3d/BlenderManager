@@ -107,7 +107,7 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 ### CI (GitHub Actions)
 
 `.github/workflows/build.yml` runs the tests and produces artifacts for **Linux**
-(`.tar.gz` + `.AppImage`), **Windows** (`.zip`) and **macOS** (compressed `.app`).
+(`.AppImage`), **Windows** (`.zip`) and **macOS** (compressed `.app`).
 It runs when you push a `v*` tag or manually from the Actions tab. When a tag is
 pushed, a **GitHub Release** is created with all the binaries attached.
 
