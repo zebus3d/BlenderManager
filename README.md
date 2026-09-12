@@ -1,51 +1,54 @@
-# Blender Manager
+# Blender Downloads Manager
 
-Aplicación de escritorio (Kivy) para **descubrir, descargar, organizar y lanzar**
-versiones de [Blender](https://www.blender.org/): LTS, estables y de desarrollo
-(diarias/alfa). Es multiplataforma (Linux, Windows y macOS) y está pensada para
-ser **portable**: no requiere instalar nada una vez empaquetada.
+A desktop app (built with Kivy) to **discover, download, organize and launch**
+[Blender](https://www.blender.org/) builds: LTS, stable and development
+(daily/alpha) versions. It is cross-platform (Linux, Windows and macOS) and
+designed to be **portable**: once packaged, users don't need to install anything.
 
-![Vista en cuadrícula](docs/img/tienda_cuadricula.png)
+![Grid view](docs/img/store.png)
 
-## Características
+## Features
 
-- **Tienda de versiones** con tarjetas e iconos, filtros por canal (LTS, estables,
-  diarias) y búsqueda por versión o rama.
-- **Vista en cuadrícula o en filas**, con **barra de zoom** para elegir el tamaño
-  de los iconos (al estilo de Dolphin).
-- **Detección automática** del sistema operativo y la arquitectura.
-- **Descarga con progreso**, verificación de integridad **SHA-256** y extracción
-  automática (`.tar.xz` en Linux, `.zip` en Windows, `.dmg` en macOS).
-- **Carpeta destino configurable** y listado de **versiones instaladas**.
-- **Lanzamiento** de cualquier versión instalada con argumentos opcionales.
-- **Diferenciación visual** de lo que ya está descargado.
-- **Interfaz en español e inglés** con detección automática del idioma.
-- **Tooltips** explicativos en los controles.
-- **Modo portable**: los ajustes viven junto al ejecutable.
+- **Build store** with cards and icons, channel filters (LTS, Stable, LTS + Stable,
+  Daily) and search by version or branch.
+- **Grid or list view**, with a **zoom slider** to choose the icon size (Dolphin-style).
+- **Automatic detection** of the operating system and architecture.
+- **Downloads with progress**, **SHA-256** integrity verification and automatic
+  extraction (`.tar.xz` on Linux, `.zip` on Windows, `.dmg` on macOS).
+- **Configurable destination folder**, **remembered window size** and a list of
+  **installed versions** (launch or uninstall them from the app).
+- **Filters and search also apply to installed versions**.
+- **Blender runs detached**: closing the manager does **not** close the Blender
+  instances you launched from it.
+- **Visual hints**: installed builds are highlighted, builds still to download
+  are dimmed; buttons and cards highlight on hover.
+- **Interface in English and Spanish** with automatic language detection.
+- **Tooltips** on the controls.
+- **Portable mode**: settings live next to the executable.
 
-![Vista en filas](docs/img/tienda_lista.png)
+![List view](docs/img/installed.png)
 
-## Cómo ejecutar el proyecto (desde el código fuente)
+## Running from source
 
-Requisitos: **Python 3.12 o superior** y **Kivy**. No hace falta nada más: la
-descarga, la extracción y la API de Blender usan la librería estándar.
+Requirements: **Python 3.12 or newer** and **Kivy**. Nothing else is needed:
+downloads, extraction and the Blender API use the standard library.
 
-### 1. Obtener el código
+### 1. Get the code
 
 ```bash
 git clone https://github.com/zebus3d/BlenderManager.git
 cd BlenderManager
 ```
 
-### 2. Instalar Kivy
+### 2. Install Kivy
 
-**Arch Linux** (vía recomendada: Kivy ya compilado para el Python del sistema):
+**Arch Linux** (recommended: Kivy compiled for the system Python):
 
 ```bash
 sudo pacman -S python-kivy
 ```
 
-**Otras distribuciones de Linux, Windows o macOS** (entorno virtual):
+**Other Linux distros, Windows or macOS** (virtual environment):
 
 ```bash
 python3 -m venv .venv
@@ -53,103 +56,106 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Arrancar la aplicación
+### 3. Launch the app
 
 ```bash
 python3 src/main.py
 ```
 
-Al abrirse verás la tienda de compilaciones. La **primera vez** se crea la
-carpeta de ajustes del usuario y, al descargar la primera versión, se usará
-`~/Descargas/Blenders` como destino (puedes cambiarlo en **Ajustes**).
+The build store opens on start. The **first time**, if you already have installed
+builds in the destination folder, it opens on the **Installed** tab; otherwise it
+opens the **Store**. The default destination is `~/Descargas/Blenders` (change it
+in **Settings**).
 
-> Si ejecutas con el entorno virtual, acuérdate de activarlo antes
-> (`source .venv/bin/activate`) y usa `python` en lugar de `python3`.
+> If you use a virtual environment, activate it first
+> (`source .venv/bin/activate`) and use `python` instead of `python3`.
 
-### Opciones de línea de comandos
+### Command-line options
 
 ```bash
-python3 src/main.py                    # abre la interfaz
-python3 src/main.py --debug            # interfaz con registro detallado
-python3 src/main.py --smoke            # lista compilaciones por consola (sin ventana)
-python3 src/main.py --screenshot r.png # arranca, guarda una captura y sale
+python3 src/main.py                     # open the UI
+python3 src/main.py --debug             # UI with verbose logging
+python3 src/main.py --smoke             # list builds in the console (no window)
+python3 src/main.py --watch             # hot-reload .kv/theme on save (development)
+python3 src/main.py --screenshot r.png  # start, save a screenshot and quit
 ```
 
-## Modo portable
+## Portable mode
 
-Crea un archivo vacío llamado `portable` junto al ejecutable (o a `src/main.py`
-si lo ejecutas desde el código). Entonces los ajustes, el caché y los registros
-se guardan en esa misma carpeta en lugar de en el directorio del usuario.
+Create an empty file named `portable` next to the executable (or next to
+`src/main.py` if you run from source). Settings, cache and logs are then stored in
+that same folder instead of the user's config directory.
 
-## Pruebas
+## Tests
 
 ```bash
 python3 -m unittest discover -t . -s tests -v
 ```
 
-## Empaquetado
+## Packaging
 
-Se usa **PyInstaller** en modo *one-folder* (más rápido y depurable que
-`--onefile`). La especificación es multiplataforma: `packaging/blendermanager.spec`.
+Packaging uses **PyInstaller** in *one-folder* mode (faster and easier to debug
+than `--onefile`). The spec is cross-platform: `packaging/blendermanager.spec`.
 
-Linux (binario portable y, opcionalmente, AppImage):
+Linux (portable binary and, optionally, an AppImage):
 
 ```bash
-packaging/build.sh            # genera dist/BlenderManager
-packaging/build.sh --appimage # además genera dist/BlenderManager-x86_64.AppImage
+packaging/build.sh             # produces dist/BlenderManager
+packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppImage
 ```
-
-En Linux conviene compilar dentro de una imagen con glibc antigua
-(por ejemplo `manylinux_2_28`) para que el binario funcione en más
-distribuciones. De eso se encarga el flujo de GitHub Actions.
 
 ### CI (GitHub Actions)
 
-El flujo `.github/workflows/build.yml` ejecuta las pruebas y genera artefactos
-para **Linux** (`.tar.gz` + `.AppImage`), **Windows** (`.zip`) y **macOS** (`.app`
-comprimido). Se lanza al empujar una etiqueta `v*` o manualmente.
+`.github/workflows/build.yml` runs the tests and produces artifacts for **Linux**
+(`.tar.gz` + `.AppImage`), **Windows** (`.zip`) and **macOS** (compressed `.app`).
+It runs when you push a `v*` tag or manually from the Actions tab. When a tag is
+pushed, a **GitHub Release** is created with all the binaries attached.
 
-## Requisitos de la compilación de Linux
+The binaries are **not** committed to the repository; they are downloadable from
+the workflow run (or from the Release for tagged versions).
 
-Blender Launcher V2 pedía glibc 2.31; aquí, compilando en `manylinux_2_28`, el
-binario portable requiere **glibc 2.28 o superior**, lo que cubre la mayoría de
-distribuciones actuales. El **AppImage** no necesita instalar nada, aunque en
-sistemas sin `libfuse2` hay que ejecutarlo con `--appimage-extract-and-run`.
+## Linux requirements
 
-## Estructura del proyecto
+Building on `ubuntu-22.04` means the portable binary needs **glibc 2.35 or
+higher**. The **AppImage** needs nothing installed, although on systems without
+`libfuse2` you have to run it with `--appimage-extract-and-run`. The file to
+share is `BlenderManager-x86_64.AppImage`.
+
+## Project structure
 
 ```
 src/
-  main.py            # punto de entrada y argumentos
-  paths.py           # rutas (código fuente vs. empaquetado)
-  i18n.py            # traducciones es/en
-  model/build.py     # modelo de datos (Build, InstalledBuild)
+  main.py            # entry point and arguments
+  paths.py           # paths (source vs. packaged)
+  i18n.py            # English/Spanish translations
+  model/build.py     # data model (Build, InstalledBuild)
   services/
-    api.py           # consulta la API JSON de Blender y cachea
-    detector.py      # sistema operativo y arquitectura
-    settings.py      # ajustes persistentes y modo portable
-    downloader.py    # descarga en hilo con progreso y SHA-256
-    extractor.py     # extracción segura de tar/zip
-    installed.py     # escaneo de versiones instaladas
-    launcher.py      # lanzamiento de Blender
+    api.py           # queries and caches Blender's JSON API
+    detector.py      # operating system and architecture
+    settings.py      # persistent settings and portable mode
+    downloader.py    # threaded download with progress and SHA-256
+    extractor.py     # safe tar/zip extraction
+    installed.py     # scans installed versions
+    launcher.py      # launches Blender (detached process)
   ui/
-    theme.py         # paleta, colores y fuente de iconos
-    icons.py         # glifos de Font Awesome
-    widgets.py       # tarjetas, barra lateral y controlador principal
-    tooltip.py       # sistema de tooltips
-  views/gui.kv       # interfaz declarativa (Kivy Language)
-  assets/            # logo de Blender y fuente de iconos
-tests/               # pruebas unitarias (unittest)
-packaging/           # spec de PyInstaller, AppImage y .desktop
+    theme.py         # palette, colors and icon font
+    icons.py         # Font Awesome glyphs
+    widgets.py       # cards, sidebar and main controller
+    tooltip.py       # tooltip / hover system
+  views/gui.kv       # declarative UI (Kivy Language)
+  assets/            # Blender logo, app icon and icon font
+tests/               # unit tests (unittest)
+packaging/           # PyInstaller spec, AppImage script and .desktop
+dist/                # build output (binaries ignored by git)
 ```
 
-## Créditos
+## Credits
 
-Este proyecto retoma y termina dos intentos propios anteriores
-(`BlenderDownloader` en Qt y `BlenderManager` en Kivy) y se inspira en
-[Blender Launcher V2](https://github.com/Victor-IX/Blender-Launcher-V2): de él
-viene la idea de usar la API JSON de Blender y el mapa de versiones LTS, que
-evitan el scraping frágil de las primeras versiones.
+This project finishes two earlier attempts of mine (`BlenderDownloader` in Qt and
+`BlenderManager` in Kivy) and is inspired by
+[Blender Launcher V2](https://github.com/Victor-IX/Blender-Launcher-V2): the idea
+of using Blender's JSON API and the LTS version map comes from it, which avoids
+the fragile scraping of the first versions.
 
-El logo de Blender es una marca de la [Blender Foundation](https://www.blender.org/).
-Los iconos son de [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
+The Blender logo is a trademark of the [Blender Foundation](https://www.blender.org/).
+Icons are from [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
