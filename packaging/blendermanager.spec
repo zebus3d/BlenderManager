@@ -10,11 +10,22 @@ Uso:
         --distpath dist --workpath build
 """
 
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH).resolve().parent
 SRC = ROOT / "src"
+
+# La versión vive en src/version.py; el CI la reescribe desde el tag antes de
+# compilar (packaging/inject_version.py) y genera el recurso de versión de
+# Windows a partir de ella.
+_version_match = re.search(
+    r'__version__\s*=\s*"([^"]+)"',
+    (SRC / "version.py").read_text(encoding="utf-8"),
+)
+APP_VERSION = _version_match.group(1) if _version_match else "0.0.0"
+VERSION_INFO = ROOT / "packaging" / "version_info.txt"
 
 block_cipher = None
 
@@ -51,6 +62,8 @@ exe = EXE(
     upx=False,
     console=False,
     disable_windowed_traceback=False,
+    # Recurso de versión del .exe (solo aplica en Windows).
+    version=str(VERSION_INFO) if VERSION_INFO.is_file() else None,
 )
 
 coll = COLLECT(
@@ -70,5 +83,7 @@ if sys.platform == "darwin":
         bundle_identifier="org.zebus3d.blendermanager",
         info_plist={
             "NSHighResolutionCapable": True,
+            "CFBundleShortVersionString": APP_VERSION,
+            "CFBundleVersion": APP_VERSION,
         },
     )

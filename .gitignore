@@ -7,6 +7,9 @@ venv/
 build/
 *.spec.bak
 
+# Recurso de versión generado por el CI a partir del tag.
+packaging/version_info.txt
+
 # Los binarios de dist/ no se versionan, pero sí su documentación.
 dist/*
 !dist/README.md
