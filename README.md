@@ -108,11 +108,15 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 
 `.github/workflows/build.yml` runs the tests and produces artifacts for **Linux**
 (`.AppImage`), **Windows** (`.zip`) and **macOS** (compressed `.app`).
-It runs when you push a `v*` tag or manually from the Actions tab. When a tag is
-pushed, a **GitHub Release** is created with all the binaries attached.
+
+- On every push to `master` it also publishes a **pre-release** with a per-build
+  version (e.g. `v1.1.42`), so every compilation is downloadable from Releases.
+- Pushing a `vX.Y.Z` tag publishes a **stable Release** (not a pre-release).
+  Only these stable releases trigger the in-app auto-update, because the app
+  checks `.../releases/latest`, which ignores pre-releases.
 
 The binaries are **not** committed to the repository; they are downloadable from
-the workflow run (or from the Release for tagged versions).
+the Release (or from the workflow run).
 
 ## Linux requirements
 
