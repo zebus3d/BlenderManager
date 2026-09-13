@@ -296,6 +296,19 @@ class RootWidget(BoxLayout):
     has_builds = BooleanProperty(False)
     has_installed = BooleanProperty(False)
 
+    def _get_show_filters(self):
+        """Los filtros solo tienen sentido fuera de la pantalla de ajustes."""
+        return self.view != "settings"
+
+    # Controla la visibilidad de la búsqueda, el refresco y la barra de filtros.
+    show_filters = AliasProperty(_get_show_filters, bind=("view",))
+
+    def _get_show_zoom(self):
+        """La barra de zoom (tamaño de icono) solo aplica en rejilla y sin ajustes."""
+        return self.view != "settings" and self.layout_mode == "grid"
+
+    show_zoom = AliasProperty(_get_show_zoom, bind=("view", "layout_mode"))
+
     def __init__(self, **kwargs):
         # Al llamar a super() se aplican ya las reglas del .kv, así que las
         # propiedades de arriba deben tener valores por defecto válidos.
