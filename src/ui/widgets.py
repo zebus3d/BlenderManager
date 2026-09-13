@@ -974,10 +974,13 @@ class RootWidget(BoxLayout):
         self.settings.save()
 
     def _auto_check_updates(self):
-        # También en modo fuente: ahora la comprobación usa el último tag del
-        # checkout, así que ofrecerá git pull en vez de descargar un binario.
-        if self.auto_update:
-            self.check_updates(manual=False)
+        if not self.auto_update:
+            return
+        # En modo fuente sin checkout git no hay nada que actualizar; si no,
+        # ofrecería en cada arranque una descarga que además no se puede aplicar.
+        if not getattr(sys, "frozen", False) and updater.source_root() is None:
+            return
+        self.check_updates(manual=False)
 
     def check_updates(self, manual=False):
         """Comprueba en segundo plano si hay una versión nueva publicada."""
@@ -1012,10 +1015,13 @@ class RootWidget(BoxLayout):
             if manual:
                 self._show_message(tr("You are up to date"))
             return
-        # Modo fuente sobre un checkout git: se actualiza con git pull, sin
-        # descargar ningún binario.
-        if source is not None and updater.source_root() is not None:
-            self._show_source_update(tag)
+        # Modo fuente: con checkout git se hace git pull; sin él no hay nada que
+        # reemplazar, así que (solo si lo pidió el usuario) abrimos la release.
+        if not getattr(sys, "frozen", False):
+            if updater.source_root() is not None:
+                self._show_source_update(tag)
+            elif manual:
+                updater.open_releases()
             return
         asset_name = updater.asset_for(self.system)
         asset = next((item for item in assets if item["name"] == asset_name), None)
