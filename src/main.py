@@ -23,9 +23,8 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 import i18n
-import version
 from paths import ASSETS_DIR, VIEWS_DIR
-from services import api, detector, settings as settings_service
+from services import api, detector, settings as settings_service, updater
 
 
 def smoke():
@@ -161,10 +160,9 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
         def build(self):
             app_settings = settings_service.Settings.load()
             i18n.set_language(app_settings.language)
-            # La versión también en el título: en modo fuente es "0.0.0" (el CI
-            # la inyecta al empaquetar), así que lo marcamos como "dev".
-            shown_version = version.__version__ if version.__version__ != "0.0.0" else "dev"
-            self.title = f"{i18n.tr('Blender Downloads Manager')} {shown_version}"
+            # La versión también en el título. En modo fuente sale del último
+            # tag del repo (updater.app_version), no del 0.0.0 de version.py.
+            self.title = f"{i18n.tr('Blender Downloads Manager')} {updater.app_version()}"
             Window.clearcolor = theme.BG
             # Restauramos el tamaño que dejó el usuario en la sesión anterior.
             width = max(880, app_settings.window_width or 1060)
