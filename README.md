@@ -24,6 +24,9 @@ designed to be **portable**: once packaged, users don't need to install anything
 - **Filters and search also apply to installed versions**.
 - **Blender runs detached**: closing the manager does **not** close the Blender
   instances you launched from it.
+- **Release notes one click away**: every build card has a small blue **i** that
+  opens that series' release notes (e.g. `developer.blender.org/docs/release_notes/5.2/`)
+  in your browser, so you can check what changed before downloading.
 - **Visual hints**: installed builds are highlighted, builds still to download
   are dimmed; buttons and cards highlight on hover.
 - **Interface in English and Spanish** with automatic language detection.
@@ -53,13 +56,33 @@ that one flow to have as little friction as possible, particularly on Linux.
 | Focus | Official builds only | Official builds, forks and experimental branches |
 | Views | Grid **and** list, with a zoom slider | Library / downloads pages |
 | Languages | English and Spanish | English |
-| Linux footprint | One AppImage, standard library only | Larger Qt bundle |
+| Linux download | One AppImage (~50 MB) | Two Linux zips (~95-107 MB), pick the right one |
+| Running from source | System Python + Kivy | Python + PySide/Qt dependencies |
 
-The practical difference on Linux is the weight: Blender Manager is a single
-AppImage, starts fast and doesn't pull in Qt. If you just want "the official
-Blender builds, downloaded and launched in a couple of clicks", it is the
-simpler tool. If you need forks, experimental branches or the tray integration,
-Blender Launcher V2 remains the more powerful option.
+### Why it may suit you better on Linux
+
+Linux is where this project started, because getting the alternative running on
+a rolling-release distro was more work than it should be. Concretely:
+
+- **One file, no install.** `BlenderManager-x86_64.AppImage` (~50 MB) is the
+  whole app. Blender Launcher V2 ships two different Linux zips (`Linux_x64` and
+  `Ubuntu_x64`, ~95-107 MB) and you have to know which one matches your system.
+- **No Qt to fight with.** Kivy renders with OpenGL and carries its own widgets,
+  so there is no Qt platform plugin to install, no `qt.qpa.plugin` error and no
+  mismatch between the bundled Qt and the system one — the classic reason a Qt
+  app refuses to open on Arch or on an older Ubuntu.
+- **Runs from source with the system Python.** `python3 src/main.py` needs only
+  Kivy (`sudo pacman -S python-kivy`); everything else is the standard library.
+  No virtualenv, no compiled dependencies, no lockfile.
+- **Updates the way you installed it.** The AppImage replaces itself and
+  restarts; a git checkout runs `git pull --ff-only` and restarts. Either way
+  you never go back to the browser to update.
+- **It speaks Spanish**, detected automatically from your locale.
+
+If you just want "the official Blender builds, downloaded and launched in a
+couple of clicks", this is the simpler tool. If you need forks, experimental
+branches or the tray integration, Blender Launcher V2 remains the more powerful
+option.
 
 ## Running from source
 

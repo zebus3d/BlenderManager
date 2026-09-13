@@ -272,3 +272,25 @@ class DetectorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReleaseNotesUrlTests(unittest.TestCase):
+    """La "i" de cada tarjeta abre las notas de esa serie de Blender."""
+
+    def test_series_page(self):
+        self.assertEqual(
+            api.release_notes_url("4.2.1"),
+            "https://developer.blender.org/docs/release_notes/4.2/")
+        self.assertEqual(
+            api.release_notes_url("5.2.0-alpha"),
+            "https://developer.blender.org/docs/release_notes/5.2/")
+        self.assertEqual(
+            api.release_notes_url("2.93.18"),
+            "https://developer.blender.org/docs/release_notes/2.93/")
+
+    def test_falls_back_to_the_index(self):
+        # Sin versión entendible o antes de que hubiera notas publicadas.
+        for version in ("", None, "sin numero", "2.78c", "1.0"):
+            self.assertEqual(
+                api.release_notes_url(version),
+                "https://developer.blender.org/docs/release_notes/")

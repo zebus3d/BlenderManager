@@ -63,6 +63,10 @@ PLAY_GREEN = (0x22 / 255, 0xC5 / 255, 0x5E / 255, 1)  # icono de play
 SUCCESS_TEXT = (0x6F / 255, 0xCF / 255, 0x7A / 255, 1)
 INFO_TEXT = (0x7A / 255, 0xA7 / 255, 0xE0 / 255, 1)
 
+# Disco del icono de informacion de las tarjetas (azul apagado que se aclara
+# al pasar el raton). La "i" que va encima siempre es blanca.
+INFO_DISC = (0x45 / 255, 0x72 / 255, 0x9B / 255, 1)
+
 # Fuente de iconos (Font Awesome Free). Se registra con un nombre lógico
 # para poder usarla desde el .kv con font_name: "Icons".
 ICON_FONT = "Icons"
