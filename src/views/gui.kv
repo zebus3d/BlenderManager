@@ -28,6 +28,11 @@
     color: theme.TEXT_SEL if (self.state == "down" or self.hovered) else theme.TEXT
     font_size: sp(13)
     bold: True
+    # OJO: allow_no_selection solo lo respeta Kivy si el botón está en un
+    # `group` (ToggleButtonBehavior._do_press lo comprueba). Sin grupo, volver
+    # a pulsar el filtro activo lo apagaba y ya no se volvía a encender,
+    # porque la regla `state:` de abajo solo se reevalúa cuando cambia
+    # root.channel. Por eso cada conjunto de pastillas lleva su `group`.
     allow_no_selection: False
     canvas.before:
         Color:
@@ -51,6 +56,7 @@
     font_name: theme.ICON_FONT
     font_size: sp(20)
     color: theme.TEXT_SEL if (self.state == "down" or self.hovered) else theme.TEXT
+    # Mismo motivo que en <Pill>: sin `group` esto no hace nada.
     allow_no_selection: False
     canvas.before:
         Color:
@@ -629,30 +635,35 @@
             tooltip_text: tr("Filter: all channels")
             state: "down" if root.channel == "all" else "normal"
             disabled: not root.show_filters
+            group: "channel"
             on_release: root.set_channel("all")
         Pill:
             text: tr("LTS")
             tooltip_text: tr("Filter: LTS only")
             state: "down" if root.channel == "lts" else "normal"
             disabled: not root.show_filters
+            group: "channel"
             on_release: root.set_channel("lts")
         Pill:
             text: tr("Stable")
             tooltip_text: tr("Filter: stable only")
             state: "down" if root.channel == "stable" else "normal"
             disabled: not root.show_filters
+            group: "channel"
             on_release: root.set_channel("stable")
         Pill:
             text: tr("LTS + Stable")
             tooltip_text: tr("Filter: LTS and stable")
             state: "down" if root.channel == "lts_stable" else "normal"
             disabled: not root.show_filters
+            group: "channel"
             on_release: root.set_channel("lts_stable")
         Pill:
             text: tr("Daily")
             tooltip_text: tr("Filter: daily and alpha")
             state: "down" if root.channel == "daily" else "normal"
             disabled: not root.show_filters
+            group: "channel"
             on_release: root.set_channel("daily")
         Widget:
         Pill:
@@ -662,6 +673,7 @@
             font_size: sp(14)
             state: "down" if root.layout_mode == "grid" else "normal"
             disabled: not root.show_filters
+            group: "layout"
             on_release: root.set_layout_mode("grid")
         Pill:
             text: icons.LIST
@@ -670,6 +682,7 @@
             font_size: sp(14)
             state: "down" if root.layout_mode == "list" else "normal"
             disabled: not root.show_filters
+            group: "layout"
             on_release: root.set_layout_mode("list")
         HoverSpinner:
             text: root.platform_label
@@ -711,17 +724,20 @@
                 text: icons.INSTALLED
                 tooltip_text: tr("Show installed versions")
                 state: "down" if root.view == "installed" else "normal"
+                group: "view"
                 on_release: root.set_view("installed")
             SideButton:
                 text: icons.STORE
                 tooltip_text: tr("Show the store")
                 state: "down" if root.view == "store" else "normal"
+                group: "view"
                 on_release: root.set_view("store")
             Widget:
             SideButton:
                 text: icons.SETTINGS
                 tooltip_text: tr("Open settings")
                 state: "down" if root.view == "settings" else "normal"
+                group: "view"
                 on_release: root.set_view("settings")
 
         # Las tres vistas viven en un ScreenManager: solo se dibuja la activa

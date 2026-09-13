@@ -13,10 +13,10 @@ extra al empaquetado.
 import json
 import time
 import urllib.request
-from dataclasses import asdict
+from dataclasses import asdict, fields
 
 from model.build import Build
-from services.settings import cache_dir
+from services.settings import cache_dir, write_json_atomic
 
 API_URL = "https://builder.blender.org/download/daily/?format=json&v=2"
 CACHE_MAX_AGE = 3600  # una hora de validez para el caché en disco
@@ -54,7 +54,7 @@ def _to_build(entry: dict) -> Build:
         size=int(entry.get("file_size") or 0),
         checksum=entry.get("checksum"),
         mtime=int(entry.get("file_mtime") or 0),
-        release_cycle=str(entry.get("release_cycle") or ""),
+        build_hash=str(entry.get("hash") or ""),
     )
 
 
@@ -70,10 +70,8 @@ def fetch_builds(timeout: int = 20):
 
 
 def save_cache(builds) -> None:
-    path = cache_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"saved_at": int(time.time()), "builds": [asdict(build) for build in builds]}
-    path.write_text(json.dumps(payload), encoding="utf-8")
+    write_json_atomic(cache_path(), payload)
 
 
 def load_cache(max_age=CACHE_MAX_AGE):
@@ -87,10 +85,14 @@ def load_cache(max_age=CACHE_MAX_AGE):
         return []
     if max_age is not None and time.time() - payload.get("saved_at", 0) > max_age:
         return []
+    # Un caché escrito por una versión anterior puede traer campos que ya no
+    # existen (o faltarle alguno nuevo): nos quedamos solo con los que conoce
+    # el modelo, en vez de descartar la entrada entera.
+    known = {field.name for field in fields(Build)}
     builds = []
     for item in payload.get("builds", []):
         try:
-            builds.append(Build(**item))
+            builds.append(Build(**{key: value for key, value in item.items() if key in known}))
         except TypeError:
             continue
     return builds

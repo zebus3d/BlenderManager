@@ -36,7 +36,12 @@ def _safe_extract_tar(archive: tarfile.TarFile, dest: Path) -> None:
             link_target = target.parent / member.linkname
             if not _within(dest, link_target):
                 raise ValueError("unsafe link in archive: " + member.name)
-    archive.extractall(dest)
+    # Pedimos el filtro "data" explícitamente: sin él, Python 3.12/3.13 usan
+    # "fully_trusted" (con DeprecationWarning) y 3.14 ya usa "data" por
+    # defecto, así que el comportamiento cambiaría según con qué versión se
+    # empaquete. Nuestras comprobaciones de arriba siguen siendo la primera
+    # barrera; esta es la segunda.
+    archive.extractall(dest, filter="data")
 
 
 def _safe_extract_zip(archive: zipfile.ZipFile, dest: Path) -> None:

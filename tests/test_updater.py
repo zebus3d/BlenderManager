@@ -100,5 +100,40 @@ class LatestReleaseTests(unittest.TestCase):
             self.assertIsNone(updater.latest_release())
 
 
+class CleanupTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self._original = updater.cache_dir
+        updater.cache_dir = lambda: Path(self.tmp.name)
+
+    def tearDown(self):
+        updater.cache_dir = self._original
+        self.tmp.cleanup()
+
+    def test_cleanup_removes_downloads_but_keeps_cache(self):
+        base = updater.updates_dir()
+        (base / "staging-1").mkdir(parents=True)
+        (base / "BlenderManager-x86_64.AppImage").write_text("binario grande")
+        (base / "release.json").write_text("{}")
+        (base / "release.etag").write_text("etag")
+        updater.cleanup_staging()
+        self.assertFalse((base / "staging-1").exists())
+        self.assertFalse((base / "BlenderManager-x86_64.AppImage").exists())
+        self.assertTrue((base / "release.json").is_file())
+        self.assertTrue((base / "release.etag").is_file())
+
+    def test_cleanup_partials(self):
+        folder = Path(self.tmp.name) / "blenders"
+        folder.mkdir()
+        (folder / "blender.tar.xz.part").write_text("a medias")
+        (folder / "blender.tar.xz").write_text("completo")
+        updater.cleanup_partials(folder)
+        self.assertFalse((folder / "blender.tar.xz.part").exists())
+        self.assertTrue((folder / "blender.tar.xz").is_file())
+
+    def test_cleanup_missing_folder(self):
+        updater.cleanup_partials("/nonexistent/path/xyz")
+
+
 if __name__ == "__main__":
     unittest.main()

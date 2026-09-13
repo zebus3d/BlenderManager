@@ -21,6 +21,15 @@ class I18nTests(unittest.TestCase):
         i18n.set_language("es")
         self.assertEqual(i18n.tr("Downloading {name}", name="x.tar.xz"), "Descargando x.tar.xz")
 
+    def test_broken_placeholder_does_not_raise(self):
+        i18n.set_language("es")
+        # Una traducción con una llave suelta no puede tumbar la interfaz.
+        i18n._TRANSLATIONS["es"]["__rota__"] = "Version {"
+        try:
+            self.assertEqual(i18n.tr("__rota__", version="1"), "Version {")
+        finally:
+            del i18n._TRANSLATIONS["es"]["__rota__"]
+
     def test_auto_falls_back(self):
         i18n.set_language("auto")
         self.assertIn(i18n.get_language(), ("en", "es"))
