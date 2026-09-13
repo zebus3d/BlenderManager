@@ -17,6 +17,8 @@ designed to be **portable**: once packaged, users don't need to install anything
   extraction (`.tar.xz` on Linux, `.zip` on Windows). On macOS Blender is only
   published as `.dmg`, which is not extracted: the app downloads it, reveals it
   in Finder and tells you to open it.
+- **Self-updating**: packaged builds (Linux AppImage, Windows) replace themselves
+  and restart; a source checkout runs `git pull` and restarts instead.
 - **Configurable destination folder**, **remembered window size** and a list of
   **installed versions** (launch or uninstall them from the app).
 - **Filters and search also apply to installed versions**.
@@ -29,6 +31,35 @@ designed to be **portable**: once packaged, users don't need to install anything
 - **Portable mode**: settings live next to the executable.
 
 ![List view](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/installed_list.png)
+
+![Update dialog](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/update_dialog.png)
+
+## How is it different from Blender Launcher V2?
+
+[Blender Launcher V2](https://github.com/Victor-IX/Blender-Launcher-V2) is the
+de-facto tool for this job and the reason this project exists: it showed that
+Blender's official JSON API is all you need to manage builds reliably. It is
+also **more complete** than Blender Manager, especially on Windows — forks
+(Bforartists, UPBGE), experimental branches, favorites, templates, a tray icon,
+a running-instance counter and `.blend` association.
+
+Blender Manager deliberately does **less**: find a build, download it, launch
+it. The bet is that most people only need *official* Blender builds and want
+that one flow to have as little friction as possible, particularly on Linux.
+
+| | **Blender Manager** | **Blender Launcher V2** |
+|---|---|---|
+| UI toolkit | Kivy (no Qt) | Qt-based |
+| Focus | Official builds only | Official builds, forks and experimental branches |
+| Views | Grid **and** list, with a zoom slider | Library / downloads pages |
+| Languages | English and Spanish | English |
+| Linux footprint | One AppImage, standard library only | Larger Qt bundle |
+
+The practical difference on Linux is the weight: Blender Manager is a single
+AppImage, starts fast and doesn't pull in Qt. If you just want "the official
+Blender builds, downloaded and launched in a couple of clicks", it is the
+simpler tool. If you need forks, experimental branches or the tray integration,
+Blender Launcher V2 remains the more powerful option.
 
 ## Running from source
 
