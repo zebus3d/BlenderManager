@@ -10,9 +10,16 @@ designed to be **portable**: once packaged, users don't need to install anything
 ## Features
 
 - **Build store** with cards and icons, channel filters (LTS, Stable, LTS + Stable,
-  Daily) and search by version or branch.
+  Daily, Experimental, Patch) and search by version or branch.
+- **Experimental and Patch builds**: the *Experimental* tab shows Blender's
+  official feature branches (empty most of the time — Blender rarely publishes
+  them), and *Patch* shows the pull-request builds (`main-PRxxxxx`), which are
+  the newest changes under review and are almost always available.
 - **Grid or list view**, with a **zoom slider** to choose the icon size (Dolphin-style).
 - **Automatic detection** of the operating system and architecture.
+- **Download for another platform or architecture**: pick Windows, macOS or ARM64
+  in the filter bar to grab a build for a friend or a USB stick, not just for the
+  machine you are running on.
 - **Downloads with progress**, **SHA-256** integrity verification and automatic
   extraction (`.tar.xz` on Linux, `.zip` on Windows). On macOS Blender is only
   published as `.dmg`, which is not extracted: the app downloads it, reveals it
@@ -47,13 +54,14 @@ also **more complete** than Blender Manager, especially on Windows — forks
 a running-instance counter and `.blend` association.
 
 Blender Manager deliberately does **less**: find a build, download it, launch
-it. The bet is that most people only need *official* Blender builds and want
+it. It covers the *official* Blender builds (stable, LTS, daily and the official
+experimental branches), and the bet is that most people only need those and want
 that one flow to have as little friction as possible, particularly on Linux.
 
 | | **Blender Manager** | **Blender Launcher V2** |
 |---|---|---|
 | UI toolkit | Kivy (no Qt) | Qt-based |
-| Focus | Official builds only | Official builds, forks and experimental branches |
+| Focus | Official builds and official experimental branches | Official builds, forks and experimental branches |
 | Views | Grid **and** list, with a zoom slider | Library / downloads pages |
 | Languages | English and Spanish | English |
 | Linux download | One AppImage (~50 MB) | Two Linux zips (~95-107 MB), pick the right one |
@@ -205,13 +213,17 @@ src/
     extractor.py     # safe tar/zip extraction
     installed.py     # scans installed versions
     launcher.py      # launches Blender (detached process)
+    updater.py       # checks and applies updates
   ui/
     theme.py         # palette, colors and icon font
     icons.py         # Font Awesome glyphs
-    widgets.py       # cards, sidebar and main controller
     tooltip.py       # tooltip / hover system
-  views/gui.kv       # declarative UI (Kivy Language)
+    widgets/         # Python widgets, split by topic:
+                     #   basic, spinners, dialogs, cards, root (controller)
+  views/             # declarative UI (Kivy Language), one .kv per group:
+                     #   widgets.kv, dialogs.kv, cards.kv, main.kv
   assets/            # Blender logo, app icon and icon font
+doc/                 # architecture guide in Spanish (for beginners)
 tests/               # unit tests (unittest)
 packaging/           # PyInstaller spec, AppImage script and .desktop
 dist/                # build output (binaries ignored by git)

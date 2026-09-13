@@ -91,6 +91,16 @@ _TRANSLATIONS = {
         "Filter: stable only": "Filtro: solo estables (sin LTS)",
         "Filter: LTS and stable": "Filtro: versiones LTS y estables juntas",
         "Filter: daily and alpha": "Filtro: versiones diarias y alfa",
+        "Experimental": "Experimentales",
+        "Filter: experimental branches": "Filtro: solo ramas experimentales (funciones en desarrollo)",
+        "No experimental builds right now": "Ahora mismo no hay ramas experimentales disponibles",
+        "Feature branches with new features still in development.":
+            "Ramas con funciones nuevas todavía en desarrollo. Pueden ser inestables.",
+        "Patch": "Patch",
+        "Filter: pull request builds": "Filtro: builds de pull requests (cambios en revisión)",
+        "No patch builds right now": "Ahora mismo no hay builds de pull request disponibles",
+        "Proposed changes that are still under review.":
+            "Propuestas de cambios que todavía están en revisión. Pueden ser inestables.",
         "LTS + Stable": "LTS + Estable",
         "Grid view": "Vista en cuadrícula de iconos",
         "List view": "Vista en filas",

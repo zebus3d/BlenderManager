@@ -1,0 +1,44 @@
+# Guía de Blender Manager
+
+Esta carpeta explica **cómo está montado el programa** para que puedas
+entenderlo y modificarlo a mano con el tiempo. Está escrita pensando en alguien
+que está aprendiendo Python y Kivy, así que empieza por lo básico y va subiendo.
+
+## Por dónde empezar
+
+1. **[00 - Empieza aquí](00-empieza-aqui.md)** — qué hace la aplicación, cómo se
+   ejecuta y dónde está el archivo principal.
+2. **[01 - Arquitectura](01-arquitectura.md)** — cómo se reparte el código por
+   capas (modelo, servicios, interfaz) y cómo viaja la información.
+3. **[02 - Kivy](02-kivy.md)** — los conceptos de Kivy que usa el proyecto y
+   dónde ver cada uno en el código.
+4. **[03 - Diseño de la interfaz](03-diseno-ui-ux.md)** — los colores, los
+   espacios y las reglas visuales, para que todo siga teniendo el mismo aspecto.
+5. **[04 - Cómo añadir algo](04-como-anadir.md)** — ejemplo real y paso a paso:
+   así se añadió el canal de ramas experimentales.
+
+## Resumen en una imagen
+
+```
+                 ┌──────────────────────────────────────────┐
+   EL USUARIO →  │  main.py  (arranca Kivy y carga las .kv)  │
+                 └────────────────────┬─────────────────────┘
+                                      │
+                 ┌────────────────────▼─────────────────────┐
+   LO QUE VES →  │  views/*.kv   +   ui/widgets/root.py      │
+                 │  (aspecto)        (comportamiento)         │
+                 └────────────────────┬─────────────────────┘
+                                      │ pide datos / acciones
+                 ┌────────────────────▼─────────────────────┐
+   LA LÓGICA →   │  services/  (api, downloader, extractor,  │
+                 │  installed, launcher, settings, updater)  │
+                 └────────────────────┬─────────────────────┘
+                                      │ usa
+                 ┌────────────────────▼─────────────────────┐
+   LOS DATOS →   │  model/build.py  (Build, InstalledBuild)  │
+                 └──────────────────────────────────────────┘
+```
+
+La regla de oro del proyecto: **la vista (`.kv`) describe el aspecto, el
+controlador (`root.py`) decide qué hacer, y los servicios hacen el trabajo
+pesado**. Si mantienes esa separación, todo seguirá siendo fácil de entender.

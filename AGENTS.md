@@ -15,11 +15,40 @@ src/
   model/build.py     # modelo de compilación
   services/          # api, downloader, extractor, installed, launcher,
                      # detector, settings, updater
-  ui/                # theme, icons, tooltip, widgets (lógica de la pantalla)
-  views/gui.kv       # interfaz declarativa Kivy
+  ui/                # theme, icons, tooltip
+    widgets/         # widgets de Python, repartidos por temas:
+                     #   basic, spinners, dialogs, cards, root (controlador)
+  views/             # interfaz declarativa Kivy, un .kv por grupo:
+                     #   widgets.kv, dialogs.kv, cards.kv, main.kv
+doc/                 # guía de arquitectura en español (para principiantes)
 packaging/           # spec de PyInstaller, scripts de build, inject_version.py
 tests/               # unittest
 ```
+
+`main.py` define `KV_FILES` (los `.kv` a cargar, en orden) y registra en la
+`Factory` las clases de `ui/widgets/` antes de cargar las vistas. El paquete
+`ui/widgets/__init__.py` reexporta todo, así que `from ui.widgets import X`
+sigue funcionando como cuando era un solo archivo.
+
+## Canales de compilaciones
+
+Todo vive en `src/services/api.py`; el filtrado por canal es la función pura
+`filter_builds` (testeada en `tests/test_services.py`). Blender publica **tres
+listados** y se descargan los tres:
+
+- **Daily** (`API_URL`): estables y LTS por rama, más las alfas de `main`.
+- **Experimental** (`EXPERIMENTAL_URL`, sección "Branch"): ramas de funciones
+  nuevas. **Casi siempre está vacío** (Blender solo las publica de vez en
+  cuando); por eso el canal muestra un aviso propio. Blender Launcher usa este
+  mismo endpoint.
+- **Patch** (`PATCH_URL`): builds de pull requests (`main-PR161547`). Son lo más
+  nuevo y casi nunca faltan; el campo `Build.patch` guarda el id de la PR.
+
+Los canales *Experimental* y *Patch* solo se ven en su propia pestaña: el
+resto de canales los excluye para no confundir. En `fetch_builds` los dos
+listados "extra" van cada uno en su `try` (un fallo ahí no debe tumbar el
+listado normal). `Build.experimental` y `Build.patch` se cachean con `asdict` y
+los cachés viejos caen a sus valores por defecto.
 
 ## Comandos
 
@@ -114,9 +143,9 @@ que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
 
 ## Auto-update
 
-- Lógica en `src/services/updater.py`; UI en `src/ui/widgets.py`
+- Lógica en `src/services/updater.py`; UI en `src/ui/widgets/root.py`
   (`check_updates`, `_show_update_available`, `_show_source_update`) y controles
-  en el panel de ajustes de `src/views/gui.kv`.
+  en el panel de ajustes de `src/views/main.kv`.
 - Preferencia `auto_update` en `src/services/settings.py` (por defecto activada).
 - Aplicación por plataforma: Linux AppImage reemplaza `$APPIMAGE`; Windows
   extrae a staging y relanza el binario nuevo con `--apply-update`; macOS y no
@@ -128,8 +157,8 @@ que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
   último tag del checkout (`source_tag`) para no ofrecer la misma versión en
   cada arranque. Si hay cambios locales sin confirmar no toca nada y lo avisa
   en el diálogo.
-- Los diálogos usan `AppPopup`/`AppProgressBar` (reglas en `gui.kv`), no los
-  widgets por defecto de Kivy.
+- Los diálogos usan `AppPopup`/`AppProgressBar` (reglas en `views/dialogs.kv`),
+  no los widgets por defecto de Kivy.
 - Firma de Windows: **descartada de momento** (un self-signed no reduce
   SmartScreen/AV). Si aparecen falsos positivos, valorar CA real o Azure
   Trusted Signing y resubmit a WDSI.
@@ -143,12 +172,19 @@ cd src && SDL_VIDEODRIVER=offscreen KIVY_WINDOW=sdl2 KIVY_NO_ARGS=1 python3 -c "
 from kivy.factory import Factory
 from kivy.lang import Builder
 from ui import theme
-from ui.widgets import RootWidget, ZoomSlider  # + clases del .kv
-theme.init(); Builder.load_file('views/gui.kv')
-r = RootWidget()
+import ui.widgets as W
+theme.init()
+for name in dir(W):
+    obj = getattr(W, name)
+    if isinstance(obj, type):
+        Factory.register(name, cls=obj)
+for name in ('widgets.kv', 'dialogs.kv', 'cards.kv', 'main.kv'):
+    Builder.load_file('views/' + name)
+r = W.RootWidget()
 print(r.current_version, r.show_filters)
 "
 ```
 
-Registrar en `Factory` las clases propias usadas en el `.kv` antes de
-`Builder.load_file`, igual que hace `run_ui` en `src/main.py`.
+Registrar en `Factory` las clases propias usadas en los `.kv` antes de
+`Builder.load_file`, igual que hace `run_ui` en `src/main.py`. Los `.kv` a
+cargar son los de `KV_FILES` en `main.py`.

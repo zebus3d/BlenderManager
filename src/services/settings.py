@@ -84,6 +84,12 @@ class Settings:
     auto_update: bool = True
     window_width: int = 0
     window_height: int = 0
+    # Plataforma y arquitectura de destino elegidas en la barra de filtros.
+    # Vacías = usar las del propio equipo (lo detecta ``detector``). Se guardan
+    # para poder descargar builds de otra plataforma de forma repetida, por
+    # ejemplo para copiarlas en un USB.
+    platform: str = ""
+    arch: str = ""
 
     @classmethod
     def load(cls) -> "Settings":
@@ -106,6 +112,8 @@ class Settings:
             auto_update=bool(data.get("auto_update", True)),
             window_width=int(data.get("window_width") or 0),
             window_height=int(data.get("window_height") or 0),
+            platform=str(data.get("platform") or ""),
+            arch=str(data.get("arch") or ""),
         )
         if not settings.dest_folder:
             settings.dest_folder = str(default_destination())
