@@ -1,0 +1,351 @@
+# Estilos de las tarjetas de compilaciones (tienda e instaladas).
+#
+# Solo el ASPECTO; la lógica está en src/ui/widgets/cards.py.
+
+#:import dp kivy.metrics.dp
+#:import sp kivy.metrics.sp
+#:import theme ui.theme
+#:import icons ui.icons
+#:import tr i18n.tr
+
+# --- Tarjeta en modo lista: una compilación por fila ---
+<BuildCard>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: dp(78)
+    padding: [dp(16), dp(11), dp(12), dp(11)]
+    spacing: dp(12)
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE_ALT if self.hovered else self.row_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(12)]
+
+    Image:
+        source: "images/blender_logo.png"
+        size_hint: (None, None)
+        size: dp(44), dp(44)
+        pos_hint: {"center_y": .5}
+        opacity: 1 if root.installed else 0.32
+        allow_stretch: True
+        keep_ratio: True
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(3)
+        BoxLayout:
+            size_hint_y: None
+            height: dp(24)
+            spacing: dp(10)
+            Label:
+                text: "Blender " + root.version_text
+                color: theme.TEXT
+                opacity: 1 if root.installed else 0.6
+                font_size: sp(16)
+                bold: True
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: "middle"
+            Label:
+                text: root.channel_text
+                color: theme.WARNING if root.is_lts else theme.INFO_TEXT
+                opacity: 1 if root.installed else 0.6
+                font_size: sp(12)
+                bold: True
+                size_hint_x: None
+                width: self.texture_size[0]
+                valign: "middle"
+            Widget:
+        Label:
+            text: root.meta_text
+            color: theme.MUTED
+            opacity: 1 if root.installed else 0.6
+            font_size: sp(12)
+            halign: "left"
+            valign: "middle"
+            text_size: self.width, None
+            shorten: True
+
+    IconLinkButton:
+        text: icons.INFO
+        font_size: sp(13)
+        size: dp(22), dp(22)
+        # A la altura exacta del boton de la derecha: en las filas instaladas
+        # el rotulo "Instalada" lo baja un poco respecto al centro de la fila.
+        pos_hint: {"center_y": (action_button.center_y - root.y) / root.height if root.height else .5}
+        tooltip_text: tr("Read the release notes for this version")
+        on_release: root.owner.open_release_notes(root.version_text)
+
+    BoxLayout:
+        size_hint_x: None
+        width: dp(124)
+        orientation: "vertical"
+        spacing: dp(2)
+        Label:
+            text: tr("Installed build") if root.installed else ""
+            color: theme.SUCCESS_TEXT
+            bold: True
+            font_size: sp(12)
+        CardButton:
+            id: action_button
+            text: (("[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  ") + root.action_text) if root.installed else root.action_text
+            markup: True
+            tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
+            button_color: theme.FILTER if root.installed else theme.ACCENT
+            pressed_color: theme.SURFACE_ALT if root.installed else theme.ACCENT_DARK
+            use_gradient: True
+            on_release: root.owner.install_build(root.build)
+
+# --- Tarjeta en rejilla: icono grande y botón debajo (escala con el zoom) ---
+<GridBuildCard>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: dp(196) * root.zoom
+    padding: [dp(12) * root.zoom, dp(14) * root.zoom]
+    spacing: dp(6) * root.zoom
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE_ALT if self.hovered else self.row_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(12)]
+
+    Image:
+        source: "images/blender_logo.png"
+        size_hint: (None, None)
+        size: dp(68) * root.zoom, dp(68) * root.zoom
+        pos_hint: {"center_x": .5}
+        opacity: 1 if root.installed else 0.32
+        allow_stretch: True
+        keep_ratio: True
+
+    Label:
+        text: "Blender " + root.version_text
+        color: theme.TEXT
+        font_size: sp(15) * root.zoom
+        bold: True
+        opacity: 1 if root.installed else 0.6
+        size_hint_y: None
+        height: dp(22) * root.zoom
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        shorten: True
+
+    Label:
+        text: root.channel_text + ("  ·  " + root.meta_text if root.meta_text else "")
+        color: theme.WARNING if root.is_lts else theme.INFO_TEXT
+        font_size: sp(11) * root.zoom
+        opacity: 1 if root.installed else 0.6
+        size_hint_y: None
+        height: dp(18) * root.zoom
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+
+    Label:
+        text: tr("Installed build") if root.installed else ""
+        color: theme.SUCCESS_TEXT
+        bold: True
+        font_size: sp(12) * root.zoom
+        size_hint_y: None
+        height: dp(16) * root.zoom
+        halign: "center"
+
+    Widget:
+
+    # Fila de accion: la "i" de las notas de version a la izquierda del boton.
+    BoxLayout:
+        size_hint_y: None
+        height: dp(34) * root.zoom
+        spacing: dp(6) * root.zoom
+        Widget:
+        IconLinkButton:
+            text: icons.INFO
+            font_size: sp(12) * root.zoom
+            size_hint: (None, None)
+            size: dp(20) * root.zoom, dp(20) * root.zoom
+            pos_hint: {"center_y": .5}
+            tooltip_text: tr("Read the release notes for this version")
+            on_release: root.owner.open_release_notes(root.version_text)
+        CardButton:
+            text: (("[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  ") + root.action_text) if root.installed else root.action_text
+            markup: True
+            tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
+            button_color: theme.FILTER if root.installed else theme.ACCENT
+            pressed_color: theme.SURFACE_ALT if root.installed else theme.ACCENT_DARK
+            use_gradient: True
+            font_size: sp(13) * root.zoom
+            size_hint: (None, None)
+            # El ancho se adapta a la celda para no salirse, con un minimo legible.
+            width: max(dp(84), min(dp(150) * root.zoom, root.width - dp(56) * root.zoom))
+            height: dp(34) * root.zoom
+            pos_hint: {"center_y": .5}
+            on_release: root.owner.install_build(root.build)
+        Widget:
+
+# --- Tarjeta de una versión ya instalada (lanzar / desinstalar) ---
+# Es responsiva: el bloque de texto se estira y se recorta con "…", mientras
+# que los botones tienen un ancho fijo reducido para no salirse de la ventana.
+<InstalledCard>:
+    orientation: "horizontal"
+    size_hint_y: None
+    height: dp(66)
+    padding: [dp(14), dp(10), dp(12), dp(10)]
+    spacing: dp(10)
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE_ALT if self.hovered else self.row_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(12)]
+
+    Image:
+        source: "images/blender_logo.png"
+        size_hint: (None, None)
+        size: dp(40), dp(40)
+        pos_hint: {"center_y": .5}
+        allow_stretch: True
+        keep_ratio: True
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(2)
+        size_hint_x: 1
+        Label:
+            text: root.title
+            color: theme.TEXT
+            font_size: sp(15)
+            bold: True
+            halign: "left"
+            valign: "middle"
+            text_size: self.width, None
+            shorten: True
+        Label:
+            text: root.meta_text
+            color: theme.MUTED
+            font_size: sp(11)
+            halign: "left"
+            valign: "middle"
+            text_size: self.width, None
+            shorten: True
+
+    IconLinkButton:
+        text: icons.INFO
+        font_size: sp(13)
+        size: dp(22), dp(22)
+        pos_hint: {"center_y": .5}
+        tooltip_text: tr("Read the release notes for this version")
+        on_release: root.owner.open_release_notes(root.version_text)
+
+    CardButton:
+        text: "[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  " + root.action_text
+        markup: True
+        tooltip_text: tr("Launch this installed version")
+        button_color: theme.FILTER
+        pressed_color: theme.SURFACE_ALT
+        disabled: not root.can_launch
+        size_hint: (None, None)
+        width: dp(104)
+        on_release: root.owner.launch_installed(root.entry)
+
+    CardButton:
+        text: icons.DELETE
+        font_name: theme.ICON_FONT
+        font_size: sp(15)
+        tooltip_text: tr("Remove this installed version")
+        button_color: theme.DANGER
+        pressed_color: theme.DANGER_DARK
+        use_gradient: True
+        size_hint: (None, None)
+        width: dp(46)
+        on_release: root.owner.delete_installed(root.entry)
+
+# --- Versión instalada en cuadrícula (icono grande y botones debajo) ---
+<GridInstalledCard>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: dp(188) * root.zoom
+    padding: [dp(12) * root.zoom, dp(14) * root.zoom]
+    spacing: dp(6) * root.zoom
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE_ALT if self.hovered else self.row_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(12)]
+
+    Image:
+        source: "images/blender_logo.png"
+        size_hint: (None, None)
+        size: dp(64) * root.zoom, dp(64) * root.zoom
+        pos_hint: {"center_x": .5}
+        allow_stretch: True
+        keep_ratio: True
+
+    Label:
+        text: root.title
+        color: theme.TEXT
+        font_size: sp(14) * root.zoom
+        bold: True
+        size_hint_y: None
+        height: dp(20) * root.zoom
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        shorten: True
+
+    Label:
+        text: root.meta_text
+        color: theme.MUTED
+        font_size: sp(10) * root.zoom
+        size_hint_y: None
+        height: dp(16) * root.zoom
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        shorten: True
+
+    Widget:
+
+    BoxLayout:
+        size_hint_y: None
+        height: dp(32) * root.zoom
+        spacing: dp(6) * root.zoom
+        IconLinkButton:
+            text: icons.INFO
+            font_size: sp(12) * root.zoom
+            size_hint_x: None
+            size: dp(20) * root.zoom, dp(20) * root.zoom
+            pos_hint: {"center_y": .5}
+            tooltip_text: tr("Read the release notes for this version")
+            on_release: root.owner.open_release_notes(root.version_text)
+        CardButton:
+            text: "[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  " + root.action_text
+            markup: True
+            tooltip_text: tr("Launch this installed version")
+            button_color: theme.FILTER
+            pressed_color: theme.SURFACE_ALT
+            use_gradient: True
+            disabled: not root.can_launch
+            font_size: sp(12) * root.zoom
+            size_hint_x: 1
+            height: dp(30) * root.zoom
+            on_release: root.owner.launch_installed(root.entry)
+        CardButton:
+            text: icons.DELETE
+            font_name: theme.ICON_FONT
+            font_size: sp(14) * root.zoom
+            tooltip_text: tr("Remove this installed version")
+            button_color: theme.DANGER
+            pressed_color: theme.DANGER_DARK
+            use_gradient: True
+            size_hint_x: None
+            width: dp(42) * root.zoom
+            height: dp(30) * root.zoom
+            on_release: root.owner.delete_installed(root.entry)

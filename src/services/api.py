@@ -17,9 +17,21 @@ import urllib.request
 from dataclasses import asdict, fields
 
 from model.build import Build
+from services.downloader import log
 from services.settings import cache_dir, write_json_atomic
 
 API_URL = "https://builder.blender.org/download/daily/?format=json&v=2"
+# Las ramas experimentales (sección "Branch" del builder) publican en su
+# propio listado, el mismo que Blender Launcher usa para "experimental". Solo
+# aparece contenido cuando el equipo de Blender abre ramas de funciones nuevas;
+# la mayor parte del tiempo está vacío (y entonces la app lo explica en la
+# tienda). No confundir con las builds de "patch" (main-PRxxxxx), que son otra
+# sección y no se ofrecen aquí.
+EXPERIMENTAL_URL = "https://builder.blender.org/download/experimental/?format=json&v=2"
+# Builds "patch": las propuestas de cambios (pull requests) que aún se están
+# revisando. Son lo más nuevo y experimental que publica Blender a diario, y a
+# diferencia de las ramas experimentales casi nunca faltan.
+PATCH_URL = "https://builder.blender.org/download/patch/?format=json&v=2"
 CACHE_MAX_AGE = 3600  # una hora de validez para el caché en disco
 
 # Extensiones descargables que nos interesan (descartamos .sha256, .msi, etc.).
@@ -42,7 +54,7 @@ def _fetch_json(url: str, timeout: int = 20):
         return json.loads(response.read().decode("utf-8"))
 
 
-def _to_build(entry: dict) -> Build:
+def _to_build(entry: dict, experimental: bool = False) -> Build:
     """Convierte una entrada del JSON en un objeto Build."""
     return Build(
         version=str(entry.get("version") or ""),
@@ -56,17 +68,37 @@ def _to_build(entry: dict) -> Build:
         checksum=entry.get("checksum"),
         mtime=int(entry.get("file_mtime") or 0),
         build_hash=str(entry.get("hash") or ""),
+        experimental=experimental,
+        # El propio JSON trae a qué pull request pertenece ("PR161547"), y es
+        # null en todas las demás. Así no hace falta distinguir el endpoint.
+        patch=str(entry.get("patch") or ""),
     )
 
 
-def fetch_builds(timeout: int = 20):
-    """Descarga el listado completo y filtra las extensiones útiles."""
-    entries = _fetch_json(API_URL, timeout=timeout)
+def _fetch_builds_from(url: str, timeout: int, experimental: bool):
+    """Descarga un listado y se queda con las extensiones que sabemos abrir."""
+    entries = _fetch_json(url, timeout=timeout)
     builds = []
     for entry in entries:
         if entry.get("file_extension") not in VALID_EXTENSIONS:
             continue
-        builds.append(_to_build(entry))
+        builds.append(_to_build(entry, experimental=experimental))
+    return builds
+
+
+def fetch_builds(timeout: int = 20):
+    """Descarga el listado completo: diarias + experimentales + patch.
+
+    Los dos listados "extra" van cada uno en su propio try: casi siempre están
+    vacíos o fallan (no hay ramas abiertas, etc.) y eso no debe impedir que se
+    vean las compilaciones normales.
+    """
+    builds = _fetch_builds_from(API_URL, timeout, experimental=False)
+    for url, experimental in ((EXPERIMENTAL_URL, True), (PATCH_URL, False)):
+        try:
+            builds += _fetch_builds_from(url, timeout, experimental=experimental)
+        except Exception as error:
+            log(f"extra builds unavailable ({url}): {error}")
     return builds
 
 
@@ -130,6 +162,40 @@ def available_for(builds, platform: str, arch: str):
         if current is None or build.mtime > current.mtime:
             best[key] = build
     return sorted(best.values(), key=lambda build: build.sort_key, reverse=True)
+
+
+def filter_builds(builds, channel: str, search: str = ""):
+    """Aplica el filtro de canal y la búsqueda a las compilaciones de la tienda.
+
+    Las ramas experimentales y las builds de patch solo se ven en su propio
+    canal ("experimental" y "patch"): así no se cuelan entre las estables o las
+    diarias y no confunden a quien solo quiere una versión normal de Blender.
+    """
+    if channel == "experimental":
+        selected = [build for build in builds if build.experimental]
+    elif channel == "patch":
+        selected = [build for build in builds if build.patch]
+    else:
+        selected = [build for build in builds if not build.experimental and not build.patch]
+        if channel == "lts":
+            # Solo las versiones con soporte de larga duración.
+            selected = [build for build in selected if build.is_lts]
+        elif channel == "stable":
+            # Estables que no son LTS.
+            selected = [build for build in selected
+                        if build.risk == "stable" and not build.is_lts]
+        elif channel == "lts_stable":
+            # LTS y estables a la vez (todo lo estable).
+            selected = [build for build in selected if build.risk == "stable"]
+        elif channel == "daily":
+            selected = [build for build in selected if build.risk != "stable"]
+    text = (search or "").strip().lower()
+    if text:
+        selected = [
+            build for build in selected
+            if text in build.version.lower() or text in build.branch.lower()
+        ]
+    return selected
 
 
 # Notas de versión de Blender. Cada serie tiene su propia página:

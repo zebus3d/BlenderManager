@@ -111,6 +111,7 @@ def scan(dest_folder, platform: str):
                 version=str(marker.get("version") or match.group(1)),
                 executable=executable,
                 build_hash=str(marker.get("hash") or ""),
+                branch=str(marker.get("branch") or ""),
             )
         )
     results.sort(key=lambda build: version_tuple(build.version), reverse=True)
@@ -141,3 +142,49 @@ def is_version_installed(installed, version: str) -> bool:
     """Comprueba si una versión concreta ya está instalada."""
     target = version_tuple(version)
     return any(version_tuple(build.version) == target for build in installed)
+
+
+def is_experimental(entry) -> bool:
+    """True si la instalación viene de una rama experimental.
+
+    Las ramas normales se llaman ``main`` (diarias) o ``v45``, ``v52``...
+    (estables). Cualquier otro nombre es una rama de funciones nuevas. Las
+    instalaciones antiguas no tienen rama anotada (``""``), así que se tratan
+    como normales.
+    """
+    branch = (entry.branch or "").strip()
+    if not branch:
+        return False
+    return branch != "main" and not branch.startswith("v")
+
+
+def filter_installed(entries, channel: str, search: str = ""):
+    """Aplica el filtro de canal y la búsqueda a las versiones instaladas.
+
+    Es el equivalente de ``api.filter_builds`` para la pestaña de instaladas:
+    las experimentales solo salen en su canal y el resto de canales las
+    excluyen. Como las instaladas no guardan el "riesgo" de la compilación, lo
+    deducimos de su nombre (las diarias llevan 'alpha', 'beta' o 'main').
+    """
+    if channel == "experimental":
+        selected = [entry for entry in entries if is_experimental(entry)]
+    else:
+        selected = [entry for entry in entries if not is_experimental(entry)]
+        if channel == "lts":
+            selected = [entry for entry in selected if entry.is_lts]
+        elif channel == "stable":
+            selected = [entry for entry in selected if not entry.is_lts]
+        elif channel == "daily":
+            tokens = ("alpha", "beta", "main")
+            selected = [
+                entry for entry in selected
+                if any(token in entry.name.lower() for token in tokens)
+            ]
+    # "all" y "lts_stable" muestran todas las que no son experimentales.
+    text = (search or "").strip().lower()
+    if text:
+        selected = [
+            entry for entry in selected
+            if text in entry.name.lower() or text in entry.version.lower()
+        ]
+    return selected

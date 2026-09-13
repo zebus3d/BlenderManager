@@ -57,6 +57,15 @@ class Build:
     # Es lo único que distingue dos compilaciones diarias del mismo día a día:
     # todas las alfa de 'main' comparten número de versión.
     build_hash: str = ""
+    # True si la compilación viene de una rama experimental (la sección
+    # "Branch" del builder, ramas con funciones nuevas que aún no están en una
+    # versión oficial). Se muestra con su propio filtro "Experimental".
+    experimental: bool = False
+    # Identificador de la pull request si es una build "patch" (por ejemplo
+    # "PR161547"); vacío en cualquier otra. Las builds de patch son las de las
+    # propuestas de cambios que aún se están revisando, y se ven en su propio
+    # filtro "Patch".
+    patch: str = ""
 
     @property
     def is_lts(self) -> bool:
@@ -85,6 +94,10 @@ class InstalledBuild:
     # Las carpetas instaladas antes de que existiera el marcador lo traen
     # vacío, y entonces se compara solo por versión (como se hacía siempre).
     build_hash: str = ""
+    # Rama de la que salió la compilación, también leída del marcador. Sirve
+    # para reconocer las ramas experimentales ("geometry-nodes", etc.). Vacío
+    # en instalaciones antiguas, que se tratan como normales.
+    branch: str = ""
 
     @property
     def is_lts(self) -> bool:

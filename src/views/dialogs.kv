@@ -1,0 +1,140 @@
+# Estilos de diálogos, barra de progreso y tarjetas de ajustes.
+#
+# Solo el ASPECTO; el comportamiento está en src/ui/widgets/dialogs.py y en el
+# controlador src/ui/widgets/root.py.
+
+#:import dp kivy.metrics.dp
+#:import sp kivy.metrics.sp
+#:import theme ui.theme
+
+# --- Diálogos y barra de progreso con el aspecto de la app ---
+# El Popup y el ProgressBar por defecto de Kivy (título claro, separador azul y
+# relleno verde) desentonan con el tema. En vez de pintar un panel nosotros (las
+# instrucciones de una regla derivada se añaden *después* de los hijos y los
+# taparía), teñimos el fondo redondeado que ModalView ya dibuja.
+<AppPopup>:
+    background_color: theme.SURFACE
+    overlay_color: 0, 0, 0, 0.6
+    title_size: sp(15)
+    title_color: theme.TEXT
+    title_align: "left"
+    separator_color: theme.BORDER
+    separator_height: dp(1)
+
+<AppModalView>:
+    background_color: theme.SURFACE
+
+<AppProgressBar>:
+    canvas:
+        Color:
+            rgba: theme.FIELD
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(4)]
+        Color:
+            rgba: theme.ACCENT
+        RoundedRectangle:
+            pos: self.pos
+            size: (self.width * (self.value / self.max if self.max else 0), self.height)
+            radius: [dp(4)]
+
+# --- Pantalla de ajustes: tarjetas, cabeceras y campos ---
+# Tarjeta de sección: mismo lenguaje que las tarjetas de la tienda (panel
+# SURFACE elevado sobre la página en BG, esquinas redondeadas y borde sutil).
+<SettingsCard>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: self.minimum_height
+    padding: [dp(16), dp(14)]
+    spacing: dp(10)
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(10)]
+        Color:
+            rgba: 0, 0, 0, 0.35
+        Line:
+            rounded_rectangle: (self.x + 0.5, self.y + 0.5, self.width - 1, self.height - 1, dp(10))
+            width: 1
+
+# Cabecera de sección dentro de una tarjeta: icono de acento, título en gris y
+# una línea fina que rellena el resto.
+<SettingsHeader>:
+    size_hint_y: None
+    height: dp(28)
+    spacing: dp(8)
+    Label:
+        text: root.icon
+        font_name: theme.ICON_FONT
+        font_size: sp(12)
+        color: theme.ACCENT
+        size_hint_x: None
+        width: dp(16)
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+    Label:
+        text: root.title
+        font_size: sp(12)
+        bold: True
+        color: theme.MUTED
+        size_hint_x: None
+        width: self.texture_size[0]
+        valign: "middle"
+    Widget:
+        size_hint_y: None
+        height: dp(1)
+        canvas:
+            Color:
+                rgba: 0, 0, 0, 0.28
+            Rectangle:
+                pos: self.x, self.center_y - dp(0.5)
+                size: self.width, dp(1)
+
+# Fila de ajuste: etiqueta a la izquierda y control a la derecha, con un
+# separador fino debajo (así las filas se leen como una lista).
+<SettingsRow@BoxLayout>:
+    size_hint_y: None
+    height: dp(46)
+    spacing: dp(12)
+    canvas.after:
+        Color:
+            rgba: 0, 0, 0, 0.18
+        Rectangle:
+            pos: self.x, self.y
+            size: self.width, dp(1)
+
+# Etiqueta de una fila (ocupa el alto de la fila).
+<SettingsRowLabel@Label>:
+    font_size: sp(13)
+    color: theme.TEXT
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+
+# Etiqueta encima de un campo de texto (más pequeña y apagada).
+<SettingsFieldLabel@Label>:
+    size_hint_y: None
+    height: dp(18)
+    font_size: sp(12)
+    color: theme.MUTED
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+
+# Envoltorio redondeado de un campo de texto, igual que el buscador.
+<SettingsInput>:
+    size_hint_y: None
+    height: dp(38)
+    padding: [dp(12), 0]
+    canvas.before:
+        Color:
+            rgba: theme.FIELD
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]

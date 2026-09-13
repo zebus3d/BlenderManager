@@ -6,6 +6,10 @@ Modos de uso:
 * ``python3 src/main.py --debug``       -> interfaz con registro detallado.
 * ``python3 src/main.py --smoke``       -> lista compilaciones por consola (sin ventana).
 * ``python3 src/main.py --screenshot RUTA.png`` -> arranca, captura y sale.
+* ``python3 src/main.py --watch``       -> recarga los .kv/tema al guardarlos.
+
+¿Primera vez en el proyecto? Lee ``doc/00-empieza-aqui.md`` y
+``doc/01-arquitectura.md``: explican cómo está montado todo, capa por capa.
 """
 
 import argparse
@@ -26,6 +30,11 @@ import i18n
 from paths import ASSETS_DIR, VIEWS_DIR
 from services import api, detector, settings as settings_service, updater
 
+# Archivos de vista (.kv), en el orden en que se cargan. Están separados por
+# temas para que sean más fáciles de leer: estilos de widgets, diálogos,
+# tarjetas y la pantalla principal.
+KV_FILES = ("widgets.kv", "dialogs.kv", "cards.kv", "main.kv")
+
 
 def smoke():
     """Comprobación rápida sin interfaz: descarga el listado y lo imprime."""
@@ -39,18 +48,18 @@ def smoke():
 
 
 class DevReloader:
-    """Recarga en caliente el .kv y el tema cuando se guardan los archivos.
+    """Recarga en caliente los .kv y el tema cuando se guardan los archivos.
 
-    Es una ayuda de desarrollo: los cambios de estilo (gui.kv, theme.py,
-    icons.py, i18n.py) se aplican sin reiniciar. Los cambios de lógica en
-    Python siguen necesitando reiniciar la aplicación.
+    Es una ayuda de desarrollo: los cambios de estilo (los .kv de views/,
+    theme.py, icons.py, i18n.py) se aplican sin reiniciar. Los cambios de
+    lógica en Python siguen necesitando reiniciar la aplicación.
     """
 
-    def __init__(self, app, kv_path, files):
+    def __init__(self, app, kv_paths, files):
         from kivy.clock import Clock
 
         self.app = app
-        self.kv_path = kv_path
+        self.kv_paths = kv_paths
         self.files = files
         self.mtimes = {}
         for path in files:
@@ -86,8 +95,10 @@ class DevReloader:
             importlib.reload(theme)
             importlib.reload(icons)
             theme.init()
-            Builder.unload_file(str(self.kv_path))
-            Builder.load_file(str(self.kv_path))
+            for kv_path in self.kv_paths:
+                Builder.unload_file(str(kv_path))
+            for kv_path in self.kv_paths:
+                Builder.load_file(str(kv_path))
             self.app.root._reload_ui()
             Logger.info("Watch: interfaz recargada")
         except Exception:
@@ -118,6 +129,7 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
         FolderRow,
         GridBuildCard,
         GridInstalledCard,
+        HeaderLogo,
         HoverButton,
         HoverSpinner,
         IconLinkButton,
@@ -150,6 +162,7 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
         HoverButton,
         HoverSpinner,
         IconLinkButton,
+        HeaderLogo,
         BuildCard,
         GridBuildCard,
         GridInstalledCard,
@@ -164,9 +177,13 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
     for widget in widgets:
         Factory.register(widget.__name__, cls=widget)
 
-    # Registramos la fuente de iconos y cargamos la vista.
+    # Registramos la fuente de iconos y cargamos las vistas (.kv). El orden
+    # importa poco (las reglas se aplican al construir cada widget), pero
+    # cargamos primero los estilos y luego la pantalla principal.
     theme.init()
-    Builder.load_file(str(VIEWS_DIR / "gui.kv"))
+    kv_paths = [VIEWS_DIR / name for name in KV_FILES]
+    for kv_path in kv_paths:
+        Builder.load_file(str(kv_path))
 
     class MainApp(App):
         def build(self):
@@ -204,8 +221,12 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
             except Exception:
                 pass
             if watch:
-                DevReloader(self, VIEWS_DIR / "gui.kv", [
-                    VIEWS_DIR / "gui.kv",
+                # Guardamos el recargador en un atributo de la app: Kivy guarda
+                # una referencia *débil* a los métodos que programa en el Clock,
+                # así que si no lo retenemos, se recolecta y la recarga en
+                # caliente deja de funcionar sin avisar.
+                self._reloader = DevReloader(self, kv_paths, [
+                    *kv_paths,
                     SRC_DIR / "ui" / "theme.py",
                     SRC_DIR / "ui" / "icons.py",
                     SRC_DIR / "i18n.py",

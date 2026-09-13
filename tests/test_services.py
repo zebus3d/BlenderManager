@@ -12,9 +12,9 @@ from services.extractor import extract, is_archive
 
 
 def make_build(version, risk, branch, filename, platform="linux", arch="x86_64", mtime=0,
-               build_hash=""):
+               build_hash="", experimental=False, patch=""):
     return Build(version, branch, risk, platform, arch, "https://example/" + filename, filename,
-                 mtime=mtime, build_hash=build_hash)
+                 mtime=mtime, build_hash=build_hash, experimental=experimental, patch=patch)
 
 
 class ApiTests(unittest.TestCase):
@@ -65,6 +65,25 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(build.build_hash, "b787619620d1")
         self.assertTrue(build.is_lts)
 
+    def test_to_build_experimental_flag(self):
+        entry = {
+            "version": "4.5.0", "branch": "geometry-nodes", "risk_id": "alpha",
+            "platform": "linux", "architecture": "x86_64", "url": "u",
+            "file_name": "f.tar.xz",
+        }
+        self.assertTrue(api._to_build(entry, experimental=True).experimental)
+        self.assertFalse(api._to_build(entry).experimental)
+
+    def test_to_build_patch_id(self):
+        entry = {
+            "version": "5.3.0", "branch": "main-PR161547", "risk_id": "alpha",
+            "platform": "linux", "architecture": "x86_64", "url": "u",
+            "file_name": "f.tar.xz", "patch": "PR161547",
+        }
+        self.assertEqual(api._to_build(entry).patch, "PR161547")
+        entry["patch"] = None
+        self.assertEqual(api._to_build(entry).patch, "")
+
     def test_available_prefers_dmg_on_darwin(self):
         # En macOS la API solo publica .dmg; que quede claro en los tests,
         # porque de ahí viene que no se pueda extraer.
@@ -100,6 +119,51 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(builds[0].version, "5.2.1")
 
 
+class ChannelFilterTests(unittest.TestCase):
+    """Filtro de canal de la tienda (incluidas las ramas experimentales)."""
+
+    def _builds(self):
+        return [
+            make_build("5.2.1", "stable", "v52", "b.tar.xz", mtime=1),
+            make_build("5.3.0", "alpha", "main", "b.tar.xz", mtime=2),
+            make_build("4.5.13", "stable", "v45", "b.tar.xz", mtime=3),
+            make_build("4.5.0", "alpha", "geometry-nodes", "b.tar.xz", mtime=4,
+                       experimental=True),
+        ]
+
+    def test_experimental_only_in_its_own_channel(self):
+        builds = self._builds()
+        experimental = api.filter_builds(builds, "experimental")
+        self.assertEqual([build.branch for build in experimental], ["geometry-nodes"])
+        for channel in ("all", "lts", "stable", "lts_stable", "daily"):
+            selected = api.filter_builds(builds, channel)
+            self.assertNotIn("geometry-nodes", [build.branch for build in selected])
+
+    def test_channels_keep_their_meaning(self):
+        builds = self._builds()
+        self.assertEqual(len(api.filter_builds(builds, "lts")), 2)
+        self.assertEqual(len(api.filter_builds(builds, "stable")), 0)
+        self.assertEqual(len(api.filter_builds(builds, "lts_stable")), 2)
+        self.assertEqual(len(api.filter_builds(builds, "daily")), 1)
+        self.assertEqual(len(api.filter_builds(builds, "all")), 3)
+
+    def test_search(self):
+        builds = self._builds()
+        result = api.filter_builds(builds, "all", "5.3")
+        self.assertEqual([build.version for build in result], ["5.3.0"])
+
+    def test_patch_only_in_its_own_channel(self):
+        builds = self._builds() + [
+            make_build("5.3.0", "alpha", "main-PR161547", "b.tar.xz", mtime=5,
+                       patch="PR161547"),
+        ]
+        patch = api.filter_builds(builds, "patch")
+        self.assertEqual([build.patch for build in patch], ["PR161547"])
+        for channel in ("all", "lts", "stable", "lts_stable", "daily", "experimental"):
+            selected = api.filter_builds(builds, channel)
+            self.assertNotIn("main-PR161547", [build.branch for build in selected])
+
+
 class InstalledTests(unittest.TestCase):
     def test_scan_finds_versions_and_executable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -131,6 +195,33 @@ class InstalledTests(unittest.TestCase):
             results = installed.scan(Path(tmp), "linux")
             self.assertEqual(len(results), 1)
             self.assertFalse(results[0].can_launch)
+
+
+class InstalledFilterTests(unittest.TestCase):
+    """Filtro de canal de la pestaña de instaladas."""
+
+    def _entries(self):
+        return [
+            installed.InstalledBuild("blender-4.5.13-linux-x64", Path("/tmp/a"), "4.5.13",
+                                     branch="v45"),
+            installed.InstalledBuild("blender-5.3.0-alpha-linux-x64", Path("/tmp/b"), "5.3.0",
+                                     branch="main"),
+            installed.InstalledBuild("blender-4.5.0-geometry-nodes-linux-x64", Path("/tmp/c"),
+                                     "4.5.0", branch="geometry-nodes"),
+        ]
+
+    def test_experimental_only_in_its_own_channel(self):
+        entries = self._entries()
+        experimental = installed.filter_installed(entries, "experimental")
+        self.assertEqual([entry.branch for entry in experimental], ["geometry-nodes"])
+        for channel in ("all", "lts", "stable", "daily"):
+            selected = installed.filter_installed(entries, channel)
+            self.assertNotIn("geometry-nodes", [entry.branch for entry in selected])
+
+    def test_daily_and_lts(self):
+        entries = self._entries()
+        self.assertEqual(len(installed.filter_installed(entries, "lts")), 1)
+        self.assertEqual(len(installed.filter_installed(entries, "daily")), 1)
 
 
 class FindInstalledTests(unittest.TestCase):
@@ -237,6 +328,8 @@ class SettingsTests(unittest.TestCase):
             auto_update=False,
             window_width=1200,
             window_height=700,
+            platform="Windows",
+            arch="arm64",
         )
         settings.save()
         loaded = settings_module.Settings.load()
@@ -248,6 +341,8 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(loaded.auto_update)
         self.assertEqual(loaded.window_width, 1200)
         self.assertEqual(loaded.window_height, 700)
+        self.assertEqual(loaded.platform, "Windows")
+        self.assertEqual(loaded.arch, "arm64")
 
     def test_save_is_atomic(self):
         # Tras guardar no debe quedar ningún .tmp suelto y el JSON debe ser
