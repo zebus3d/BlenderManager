@@ -101,6 +101,44 @@
             rounded_rectangle: (self.x + 0.5, self.y + 0.5, self.width - 1, self.height - 1, dp(5))
             width: 1
 
+# --- Diálogos y barra de progreso con el aspecto de la app ---
+# El Popup y el ProgressBar por defecto de Kivy (título claro, separador azul y
+# relleno verde) desentonan con el tema. En vez de pintar un panel nosotros (las
+# instrucciones de una regla derivada se añaden *después* de los hijos y los
+# taparía), teñimos el fondo redondeado que ModalView ya dibuja.
+<AppPopup>:
+    background_color: theme.SURFACE
+    overlay_color: 0, 0, 0, 0.6
+    title_size: sp(15)
+    title_color: theme.TEXT
+    title_align: "left"
+    separator_color: theme.BORDER
+    separator_height: dp(1)
+
+<AppModalView>:
+    background_color: theme.SURFACE
+
+<AppProgressBar>:
+    canvas:
+        Color:
+            rgba: theme.FIELD
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(4)]
+        Color:
+            rgba: theme.ACCENT
+        RoundedRectangle:
+            pos: self.pos
+            size: (self.width * (self.value / self.max if self.max else 0), self.height)
+            radius: [dp(4)]
+
+# --- Barra de desplazamiento (la de Kivy es gris claro y desentona) ---
+<ScrollView>:
+    bar_color: theme.ACCENT
+    bar_inactive_color: (theme.MUTED[0], theme.MUTED[1], theme.MUTED[2], 0.35)
+    bar_width: dp(6)
+
 # --- Interruptor de sí/no con el mismo aspecto que los botones ---
 <SwitchPill>:
     size_hint: None, None
@@ -932,7 +970,7 @@
             valign: "middle"
             text_size: self.size
             shorten: True
-        ProgressBar:
+        AppProgressBar:
             id: progress_bar
             max: 100
             value: root.progress

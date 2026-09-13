@@ -115,12 +115,19 @@ que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
 ## Auto-update
 
 - Lógica en `src/services/updater.py`; UI en `src/ui/widgets.py`
-  (`check_updates`, `_show_update_available`) y controles en el panel de
-  ajustes de `src/views/gui.kv`.
+  (`check_updates`, `_show_update_available`, `_show_source_update`) y controles
+  en el panel de ajustes de `src/views/gui.kv`.
 - Preferencia `auto_update` en `src/services/settings.py` (por defecto activada).
 - Aplicación por plataforma: Linux AppImage reemplaza `$APPIMAGE`; Windows
   extrae a staging y relanza el binario nuevo con `--apply-update`; macOS y no
   soportados solo avisan.
+- **Modo fuente**: al correr con `python3 src/main.py` no hay binario que
+  reemplazar, así que la actualización es `git pull --ff-only` + reinicio
+  (`updater.source_update` / `relaunch_source`). Compara contra el último tag
+  del checkout (`source_tag`) para no ofrecer la misma versión en cada arranque.
+  Si hay cambios locales sin confirmar no toca nada y lo avisa en el diálogo.
+- Los diálogos usan `AppPopup`/`AppProgressBar` (reglas en `gui.kv`), no los
+  widgets por defecto de Kivy.
 - Firma de Windows: **descartada de momento** (un self-signed no reduce
   SmartScreen/AV). Si aparecen falsos positivos, valorar CA real o Azure
   Trusted Signing y resubmit a WDSI.
