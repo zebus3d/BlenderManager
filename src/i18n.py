@@ -112,6 +112,10 @@ _TRANSLATIONS = {
         "Installing the update...": "Instalando la actualizacion...",
         "Restarting to install the update...": "Reiniciando para instalar la actualizacion...",
         "Update downloaded. Install it manually.": "Actualizacion descargada. Instalala manualmente.",
+        "A download is already in progress": "Ya hay una descarga en curso",
+        "Downloaded to {folder}": "Descargado en {folder}",
+        "Open it to install Blender manually.": "Abrelo para instalar Blender a mano.",
+        "The language will change when you restart": "El idioma cambiara al reiniciar",
     }
 }
 
@@ -153,6 +157,8 @@ def tr(text, **kwargs) -> str:
     if kwargs:
         try:
             return translated.format(**kwargs)
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, ValueError):
+            # Una traducción con una llave suelta ("Versión {") no puede tumbar
+            # la construcción de la interfaz: devolvemos el texto sin sustituir.
             return translated
     return translated

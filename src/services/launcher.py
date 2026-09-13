@@ -5,8 +5,8 @@ en Linux/macOS se inicia en su propia sesión (``start_new_session``) y en
 Windows en un grupo de procesos propio. Así, aunque cierres Blender Manager,
 los Blender que hayas lanzado desde él siguen abiertos.
 
-Guardamos las referencias a los procesos vivos para poder informar de cuántas
-instancias están en marcha (y limpiar las que ya han terminado).
+Guardamos las referencias a los procesos lanzados solo para poder descartar
+los que ya han terminado y no acumularlas indefinidamente.
 """
 
 import subprocess
@@ -45,9 +45,3 @@ class Launcher:
         self._processes.append(process)
         self._processes = [item for item in self._processes if item.poll() is None]
         return process
-
-    @property
-    def running(self) -> int:
-        """Número de instancias de Blender lanzadas que siguen vivas."""
-        self._processes = [item for item in self._processes if item.poll() is None]
-        return len(self._processes)
