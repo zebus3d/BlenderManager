@@ -245,6 +245,7 @@ def checksum_for(assets, filename: str, timeout: int = 15):
     """SHA-256 de ``filename`` según checksums.txt de la release (o None)."""
     url = next((a["url"] for a in assets if a["name"] == CHECKSUM_NAME), None)
     if not url:
+        log(f"update: la release no trae {CHECKSUM_NAME}; se descarga sin verificar")
         return None
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
@@ -265,9 +266,15 @@ def checksum_for(assets, filename: str, timeout: int = 15):
 def _open_fallback(path=None) -> None:
     """Abre la descarga o la página de releases para actualizar a mano."""
     try:
-        if path and sys.platform == "darwin" and Path(path).exists():
-            subprocess.Popen(["open", "-R", str(path)])
-            return
+        if path and Path(path).exists():
+            # Mejor dejar al usuario delante del archivo que acaba de bajar
+            # que en la página de releases, donde tendría que bajarlo otra vez.
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(path)])
+                return
+            if not sys.platform.startswith("win"):
+                subprocess.Popen(["xdg-open", str(Path(path).parent)])
+                return
         if sys.platform.startswith("win"):
             os.startfile(RELEASES_URL)  # noqa: S606 (solo Windows)
         elif sys.platform == "darwin":

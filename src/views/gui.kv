@@ -55,12 +55,10 @@
     background_color: 0, 0, 0, 0
     font_name: theme.ICON_FONT
     font_size: sp(20)
-    color: theme.TEXT_SEL if (self.state == "down" or self.hovered) else theme.TEXT
-    # Mismo motivo que en <Pill>: sin `group` esto no hace nada.
-    allow_no_selection: False
+    color: theme.TEXT_SEL if (self.active or self.hovered) else theme.TEXT
     canvas.before:
         Color:
-            rgba: theme.ACCENT if self.state == "down" else (theme.ACCENT_DARK if self.hovered else theme.BUTTON)
+            rgba: theme.ACCENT if self.active else (theme.ACCENT_DARK if self.hovered else theme.BUTTON)
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -70,6 +68,25 @@
         Line:
             rounded_rectangle: (self.x + 0.5, self.y + 0.5, self.width - 1, self.height - 1, dp(8))
             width: 1
+
+# Icono de informacion de una tarjeta: el clasico circulo azul con la "i"
+# blanca. El circulo se pinta aqui (la fuente de iconos es de un solo color) y
+# encima va el glifo, para que se lea igual de bien en grande y en pequeno.
+<IconLinkButton>:
+    size_hint: None, None
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    font_name: theme.ICON_FONT
+    color: theme.TEXT_SEL
+    # Diametro del circulo: el lado menor del boton, con un pelin de margen.
+    disc: min(self.width, self.height) - dp(3)
+    canvas.before:
+        Color:
+            rgba: theme.ACCENT if (self.hovered or self.state == "down") else theme.INFO_DISC
+        Ellipse:
+            pos: self.center_x - self.disc / 2.0, self.center_y - self.disc / 2.0
+            size: self.disc, self.disc
 
 <CardButton>:
     size_hint: None, None
@@ -100,6 +117,35 @@
         Line:
             rounded_rectangle: (self.x + 0.5, self.y + 0.5, self.width - 1, self.height - 1, dp(5))
             width: 1
+
+# --- Fila del selector de carpetas (icono + nombre, resalta al pasar) ---
+<FolderRow>:
+    size_hint_y: None
+    height: dp(34)
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: theme.TEXT
+    font_size: sp(13)
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+    padding: [dp(32), 0]
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE_ALT if self.hovered else (0, 0, 0, 0)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(5)]
+    Label:
+        text: root.icon
+        font_name: theme.ICON_FONT
+        font_size: sp(12)
+        color: theme.WARNING
+        size_hint: None, None
+        size: dp(15), dp(15)
+        pos: (root.x + dp(10), root.center_y - self.height / 2)
 
 # --- Diálogos y barra de progreso con el aspecto de la app ---
 # El Popup y el ProgressBar por defecto de Kivy (título claro, separador azul y
@@ -137,7 +183,111 @@
 <ScrollView>:
     bar_color: theme.ACCENT
     bar_inactive_color: (theme.MUTED[0], theme.MUTED[1], theme.MUTED[2], 0.35)
-    bar_width: dp(6)
+    bar_width: dp(8)
+    bar_margin: dp(2)
+    # Con "bars" la barra se puede arrastrar con el raton, como en cualquier
+    # aplicacion de escritorio; con solo "content" unicamente se podia rodar.
+    scroll_type: ["bars", "content"]
+
+# --- Pantalla de ajustes: tarjetas, cabeceras y campos ---
+# Tarjeta de sección: mismo lenguaje que las tarjetas de la tienda (panel
+# SURFACE elevado sobre la página en BG, esquinas redondeadas y borde sutil).
+<SettingsCard>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: self.minimum_height
+    padding: [dp(16), dp(14)]
+    spacing: dp(10)
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(10)]
+        Color:
+            rgba: 0, 0, 0, 0.35
+        Line:
+            rounded_rectangle: (self.x + 0.5, self.y + 0.5, self.width - 1, self.height - 1, dp(10))
+            width: 1
+
+# Cabecera de sección dentro de una tarjeta: icono de acento, título en gris y
+# una línea fina que rellena el resto.
+<SettingsHeader>:
+    size_hint_y: None
+    height: dp(28)
+    spacing: dp(8)
+    Label:
+        text: root.icon
+        font_name: theme.ICON_FONT
+        font_size: sp(12)
+        color: theme.ACCENT
+        size_hint_x: None
+        width: dp(16)
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+    Label:
+        text: root.title
+        font_size: sp(12)
+        bold: True
+        color: theme.MUTED
+        size_hint_x: None
+        width: self.texture_size[0]
+        valign: "middle"
+    Widget:
+        size_hint_y: None
+        height: dp(1)
+        canvas:
+            Color:
+                rgba: 0, 0, 0, 0.28
+            Rectangle:
+                pos: self.x, self.center_y - dp(0.5)
+                size: self.width, dp(1)
+
+# Fila de ajuste: etiqueta a la izquierda y control a la derecha, con un
+# separador fino debajo (así las filas se leen como una lista).
+<SettingsRow@BoxLayout>:
+    size_hint_y: None
+    height: dp(46)
+    spacing: dp(12)
+    canvas.after:
+        Color:
+            rgba: 0, 0, 0, 0.18
+        Rectangle:
+            pos: self.x, self.y
+            size: self.width, dp(1)
+
+# Etiqueta de una fila (ocupa el alto de la fila).
+<SettingsRowLabel@Label>:
+    font_size: sp(13)
+    color: theme.TEXT
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+
+# Etiqueta encima de un campo de texto (más pequeña y apagada).
+<SettingsFieldLabel@Label>:
+    size_hint_y: None
+    height: dp(18)
+    font_size: sp(12)
+    color: theme.MUTED
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+
+# Envoltorio redondeado de un campo de texto, igual que el buscador.
+<SettingsInput>:
+    size_hint_y: None
+    height: dp(38)
+    padding: [dp(12), 0]
+    canvas.before:
+        Color:
+            rgba: theme.FIELD
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
 
 # --- Interruptor de sí/no con el mismo aspecto que los botones ---
 <SwitchPill>:
@@ -209,6 +359,7 @@
     color: theme.TEXT
     font_size: sp(12)
     option_cls: "DarkSpinnerOption"
+    dropdown_cls: "AppDropDown"
     canvas.before:
         Color:
             rgba: theme.ACCENT_DARK if (self.hovered or self.is_open) else theme.FILTER
@@ -230,15 +381,37 @@
         size: dp(12), dp(12)
         pos: (self.parent.right - self.width - dp(5), self.parent.center_y - self.height / 2)
 
+# Panel del desplegable: fondo hundido y borde fino, como un menu de Blender.
+# Las opciones van transparentes para que se vean sus esquinas redondeadas.
+<AppDropDown>:
+    # Sin tope, un desplegable largo se saldria de la ventana.
+    max_height: dp(240)
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(5)]
+    canvas.after:
+        Color:
+            rgba: theme.SURFACE_ALT
+        Line:
+            rounded_rectangle: (self.x + 0.5, self.y + 0.5, self.width - 1, self.height - 1, dp(5))
+            width: 1
+
+# Fila del desplegable: compacta (la de Kivy mide 44 px) y resaltada al pasar.
 <DarkSpinnerOption>:
     background_normal: ""
     background_down: ""
     background_color: 0, 0, 0, 0
-    color: theme.TEXT
+    color: theme.TEXT_SEL if (self.state == "down" or self.hovered or self.selected) else theme.TEXT
     font_size: sp(12)
+    size_hint_y: None
+    height: dp(30)
     canvas.before:
         Color:
-            rgba: theme.ACCENT if (self.state == "down" or self.hovered) else theme.FIELD
+            rgba: theme.ACCENT if (self.state == "down" or self.hovered) else (theme.ACCENT_DARK if self.selected else (0, 0, 0, 0))
         Rectangle:
             pos: self.pos
             size: self.size
@@ -274,7 +447,6 @@
     BoxLayout:
         orientation: "vertical"
         spacing: dp(3)
-        opacity: 1 if root.installed else 0.45
         BoxLayout:
             size_hint_y: None
             height: dp(24)
@@ -282,6 +454,7 @@
             Label:
                 text: "Blender " + root.version_text
                 color: theme.TEXT
+                opacity: 1 if root.installed else 0.6
                 font_size: sp(16)
                 bold: True
                 size_hint_x: None
@@ -290,6 +463,7 @@
             Label:
                 text: root.channel_text
                 color: theme.WARNING if root.is_lts else theme.INFO_TEXT
+                opacity: 1 if root.installed else 0.6
                 font_size: sp(12)
                 bold: True
                 size_hint_x: None
@@ -299,11 +473,22 @@
         Label:
             text: root.meta_text
             color: theme.MUTED
+            opacity: 1 if root.installed else 0.6
             font_size: sp(12)
             halign: "left"
             valign: "middle"
             text_size: self.width, None
             shorten: True
+
+    IconLinkButton:
+        text: icons.INFO
+        font_size: sp(13)
+        size: dp(22), dp(22)
+        # A la altura exacta del boton de la derecha: en las filas instaladas
+        # el rotulo "Instalada" lo baja un poco respecto al centro de la fila.
+        pos_hint: {"center_y": (action_button.center_y - root.y) / root.height if root.height else .5}
+        tooltip_text: tr("Read the release notes for this version")
+        on_release: root.owner.open_release_notes(root.version_text)
 
     BoxLayout:
         size_hint_x: None
@@ -316,6 +501,7 @@
             bold: True
             font_size: sp(12)
         CardButton:
+            id: action_button
             text: (("[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  ") + root.action_text) if root.installed else root.action_text
             markup: True
             tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
@@ -357,18 +543,19 @@
         color: theme.TEXT
         font_size: sp(15) * root.zoom
         bold: True
-        opacity: 1 if root.installed else 0.45
+        opacity: 1 if root.installed else 0.6
         size_hint_y: None
         height: dp(22) * root.zoom
         halign: "center"
         valign: "middle"
         text_size: self.size
+        shorten: True
 
     Label:
         text: root.channel_text + ("  ·  " + root.meta_text if root.meta_text else "")
         color: theme.WARNING if root.is_lts else theme.INFO_TEXT
         font_size: sp(11) * root.zoom
-        opacity: 1 if root.installed else 0.45
+        opacity: 1 if root.installed else 0.6
         size_hint_y: None
         height: dp(18) * root.zoom
         halign: "center"
@@ -386,20 +573,35 @@
 
     Widget:
 
-    CardButton:
-        text: (("[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  ") + root.action_text) if root.installed else root.action_text
-        markup: True
-        tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
-        button_color: theme.FILTER if root.installed else theme.ACCENT
-        pressed_color: theme.SURFACE_ALT if root.installed else theme.ACCENT_DARK
-        use_gradient: True
-        font_size: sp(13) * root.zoom
-        size_hint: (None, None)
-        # El ancho se adapta a la celda para no salirse, con un mínimo legible.
-        width: max(dp(84), min(dp(150) * root.zoom, self.parent.width - dp(24)))
+    # Fila de accion: la "i" de las notas de version a la izquierda del boton.
+    BoxLayout:
+        size_hint_y: None
         height: dp(34) * root.zoom
-        pos_hint: {"center_x": .5}
-        on_release: root.owner.install_build(root.build)
+        spacing: dp(6) * root.zoom
+        Widget:
+        IconLinkButton:
+            text: icons.INFO
+            font_size: sp(12) * root.zoom
+            size_hint: (None, None)
+            size: dp(20) * root.zoom, dp(20) * root.zoom
+            pos_hint: {"center_y": .5}
+            tooltip_text: tr("Read the release notes for this version")
+            on_release: root.owner.open_release_notes(root.version_text)
+        CardButton:
+            text: (("[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  ") + root.action_text) if root.installed else root.action_text
+            markup: True
+            tooltip_text: tr("Launch this installed version") if root.installed else tr("Download and install this version")
+            button_color: theme.FILTER if root.installed else theme.ACCENT
+            pressed_color: theme.SURFACE_ALT if root.installed else theme.ACCENT_DARK
+            use_gradient: True
+            font_size: sp(13) * root.zoom
+            size_hint: (None, None)
+            # El ancho se adapta a la celda para no salirse, con un minimo legible.
+            width: max(dp(84), min(dp(150) * root.zoom, root.width - dp(56) * root.zoom))
+            height: dp(34) * root.zoom
+            pos_hint: {"center_y": .5}
+            on_release: root.owner.install_build(root.build)
+        Widget:
 
 # --- Tarjeta de una versión ya instalada (lanzar / desinstalar) ---
 # Es responsiva: el bloque de texto se estira y se recorta con "…", mientras
@@ -451,6 +653,14 @@
             valign: "middle"
             text_size: self.width, None
             shorten: True
+
+    IconLinkButton:
+        text: icons.INFO
+        font_size: sp(13)
+        size: dp(22), dp(22)
+        pos_hint: {"center_y": .5}
+        tooltip_text: tr("Read the release notes for this version")
+        on_release: root.owner.open_release_notes(root.version_text)
 
     CardButton:
         text: "[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  " + root.action_text
@@ -531,6 +741,14 @@
         size_hint_y: None
         height: dp(32) * root.zoom
         spacing: dp(6) * root.zoom
+        IconLinkButton:
+            text: icons.INFO
+            font_size: sp(12) * root.zoom
+            size_hint_x: None
+            size: dp(20) * root.zoom, dp(20) * root.zoom
+            pos_hint: {"center_y": .5}
+            tooltip_text: tr("Read the release notes for this version")
+            on_release: root.owner.open_release_notes(root.version_text)
         CardButton:
             text: "[color=22c55e][font=Icons]" + icons.LAUNCH + "[/font][/color]  " + root.action_text
             markup: True
@@ -648,6 +866,7 @@
                     foreground_color: theme.TEXT
                     hint_text_color: theme.MUTED
                     cursor_color: theme.ACCENT
+                    selection_color: (theme.ACCENT[0], theme.ACCENT[1], theme.ACCENT[2], 0.45)
                     multiline: False
                     disabled: not root.show_filters
                     on_text: root.set_search(self.text)
@@ -761,21 +980,18 @@
             SideButton:
                 text: icons.INSTALLED
                 tooltip_text: tr("Show installed versions")
-                state: "down" if root.view == "installed" else "normal"
-                group: "view"
+                active: root.view == "installed"
                 on_release: root.set_view("installed")
             SideButton:
                 text: icons.STORE
                 tooltip_text: tr("Show the store")
-                state: "down" if root.view == "store" else "normal"
-                group: "view"
+                active: root.view == "store"
                 on_release: root.set_view("store")
             Widget:
             SideButton:
                 text: icons.SETTINGS
                 tooltip_text: tr("Open settings")
-                state: "down" if root.view == "settings" else "normal"
-                group: "view"
+                active: root.view == "settings"
                 on_release: root.set_view("settings")
 
         # Las tres vistas viven en un ScreenManager: solo se dibuja la activa
@@ -815,144 +1031,183 @@
                 BoxLayout:
                     id: settings_panel
                     orientation: "vertical"
-                    padding: dp(22)
-                    spacing: dp(12)
                     canvas.before:
                         Color:
-                            rgba: theme.SURFACE
+                            rgba: theme.BG
                         Rectangle:
                             pos: self.pos
                             size: self.size
-                    Label:
-                        text: tr("Destination folder")
-                        color: theme.TEXT
-                        size_hint_y: None
-                        height: dp(22)
-                        halign: "left"
-                        valign: "middle"
-                        text_size: self.size
-                    BoxLayout:
-                        size_hint_y: None
-                        height: dp(40)
-                        spacing: dp(8)
-                        TextInput:
-                            id: dest_input
-                            text: root.dest_folder
-                            background_normal: ""
-                            background_active: ""
-                            background_color: theme.FIELD
-                            foreground_color: theme.TEXT
-                            cursor_color: theme.ACCENT
-                            padding: [dp(10), dp(10)]
-                            multiline: False
-                        CardButton:
-                            text: tr("Browse...")
-                            tooltip_text: tr("Choose destination folder")
-                            width: dp(120)
-                            on_release: root.browse_dest()
-                    Label:
-                        text: tr("Language")
-                        color: theme.TEXT
-                        size_hint_y: None
-                        height: dp(22)
-                        halign: "left"
-                        valign: "middle"
-                        text_size: self.size
-                    HoverSpinner:
-                        id: language_spinner
-                        text: root.language_label
-                        values: root.language_values()
-                        size_hint_x: 1
-                        height: dp(38)
-                    BoxLayout:
-                        size_hint_y: None
-                        height: dp(40)
-                        Label:
-                            text: tr("Delete archive after extraction")
-                            color: theme.TEXT
-                            halign: "left"
-                            valign: "middle"
-                            text_size: self.size
-                        SwitchPill:
-                            id: archive_switch
-                            text: tr("Yes") if self.active else tr("No")
-                            active: root.delete_archive
-                            tooltip_text: tr("Delete archive after extraction")
-                            on_release: root.delete_archive = self.active
-                    Label:
-                        text: tr("Launch arguments")
-                        color: theme.TEXT
-                        size_hint_y: None
-                        height: dp(22)
-                        halign: "left"
-                        valign: "middle"
-                        text_size: self.size
-                    TextInput:
-                        id: args_input
-                        text: root.launch_args
-                        hint_text: "--background --python script.py"
-                        background_normal: ""
-                        background_active: ""
-                        background_color: theme.FIELD
-                        foreground_color: theme.TEXT
-                        hint_text_color: theme.MUTED
-                        cursor_color: theme.ACCENT
-                        padding: [dp(10), dp(10)]
-                        size_hint_y: None
-                        height: dp(40)
-                        multiline: False
-                    Label:
-                        text: tr("Updates")
-                        color: theme.TEXT
-                        size_hint_y: None
-                        height: dp(22)
-                        halign: "left"
-                        valign: "middle"
-                        text_size: self.size
-                    BoxLayout:
-                        size_hint_y: None
-                        height: dp(40)
-                        Label:
-                            text: tr("Check for updates automatically")
-                            color: theme.TEXT
-                            halign: "left"
-                            valign: "middle"
-                            text_size: self.size
-                        SwitchPill:
-                            id: update_switch
-                            text: tr("Yes") if self.active else tr("No")
-                            active: root.auto_update
-                            tooltip_text: tr("Check for updates automatically")
-                            on_release: root.set_auto_update(self.active)
-                    BoxLayout:
-                        size_hint_y: None
-                        height: dp(40)
-                        spacing: dp(8)
-                        Label:
-                            text: tr("Version {version}", version=root.current_version)
-                            color: theme.MUTED
-                            halign: "left"
-                            valign: "middle"
-                            text_size: self.size
-                        CardButton:
-                            text: tr("Check now")
-                            size_hint_x: None
-                            width: dp(150)
-                            tooltip_text: tr("Check for updates now")
-                            on_release: root.check_updates(True)
-                    Widget:
-                    CardButton:
-                        text: tr("Save")
-                        size_hint_x: None
-                        width: dp(140)
-                        pos_hint: {"right": 1}
-                        on_release: root.save_settings(dest_input.text, language_spinner.text, archive_switch.active, args_input.text)
+                    # Dos columnas de tarjetas con filas compactas: así entra
+                    # todo sin scroll. La columna izquierda agrupa lo general y
+                    # la derecha el lanzamiento y las actualizaciones.
+                    ScrollView:
+                        id: settings_scroll
+                        BoxLayout:
+                            id: settings_content
+                            orientation: "vertical"
+                            size_hint_y: None
+                            height: self.minimum_height
+                            spacing: dp(16)
+                            padding: [max(dp(24), (self.width - dp(860)) / 2), dp(20)]
+
+                            BoxLayout:
+                                size_hint_y: None
+                                height: dp(34)
+                                spacing: dp(10)
+                                Label:
+                                    text: icons.SETTINGS
+                                    font_name: theme.ICON_FONT
+                                    font_size: sp(18)
+                                    color: theme.TEXT
+                                    size_hint_x: None
+                                    width: dp(24)
+                                    halign: "left"
+                                    valign: "middle"
+                                    text_size: self.size
+                                Label:
+                                    text: tr("Settings")
+                                    font_size: sp(20)
+                                    bold: True
+                                    color: theme.TEXT
+                                    halign: "left"
+                                    valign: "middle"
+                                    text_size: self.size
+                                Widget:
+                                CardButton:
+                                    text: tr("Save")
+                                    size_hint_x: None
+                                    width: dp(120)
+                                    pos_hint: {"center_y": .5}
+                                    button_color: theme.ACCENT
+                                    pressed_color: theme.ACCENT_DARK
+                                    use_gradient: True
+                                    on_release: root.save_settings(dest_input.text, language_spinner.text, archive_switch.active, args_input.text)
+
+                            BoxLayout:
+                                orientation: "horizontal"
+                                size_hint_y: None
+                                height: max(col_left.height, col_right.height)
+                                spacing: dp(16)
+
+                                # --- Columna izquierda: General ---
+                                GridLayout:
+                                    id: col_left
+                                    cols: 1
+                                    size_hint_x: 1
+                                    size_hint_y: None
+                                    height: self.minimum_height
+                                    spacing: dp(16)
+                                    pos_hint: {"top": 1}
+                                    SettingsCard:
+                                        SettingsHeader:
+                                            icon: icons.FOLDER
+                                            title: tr("General")
+                                        SettingsFieldLabel:
+                                            text: tr("Destination folder")
+                                        BoxLayout:
+                                            size_hint_y: None
+                                            height: dp(38)
+                                            spacing: dp(8)
+                                            SettingsInput:
+                                                TextInput:
+                                                    id: dest_input
+                                                    text: root.dest_folder
+                                                    background_normal: ""
+                                                    background_active: ""
+                                                    background_color: 0, 0, 0, 0
+                                                    foreground_color: theme.TEXT
+                                                    cursor_color: theme.ACCENT
+                                                    selection_color: (theme.ACCENT[0], theme.ACCENT[1], theme.ACCENT[2], 0.45)
+                                                    multiline: False
+                                                    # Rutas largas: se veia el
+                                                    # final y no la carpeta.
+                                                    on_text: root.reset_input_scroll(self)
+                                            CardButton:
+                                                text: tr("Browse...")
+                                                tooltip_text: tr("Choose destination folder")
+                                                size_hint_x: None
+                                                width: dp(104)
+                                                on_release: root.browse_dest()
+                                        SettingsRow:
+                                            SettingsRowLabel:
+                                                text: tr("Delete archive after extraction")
+                                            SwitchPill:
+                                                id: archive_switch
+                                                text: tr("Yes") if self.active else tr("No")
+                                                active: root.delete_archive
+                                                tooltip_text: tr("Delete archive after extraction")
+                                                pos_hint: {"center_y": .5}
+                                                on_release: root.delete_archive = self.active
+                                        SettingsRow:
+                                            SettingsRowLabel:
+                                                text: tr("Language")
+                                            HoverSpinner:
+                                                id: language_spinner
+                                                text: root.language_label
+                                                values: root.language_values()
+                                                size_hint: None, None
+                                                size: dp(190), dp(30)
+                                                pos_hint: {"center_y": .5}
+
+                                # --- Columna derecha: Lanzamiento y Updates ---
+                                GridLayout:
+                                    id: col_right
+                                    cols: 1
+                                    size_hint_x: 1
+                                    size_hint_y: None
+                                    height: self.minimum_height
+                                    spacing: dp(16)
+                                    pos_hint: {"top": 1}
+                                    SettingsCard:
+                                        SettingsHeader:
+                                            icon: icons.LAUNCH
+                                            title: tr("Launch options")
+                                        SettingsFieldLabel:
+                                            text: tr("Launch arguments")
+                                        SettingsInput:
+                                            TextInput:
+                                                id: args_input
+                                                text: root.launch_args
+                                                hint_text: "--background --python script.py"
+                                                background_normal: ""
+                                                background_active: ""
+                                                background_color: 0, 0, 0, 0
+                                                foreground_color: theme.TEXT
+                                                hint_text_color: theme.MUTED
+                                                cursor_color: theme.ACCENT
+                                                selection_color: (theme.ACCENT[0], theme.ACCENT[1], theme.ACCENT[2], 0.45)
+                                                multiline: False
+                                    SettingsCard:
+                                        SettingsHeader:
+                                            icon: icons.REFRESH
+                                            title: tr("Updates")
+                                        SettingsRow:
+                                            SettingsRowLabel:
+                                                text: tr("Check for updates automatically")
+                                            SwitchPill:
+                                                id: update_switch
+                                                text: tr("Yes") if self.active else tr("No")
+                                                active: root.auto_update
+                                                tooltip_text: tr("Check for updates automatically")
+                                                pos_hint: {"center_y": .5}
+                                                on_release: root.set_auto_update(self.active)
+                                        SettingsRow:
+                                            SettingsRowLabel:
+                                                text: tr("Version {version}", version=root.current_version)
+                                                color: theme.MUTED
+                                            CardButton:
+                                                text: tr("Check now")
+                                                size_hint_x: None
+                                                width: dp(130)
+                                                tooltip_text: tr("Check for updates now")
+                                                pos_hint: {"center_y": .5}
+                                                on_release: root.check_updates(True)
 
 
     BoxLayout:
         size_hint_y: None
-        height: dp(52)
-        padding: [dp(16), dp(6)]
+        height: dp(40)
+        padding: [dp(16), dp(4)]
         spacing: dp(12)
         canvas.before:
             Color:
@@ -965,7 +1220,9 @@
             color: theme.MUTED
             font_size: sp(12)
             size_hint_x: None
-            width: dp(470)
+            # Mientras se descarga cede sitio a la barra: con un ancho fijo de
+            # 470 px la barra se quedaba en un cuadradito en ventanas estrechas.
+            width: min(dp(470), max(dp(150), self.parent.width * (0.34 if root.downloading else 0.62)))
             halign: "left"
             valign: "middle"
             text_size: self.size
@@ -974,9 +1231,22 @@
             id: progress_bar
             max: 100
             value: root.progress
+            height: dp(12)
+            size_hint_y: None
+            pos_hint: {"center_y": .5}
             # Solo se muestra mientras hay una descarga en curso.
             opacity: 1 if root.downloading else 0
             disabled: not root.downloading
+        Label:
+            text: "{:.0f} %".format(root.progress)
+            color: theme.TEXT
+            font_size: sp(12)
+            size_hint_x: None
+            width: dp(42) if root.downloading else 0
+            opacity: 1 if root.downloading else 0
+            halign: "right"
+            valign: "middle"
+            text_size: self.size
         CardButton:
             text: tr("Cancel")
             size_hint_x: None
@@ -990,17 +1260,9 @@
         BoxLayout:
             id: zoom_box
             size_hint_x: None
-            width: dp(178) if root.show_zoom else 0
-            spacing: dp(4)
+            width: dp(130) if root.show_zoom else 0
             opacity: 1 if root.show_zoom else 0
             disabled: not root.show_zoom
-            Label:
-                text: icons.MINUS
-                font_name: theme.ICON_FONT
-                font_size: sp(13)
-                color: theme.MUTED
-                size_hint_x: None
-                width: dp(20)
             ZoomSlider:
                 id: zoom_slider
                 min: 0.6
@@ -1008,10 +1270,3 @@
                 value: root.zoom
                 disabled: not root.show_zoom
                 on_value: root.set_zoom(self.value)
-            Label:
-                text: icons.PLUS
-                font_name: theme.ICON_FONT
-                font_size: sp(13)
-                color: theme.MUTED
-                size_hint_x: None
-                width: dp(20)
