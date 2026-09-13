@@ -34,7 +34,6 @@ from kivy.uix.filechooser import FileChooserListView
 from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.uix.popup import Popup
-from kivy.uix.progressbar import ProgressBar
 from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.screenmanager import NoTransition, SlideTransition
 from kivy.uix.togglebutton import ToggleButton
@@ -102,6 +101,34 @@ class HoverButton(HoverBehavior, Button):
     """Botón normal con tooltip (por ejemplo, actualizar o borrar)."""
 
     pass
+
+
+class AppPopup(Popup):
+    """Popup con el fondo, el título y el borde del tema de la app.
+
+    El aspecto vive en la regla ``<AppPopup>`` de ``gui.kv``; aquí solo
+    heredamos de Popup para que Kivy use esa regla en vez de la genérica.
+    """
+
+    pass
+
+
+class AppModalView(ModalView):
+    """ModalView con el fondo del tema (lo usa el selector de carpetas)."""
+
+    pass
+
+
+class AppProgressBar(Widget):
+    """Barra de progreso con el aspecto del tema (no la de Kivy).
+
+    No heredamos de ``ProgressBar`` porque su regla por defecto dibujaría el
+    relleno verde de Kivy *además* del nuestro. Aquí solo exponemos las dos
+    propiedades que se usan (``value`` y ``max``); el dibujo va en el .kv.
+    """
+
+    value = NumericProperty(0)
+    max = NumericProperty(100)
 
 
 class SwitchPill(HoverBehavior, ToggleButton):
@@ -811,7 +838,7 @@ class RootWidget(BoxLayout):
         content.add_widget(self._wrapped_label(message))
         button = self._dialog_button(tr("Close"))
         content.add_widget(button)
-        popup = Popup(title=tr("Error"), content=content, size_hint=(0.7, 0.4))
+        popup = AppPopup(title=tr("Error"), content=content, size_hint=(0.7, 0.4))
         button.bind(on_release=popup.dismiss)
         popup.open()
 
@@ -858,7 +885,7 @@ class RootWidget(BoxLayout):
         buttons.add_widget(cancel)
         buttons.add_widget(accept)
         content.add_widget(buttons)
-        popup = Popup(title=title, content=content, size_hint=(0.6, 0.35))
+        popup = AppPopup(title=title, content=content, size_hint=(0.6, 0.35))
         cancel.bind(on_release=popup.dismiss)
 
         def _accept(*_):
@@ -881,7 +908,7 @@ class RootWidget(BoxLayout):
 
     def browse_folder(self, current, on_select):
         """Selector de carpetas (Kivy no trae uno nativo en el escritorio)."""
-        view = ModalView(size_hint=(0.9, 0.9))
+        view = AppModalView(size_hint=(0.9, 0.9))
         layout = BoxLayout(orientation="vertical", padding=10, spacing=10)
         chooser = FileChooserListView(path=str(Path(current).expanduser().parent), dirselect=True)
         layout.add_widget(chooser)
@@ -945,8 +972,9 @@ class RootWidget(BoxLayout):
         self.settings.save()
 
     def _auto_check_updates(self):
-        # En modo fuente no tiene sentido (no hay binario que reemplazar).
-        if self.auto_update and getattr(sys, "frozen", False):
+        # También en modo fuente: ahora la comprobación usa el último tag del
+        # checkout, así que ofrecerá git pull en vez de descargar un binario.
+        if self.auto_update:
             self.check_updates(manual=False)
 
     def check_updates(self, manual=False):
@@ -960,20 +988,32 @@ class RootWidget(BoxLayout):
         def worker():
             # Fuera del hilo de la interfaz: la red puede tardar.
             result = updater.latest_release(force=manual)
-            Clock.schedule_once(lambda dt: self._on_update_result(result, manual), 0)
+            # En modo fuente no hay versión empaquetada (0.0.0), así que
+            # comparamos con el último tag del checkout para no ofrecer la
+            # misma actualización en cada arranque.
+            source = None
+            if not getattr(sys, "frozen", False):
+                source = updater.source_tag() or None
+            Clock.schedule_once(lambda dt: self._on_update_result(result, manual, source), 0)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_update_result(self, result, manual):
+    def _on_update_result(self, result, manual, source=None):
         self._update_checking = False
         if result is None:
             if manual:
                 self._show_message(tr("Update check failed"))
             return
         tag, assets = result
-        if not updater.is_newer(self.current_version, tag):
+        current = source or self.current_version
+        if not updater.is_newer(current, tag):
             if manual:
                 self._show_message(tr("You are up to date"))
+            return
+        # Modo fuente sobre un checkout git: se actualiza con git pull, sin
+        # descargar ningún binario.
+        if source is not None and updater.source_root() is not None:
+            self._show_source_update(tag)
             return
         asset_name = updater.asset_for(self.system)
         asset = next((item for item in assets if item["name"] == asset_name), None)
@@ -984,26 +1024,94 @@ class RootWidget(BoxLayout):
         self._update_assets = assets
         self._show_update_available(tag, asset)
 
-    def _show_update_available(self, tag, asset):
-        """Diálogo para descargar e instalar la versión nueva."""
-        state = {"downloading": False, "cancelled": False}
+    def _update_explanation(self):
+        """Qué hará la app tras descargar, según cómo esté instalada."""
+        if self.system.os_name == "windows" or (
+            self.system.os_name == "linux" and os.environ.get("APPIMAGE")
+        ):
+            return tr("It will be installed and the app will restart automatically.")
+        return tr("It will be downloaded. You will have to install it manually.")
+
+    def _show_source_update(self, tag):
+        """Actualización de un checkout en modo fuente: git pull + reinicio."""
         content = BoxLayout(orientation="vertical", padding=12, spacing=10)
-        title = Label(text=tr("A new version is available: {version}", version=tag))
-        content.add_widget(title)
-        info = Label(text=tr("Download and install it now?"))
+        content.add_widget(Label(text=tr("A new version is available: {version}", version=tag)))
+        info = self._wrapped_label(
+            tr("Running from source: the app will run git pull and restart."))
         content.add_widget(info)
-        progress = ProgressBar(max=100, value=0)
-        progress.size_hint_y = None
-        progress.height = dp(10)
-        progress.opacity = 0
-        content.add_widget(progress)
-        buttons = BoxLayout(size_hint_y=None, height=40, spacing=8)
+        buttons = BoxLayout(size_hint_y=None, height=dp(40), spacing=8)
         secondary = self._dialog_button(tr("Later"))
         primary = self._dialog_button(tr("Update"), ACCENT, ACCENT_DARK)
         buttons.add_widget(secondary)
         buttons.add_widget(primary)
         content.add_widget(buttons)
-        popup = Popup(title=tr("Update available"), content=content, size_hint=(0.7, 0.45))
+        popup = AppPopup(title=tr("Update available"), content=content,
+                         size_hint=(0.68, 0.45), auto_dismiss=False)
+
+        def _error_text(reason):
+            if reason == "dirty":
+                return tr("You have local changes. Commit or stash them and try again.")
+            return tr("Could not update. Run git pull manually.")
+
+        def _done(ok, reason):
+            if not ok:
+                info.text = _error_text(reason)
+                primary.disabled = False
+                secondary.disabled = False
+                secondary.text = tr("Close")
+                return
+            info.text = tr("Restarting...")
+            from kivy.app import App
+            app = App.get_running_app()
+            if updater.relaunch_source() and app is not None:
+                Clock.schedule_once(lambda dt: app.stop(), 0.8)
+            else:
+                info.text = tr("Update downloaded. Restart the app.")
+
+        def _start(*_):
+            primary.disabled = True
+            secondary.disabled = True
+            info.text = tr("Updating...")
+
+            def worker():
+                ok, reason = updater.source_update()
+                Clock.schedule_once(lambda dt: _done(ok, reason), 0)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        secondary.bind(on_release=popup.dismiss)
+        primary.bind(on_release=_start)
+        popup.open()
+
+    def _show_update_available(self, tag, asset):
+        """Diálogo para descargar e instalar la versión nueva."""
+        state = {"downloading": False, "cancelled": False}
+        content = BoxLayout(orientation="vertical", padding=12, spacing=10)
+        content.add_widget(Label(text=tr("A new version is available: {version}", version=tag)))
+        info = self._wrapped_label(self._update_explanation())
+        content.add_widget(info)
+        progress = AppProgressBar(max=100, value=0)
+        progress.size_hint_y = None
+        progress.height = dp(10)
+        progress.opacity = 0
+        content.add_widget(progress)
+        buttons = BoxLayout(size_hint_y=None, height=dp(40), spacing=8)
+        secondary = self._dialog_button(tr("Later"))
+        primary = self._dialog_button(tr("Update"), ACCENT, ACCENT_DARK)
+        buttons.add_widget(secondary)
+        buttons.add_widget(primary)
+        content.add_widget(buttons)
+        # auto_dismiss=False: mientras se descarga o se instala, un clic fuera
+        # no debe dejar el proceso en marcha sin interfaz que lo cuente.
+        popup = AppPopup(title=tr("Update available"), content=content,
+                         size_hint=(0.7, 0.5), auto_dismiss=False)
+
+        def _reset():
+            state["downloading"] = False
+            progress.opacity = 0
+            primary.disabled = False
+            secondary.disabled = False
+            secondary.text = tr("Close")
 
         def _on_secondary(*_):
             if state["downloading"]:
@@ -1022,14 +1130,38 @@ class RootWidget(BoxLayout):
             )
 
         def _on_done(path):
-            popup.dismiss()
-            self._on_update_downloaded(path)
-
-        def _on_error(message):
+            # No cerramos el diálogo: aquí mismo informamos de la instalación y
+            # del reinicio, que es lo que antes no quedaba claro.
             state["downloading"] = False
             progress.opacity = 0
-            primary.disabled = False
-            secondary.text = tr("Close")
+            primary.disabled = True
+            secondary.disabled = True
+            info.text = tr("Installing the update...")
+
+            def worker():
+                quit_app = updater.apply(path)
+                Clock.schedule_once(lambda dt: _finish(quit_app, path), 0)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        def _finish(quit_app, path):
+            if quit_app:
+                info.text = tr("Restarting to install the update...")
+                from kivy.app import App
+                app = App.get_running_app()
+                if app is not None:
+                    Clock.schedule_once(lambda dt: app.stop(), 1.0)
+                return
+            _reset()
+            # Ya está descargada: no tiene sentido volver a descargarla.
+            primary.disabled = True
+            info.text = (
+                tr("Downloaded to {folder}", folder=Path(path).parent)
+                + "  ·  " + tr("Open it to install the new version.")
+            )
+
+        def _on_error(message):
+            _reset()
             if message == "cancelled":
                 info.text = tr("Cancelled")
             elif message == "checksum":
@@ -1043,6 +1175,7 @@ class RootWidget(BoxLayout):
             info.text = tr("Downloading...")
             progress.opacity = 1
             primary.disabled = True
+            secondary.disabled = False
             secondary.text = tr("Cancel")
 
             def worker():
@@ -1068,27 +1201,6 @@ class RootWidget(BoxLayout):
         secondary.bind(on_release=_on_secondary)
         primary.bind(on_release=_start)
         popup.open()
-
-    def _on_update_downloaded(self, path):
-        """Aplica la actualización descargada (extraer en Windows puede tardar)."""
-        self.status_text = tr("Installing the update...")
-
-        def worker():
-            quit_app = updater.apply(path)
-            Clock.schedule_once(lambda dt: self._finish_update(quit_app), 0)
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _finish_update(self, quit_app):
-        from kivy.app import App
-
-        if quit_app:
-            self.status_text = tr("Restarting to install the update...")
-            app = App.get_running_app()
-            if app is not None:
-                Clock.schedule_once(lambda dt: app.stop(), 0.5)
-        else:
-            self._show_message(tr("Update downloaded. Install it manually."))
 
     def _reload_ui(self):
         """Sustituye la raíz de la aplicación por una nueva, ya traducida."""

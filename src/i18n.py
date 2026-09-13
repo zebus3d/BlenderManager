@@ -116,6 +116,22 @@ _TRANSLATIONS = {
         "Downloaded to {folder}": "Descargado en {folder}",
         "Open it to install Blender manually.": "Abrelo para instalar Blender a mano.",
         "The language will change when you restart": "El idioma cambiara al reiniciar",
+        "It will be installed and the app will restart automatically.":
+            "Se instalara y la aplicacion se reiniciara sola.",
+        "It will be downloaded. You will have to install it manually.":
+            "Se descargara. Tendras que instalarla a mano.",
+        "Running from source: the app will run git pull and restart.":
+            "Estas ejecutando desde el codigo fuente: se hara git pull y se reiniciara.",
+        "You have local changes. Commit or stash them and try again.":
+            "Tienes cambios locales sin guardar. Confirmalos o guardalos aparte e intentalo de nuevo.",
+        "Could not update. Run git pull manually.":
+            "No se pudo actualizar. Ejecuta git pull a mano.",
+        "Updating...": "Actualizando...",
+        "Restarting...": "Reiniciando...",
+        "Update downloaded. Restart the app.":
+            "Actualizacion descargada. Reinicia la aplicacion.",
+        "Open it to install the new version.":
+            "Abrelo para instalar la version nueva.",
     }
 }
 
