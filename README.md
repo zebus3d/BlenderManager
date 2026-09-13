@@ -121,6 +121,9 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
   binaries with that version.
 - Only stable releases trigger the in-app auto-update, because the app checks
   `.../releases/latest`, which ignores pre-releases.
+- When running from source (`python3 src/main.py`), the in-app update runs
+  `git pull --ff-only` on a clean checkout and restarts the app instead of
+  downloading a binary.
 
 The binaries are **not** committed to the repository; they are downloadable from
 the Release (or from the workflow run).

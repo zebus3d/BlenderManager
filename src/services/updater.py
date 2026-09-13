@@ -31,6 +31,7 @@ import urllib.request
 from pathlib import Path
 
 import version
+from paths import APP_DIR
 from services.downloader import log
 from services.extractor import extract
 from services.settings import cache_dir, write_json_atomic
@@ -81,6 +82,86 @@ def asset_for(system) -> str:
     """Nombre del asset que corresponde a esta plataforma (o None)."""
     os_name = getattr(system, "os_name", system) or ""
     return ASSET_NAMES.get(os_name)
+
+
+# --- Modo fuente (git) ------------------------------------------------------
+#
+# Al correr desde el código (``python3 src/main.py``) no hay binario que
+# reemplazar: lo equivalente a actualizarse es un ``git pull``. Lo hacemos solo
+# sobre un checkout limpio, para no pisar cambios locales sin guardar.
+
+def source_root():
+    """Raíz del checkout git, o None si no aplica (empaquetado o sin .git)."""
+    if getattr(sys, "frozen", False):
+        return None
+    folder = Path(APP_DIR)
+    for candidate in (folder, *folder.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def source_tag() -> str:
+    """Último tag del checkout (p. ej. ``v1.1.10``), o ``''`` si no se puede."""
+    root = source_root()
+    if root is None:
+        return ""
+    try:
+        output = subprocess.check_output(
+            ["git", "-C", str(root), "describe", "--tags", "--abbrev=0"],
+            stderr=subprocess.DEVNULL, timeout=10)
+    except Exception as error:
+        log(f"git describe failed: {error}")
+        return ""
+    return output.decode("utf-8", "ignore").strip()
+
+
+def source_update(timeout: int = 120):
+    """Actualiza el checkout con ``git pull --ff-only``.
+
+    Devuelve ``(ok, motivo)``. Si hay cambios locales sin confirmar no toca
+    nada: preferimos no pisar el trabajo del usuario.
+    """
+    root = source_root()
+    if root is None:
+        return False, "no-git"
+    try:
+        status = subprocess.check_output(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            stderr=subprocess.DEVNULL, timeout=20).decode("utf-8", "ignore").strip()
+    except Exception as error:
+        log(f"git status failed: {error}")
+        return False, "failed"
+    if status:
+        return False, "dirty"
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "pull", "--ff-only"],
+            capture_output=True, text=True, timeout=timeout)
+    except Exception as error:
+        log(f"git pull failed: {error}")
+        return False, "failed"
+    if result.returncode != 0:
+        log(f"git pull failed: {result.stderr.strip()}")
+        return False, "failed"
+    return True, "ok"
+
+
+def relaunch_source() -> bool:
+    """Relanza la app en modo fuente para usar el código recién descargado."""
+    if source_root() is None:
+        return False
+    kwargs = {}
+    if sys.platform.startswith("win"):
+        kwargs["creationflags"] = _DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP
+    else:
+        kwargs["start_new_session"] = True
+    try:
+        subprocess.Popen([sys.executable, *sys.argv], **kwargs)
+    except OSError as error:
+        log(f"source relaunch failed: {error}")
+        return False
+    return True
 
 
 def _parse_release(payload: dict):

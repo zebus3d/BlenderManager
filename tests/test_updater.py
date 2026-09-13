@@ -135,5 +135,36 @@ class CleanupTests(unittest.TestCase):
         updater.cleanup_partials("/nonexistent/path/xyz")
 
 
+class SourceUpdateTests(unittest.TestCase):
+    """Actualizar un checkout en modo fuente (git pull) sin red ni repo real."""
+
+    def test_no_git_checkout(self):
+        with mock.patch.object(updater, "source_root", return_value=None):
+            self.assertEqual(updater.source_update(), (False, "no-git"))
+            self.assertFalse(updater.relaunch_source())
+
+    def test_refuses_when_dirty(self):
+        with mock.patch.object(updater, "source_root", return_value=Path("/tmp/repo")), \
+                mock.patch.object(updater.subprocess, "check_output",
+                                  return_value=b" M src/main.py\n"):
+            self.assertEqual(updater.source_update(), (False, "dirty"))
+
+    def test_pulls_when_clean(self):
+        result = mock.Mock(returncode=0, stderr="")
+        with mock.patch.object(updater, "source_root", return_value=Path("/tmp/repo")), \
+                mock.patch.object(updater.subprocess, "check_output", return_value=b""), \
+                mock.patch.object(updater.subprocess, "run", return_value=result) as run:
+            self.assertEqual(updater.source_update(), (True, "ok"))
+            self.assertIn("pull", run.call_args.args[0])
+            self.assertIn("--ff-only", run.call_args.args[0])
+
+    def test_reports_failed_pull(self):
+        result = mock.Mock(returncode=1, stderr="boom")
+        with mock.patch.object(updater, "source_root", return_value=Path("/tmp/repo")), \
+                mock.patch.object(updater.subprocess, "check_output", return_value=b""), \
+                mock.patch.object(updater.subprocess, "run", return_value=result):
+            self.assertEqual(updater.source_update(), (False, "failed"))
+
+
 if __name__ == "__main__":
     unittest.main()
