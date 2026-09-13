@@ -91,14 +91,16 @@ def asset_for(system) -> str:
 # sobre un checkout limpio, para no pisar cambios locales sin guardar.
 
 def source_root():
-    """Raíz del checkout git, o None si no aplica (empaquetado o sin .git)."""
+    """Raíz del checkout git, o None si no aplica (empaquetado o sin .git).
+
+    Solo miramos el ``.git`` de la propia carpeta del proyecto (``APP_DIR``); no
+    subimos por los directorios padre para no confundir este repo con otro que
+    lo contenga (un monorepo, por ejemplo) y acabar haciendo pull de aquel.
+    """
     if getattr(sys, "frozen", False):
         return None
-    folder = Path(APP_DIR)
-    for candidate in (folder, *folder.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return None
+    root = Path(APP_DIR)
+    return root if (root / ".git").exists() else None
 
 
 def source_tag() -> str:
@@ -274,6 +276,11 @@ def _open_fallback(path=None) -> None:
             subprocess.Popen(["xdg-open", RELEASES_URL])
     except Exception as error:
         log(f"open fallback failed: {error}")
+
+
+def open_releases() -> None:
+    """Abre la página de releases para actualizar a mano."""
+    _open_fallback()
 
 
 def _apply_appimage(archive: Path) -> bool:

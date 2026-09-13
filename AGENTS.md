@@ -123,9 +123,11 @@ que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
   soportados solo avisan.
 - **Modo fuente**: al correr con `python3 src/main.py` no hay binario que
   reemplazar, así que la actualización es `git pull --ff-only` + reinicio
-  (`updater.source_update` / `relaunch_source`). Compara contra el último tag
-  del checkout (`source_tag`) para no ofrecer la misma versión en cada arranque.
-  Si hay cambios locales sin confirmar no toca nada y lo avisa en el diálogo.
+  (`updater.source_update` / `relaunch_source`). Solo aplica si hay `.git` en
+  `APP_DIR`; sin él no se ofrece actualización automática. Compara contra el
+  último tag del checkout (`source_tag`) para no ofrecer la misma versión en
+  cada arranque. Si hay cambios locales sin confirmar no toca nada y lo avisa
+  en el diálogo.
 - Los diálogos usan `AppPopup`/`AppProgressBar` (reglas en `gui.kv`), no los
   widgets por defecto de Kivy.
 - Firma de Windows: **descartada de momento** (un self-signed no reduce

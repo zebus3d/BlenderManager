@@ -143,6 +143,20 @@ class SourceUpdateTests(unittest.TestCase):
             self.assertEqual(updater.source_update(), (False, "no-git"))
             self.assertFalse(updater.relaunch_source())
 
+    def test_source_root_without_git(self):
+        with mock.patch.object(updater, "APP_DIR", Path("/tmp/no-repo-xyz")):
+            self.assertIsNone(updater.source_root())
+
+    def test_source_root_only_looks_in_app_dir(self):
+        # No debe subir a un repo padre: si APP_DIR cuelga de otro repo, no
+        # cuenta como checkout propio.
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ".git").mkdir()
+            nested = Path(tmp) / "tools" / "BlenderManager"
+            nested.mkdir(parents=True)
+            with mock.patch.object(updater, "APP_DIR", nested):
+                self.assertIsNone(updater.source_root())
+
     def test_refuses_when_dirty(self):
         with mock.patch.object(updater, "source_root", return_value=Path("/tmp/repo")), \
                 mock.patch.object(updater.subprocess, "check_output",
