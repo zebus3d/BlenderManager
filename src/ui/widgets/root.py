@@ -1,13 +1,13 @@
-"""Widgets de la interfaz y controlador principal de la aplicación.
+"""Controlador principal de la pantalla (``RootWidget``).
 
-Aquí vive toda la lógica de la pantalla: carga de ajustes, listado de
+Aquí vive toda la lógica de la interfaz: carga de ajustes, listado de
 compilaciones de Blender, filtros, descarga/extracción en segundo plano,
 lanzamiento de versiones instaladas y la navegación entre vistas.
 
-Ojo: Kivy aplica las reglas del archivo .kv durante el __init__ del widget,
-antes de que se ejecute el cuerpo de nuestro constructor. Por eso los datos
-que consume la vista (carpeta destino, idioma, etc.) se exponen como
-propiedades Kivy con valores por defecto y se rellenan después de super().__init__.
+Ojo: Kivy aplica las reglas del archivo .kv durante el ``__init__`` del widget,
+antes de que se ejecute el cuerpo de nuestro constructor. Por eso los datos que
+consume la vista (carpeta destino, idioma, etc.) se exponen como propiedades
+Kivy con valores por defecto y se rellenan después de ``super().__init__``.
 """
 
 import os
@@ -26,25 +26,24 @@ from kivy.properties import (
     BooleanProperty,
     ListProperty,
     NumericProperty,
-    ObjectProperty,
     StringProperty,
 )
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.dropdown import DropDown
 from kivy.uix.label import Label
-from kivy.uix.modalview import ModalView
-from kivy.uix.popup import Popup
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.screenmanager import NoTransition, SlideTransition
-from kivy.uix.togglebutton import ToggleButton
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
 import i18n
 import version
 from i18n import tr
-from services import api, detector, installed as installed_service, settings as settings_service, updater
+from services import (
+    api,
+    detector,
+    installed as installed_service,
+    settings as settings_service,
+    updater,
+)
 from services.downloader import Downloader, log as download_log
 from services.extractor import extract, is_archive
 from services.launcher import Launcher
@@ -53,7 +52,6 @@ from ui import theme as theme_module
 from ui.theme import (
     ACCENT,
     ACCENT_DARK,
-    BUTTON,
     CARD_DIM,
     CARD_DIM_ALT,
     DANGER,
@@ -63,7 +61,9 @@ from ui.theme import (
     ROW_ALT,
     SURFACE,
 )
-from ui.tooltip import HoverBehavior
+from ui.widgets.basic import CardButton, FolderRow
+from ui.widgets.cards import BuildCard, GridBuildCard, GridInstalledCard, InstalledCard
+from ui.widgets.dialogs import AppModalView, AppPopup, AppProgressBar
 
 # Etiquetas visibles del selector de sistema operativo -> identificador interno
 # que usan tanto la API de Blender como el escáner de versiones instaladas.
@@ -75,308 +75,6 @@ LANGUAGE_IDS = {"auto": "Automatic", "en": "English", "es": "Spanish"}
 # Límites de la barra de zoom (la misma que usa Dolphin para el tamaño de iconos).
 MIN_ZOOM = 0.6
 MAX_ZOOM = 1.8
-
-class Pill(HoverBehavior, ToggleButton):
-    """Botón con forma de pastilla para los filtros y el selector de vista."""
-
-    pass
-
-
-class SideButton(HoverBehavior, Button):
-    """Botón cuadrado de la barra lateral (tienda, instaladas, ajustes).
-
-    No usamos ToggleButton: el estado "activo" es solo visual y lo marca
-    ``active`` desde el .kv, así que un clic siempre dispara ``on_release``
-    (con ToggleButton + grupo el primer clic podía quedarse en el toggle).
-    """
-
-    active = BooleanProperty(False)
-
-
-class CardButton(HoverBehavior, Button):
-    """Botón de acción dentro de las tarjetas (descargar, lanzar, examinar...)."""
-
-    # Colores configurables: por defecto un botón neutro oscuro (como las
-    # pestañas de Blender) que se ilumina en azul al pulsarlo. Descargar,
-    # lanzar y desinstalar sobrescriben ambos colores.
-    button_color = ListProperty(list(BUTTON))
-    pressed_color = ListProperty(list(ACCENT))
-    # El degradado claro solo se usa en los botones de color (descargar/lanzar);
-    # en los grises enturbia el texto blanco.
-    use_gradient = BooleanProperty(False)
-
-
-class IconLinkButton(HoverBehavior, Button):
-    """Icono de información de una tarjeta (abre las notas de la versión).
-
-    Se dibuja como el clásico disco azul con la "i" blanca: el círculo lo pinta
-    el .kv (la fuente de iconos es de un solo color) y el glifo va encima.
-    ``disc`` es el diámetro de ese círculo, en píxeles.
-    """
-
-    disc = NumericProperty(0)
-
-
-class HoverButton(HoverBehavior, Button):
-    """Botón normal con tooltip (por ejemplo, actualizar o borrar)."""
-
-    pass
-
-
-class FolderRow(HoverBehavior, Button):
-    """Fila del selector de carpetas: icono + nombre, al estilo de la app."""
-
-    icon = StringProperty("")
-
-
-class AppPopup(Popup):
-    """Popup con el fondo, el título y el borde del tema de la app.
-
-    El aspecto vive en la regla ``<AppPopup>`` de ``gui.kv``; aquí solo
-    heredamos de Popup para que Kivy use esa regla en vez de la genérica.
-    """
-
-    pass
-
-
-class AppModalView(ModalView):
-    """ModalView con el fondo del tema (lo usa el selector de carpetas)."""
-
-    pass
-
-
-class AppProgressBar(Widget):
-    """Barra de progreso con el aspecto del tema (no la de Kivy).
-
-    No heredamos de ``ProgressBar`` porque su regla por defecto dibujaría el
-    relleno verde de Kivy *además* del nuestro. Aquí solo exponemos las dos
-    propiedades que se usan (``value`` y ``max``); el dibujo va en el .kv.
-    """
-
-    value = NumericProperty(0)
-    max = NumericProperty(100)
-
-
-class SettingsCard(BoxLayout):
-    """Tarjeta de sección de la pantalla de ajustes."""
-
-    pass
-
-
-class SettingsHeader(BoxLayout):
-    """Cabecera de una tarjeta de ajustes: icono + título."""
-
-    icon = StringProperty("")
-    title = StringProperty("")
-
-
-class SettingsInput(BoxLayout):
-    """Envoltorio redondeado de un campo de texto (igual que el buscador)."""
-
-    pass
-
-
-class SwitchPill(HoverBehavior, ToggleButton):
-    """Interruptor de sí/no con el mismo aspecto que los botones del tema.
-
-    ToggleButton trabaja con `state` ('normal'/'down'); exponemos además un
-    booleano `active` para que sea cómodo de usar desde el .kv y los ajustes.
-    """
-
-    active = BooleanProperty(False)
-
-    def on_state(self, *_):
-        self.active = self.state == "down"
-
-    def on_active(self, *_):
-        self.state = "down" if self.active else "normal"
-
-
-class HoverSpinner(HoverBehavior, Spinner):
-    """Selector desplegable con tooltip (plataforma, arquitectura, idioma)."""
-
-    def on_is_open(self, instance, value):
-        """Marca la opción que está activa al abrir la lista.
-
-        El Spinner de Kivy no distingue la opción actual de las demás, así que
-        al desplegar no se sabe cuál está puesta. Aquí se lo decimos a cada
-        fila y el .kv la pinta con el azul apagado del tema.
-        """
-        super_on_is_open = getattr(super(), "on_is_open", None)
-        if super_on_is_open is not None:
-            super_on_is_open(instance, value)
-        if not value:
-            return
-        dropdown = getattr(self, "_dropdown", None)
-        container = getattr(dropdown, "container", None) if dropdown else None
-        if container is None:
-            return
-        for option in container.children:
-            if hasattr(option, "selected"):
-                option.selected = option.text == self.text
-
-
-class AppDropDown(DropDown):
-    """Lista desplegable de un ``HoverSpinner`` con el aspecto de la app.
-
-    La de Kivy es un panel negro sin borde con opciones muy altas; esta se
-    dibuja como un menú de Blender: panel hundido, borde fino y filas
-    compactas (el aspecto vive en la regla ``<AppDropDown>`` del .kv).
-    """
-
-    pass
-
-
-class DarkSpinnerOption(HoverBehavior, SpinnerOption):
-    """Fila de un desplegable. ``selected`` marca la opción activa."""
-
-    selected = BooleanProperty(False)
-
-
-class ZoomSlider(HoverBehavior, Widget):
-    """Barra de zoom propia, dibujada con el estilo del resto de la interfaz.
-
-    No usamos el Slider de Kivy porque trae una "bolita" con su propio aspecto.
-    Aquí pintamos una pista, la parte rellena y un tirador redondeado.
-    """
-
-    min = NumericProperty(0.6)
-    max = NumericProperty(1.8)
-    value = NumericProperty(1.0)
-    step = NumericProperty(0.0)
-    thumb_size = NumericProperty(dp(16))
-    dragging = BooleanProperty(False)
-
-    def _get_thumb_x(self):
-        span = max(0.0001, self.max - self.min)
-        fraction = min(1.0, max(0.0, (self.value - self.min) / span))
-        usable = max(0.0, self.width - self.thumb_size)
-        return self.x + fraction * usable
-
-    # Posición horizontal del tirador; se recalcula al cambiar valor o tamaño.
-    thumb_x = AliasProperty(
-        _get_thumb_x, None,
-        bind=("value", "min", "max", "width", "x", "thumb_size"),
-    )
-
-    def _set_from_x(self, x):
-        usable = max(1.0, self.width - self.thumb_size)
-        fraction = min(1.0, max(0.0, (x - self.x - self.thumb_size / 2.0) / usable))
-        value = self.min + fraction * (self.max - self.min)
-        if self.step:
-            value = round(value / self.step) * self.step
-        self.value = min(self.max, max(self.min, value))
-
-    def on_touch_down(self, touch):
-        if self.disabled or not self.collide_point(*touch.pos):
-            return super().on_touch_down(touch)
-        touch.grab(self)
-        self.dragging = True
-        self._set_from_x(touch.x)
-        return True
-
-    def on_touch_move(self, touch):
-        if touch.grab_current is self:
-            self._set_from_x(touch.x)
-            return True
-        return super().on_touch_move(touch)
-
-    def on_touch_up(self, touch):
-        if touch.grab_current is self:
-            touch.ungrab(self)
-            self.dragging = False
-            return True
-        return super().on_touch_up(touch)
-
-
-class BaseBuildCard(HoverBehavior, BoxLayout):
-    """Base común para las tarjetas de compilaciones (vista lista y rejilla)."""
-
-    build = ObjectProperty(None, allownone=True)
-    owner = ObjectProperty(None, allownone=True)
-    title = StringProperty("")
-    channel_text = StringProperty("")
-    version_text = StringProperty("")
-    meta_text = StringProperty("")
-    action_text = StringProperty("")
-    is_lts = BooleanProperty(False)
-    installed = BooleanProperty(False)
-    zoom = NumericProperty(1.0)
-    # Fondo normal de la tarjeta (sin contar el resaltado al pasar el ratón).
-    # Se calcula en Python para poder alternar filas claras/oscuras en modo lista.
-    row_color = ListProperty(list(SURFACE))
-
-    def on_build(self, *_):
-        """Traduce los datos del modelo a las cadenas que pinta la tarjeta."""
-        build = self.build
-        if build is None:
-            return
-        self.title = build.version
-        self.version_text = build.version
-        if build.is_lts:
-            channel = "LTS"
-        elif build.risk in ("alpha", "daily", "beta"):
-            channel = {"alpha": "Alpha", "daily": "Daily", "beta": "Beta"}[build.risk]
-        else:
-            channel = "Stable"
-        self.channel_text = tr(channel)
-        self.is_lts = build.is_lts
-        self.meta_text = f"{build.human_size}  ·  {build.branch}  ·  {build.arch}"
-        self.refresh_action()
-
-    def refresh_action(self):
-        """El botón dice 'Lanzar' si esa versión ya está instalada y 'Descargar' si no."""
-        self.action_text = tr("Launch") if self.installed else tr("Download")
-
-
-class BuildCard(BaseBuildCard):
-    """Tarjeta en modo lista (una fila por compilación)."""
-
-    pass
-
-
-class GridBuildCard(BaseBuildCard):
-    """Tarjeta en modo rejilla (icono grande y botón debajo)."""
-
-    pass
-
-
-class BaseInstalledCard(HoverBehavior, BoxLayout):
-    """Base común para las tarjetas de versiones instaladas (lista y rejilla)."""
-
-    entry = ObjectProperty(None, allownone=True)
-    owner = ObjectProperty(None, allownone=True)
-    title = StringProperty("")
-    version_text = StringProperty("")
-    meta_text = StringProperty("")
-    action_text = StringProperty("")
-    is_lts = BooleanProperty(False)
-    can_launch = BooleanProperty(False)
-    zoom = NumericProperty(1.0)
-    row_color = ListProperty(list(SURFACE))
-
-    def on_entry(self, *_):
-        entry = self.entry
-        if entry is None:
-            return
-        self.title = entry.name
-        self.version_text = entry.version
-        self.meta_text = f"Blender {entry.version}   ·   {entry.path}"
-        self.is_lts = entry.is_lts
-        self.can_launch = entry.can_launch
-        self.action_text = tr("Launch")
-
-
-class InstalledCard(BaseInstalledCard):
-    """Versión instalada en modo lista (una fila)."""
-
-    pass
-
-
-class GridInstalledCard(BaseInstalledCard):
-    """Versión instalada en modo rejilla (icono grande y botones debajo)."""
-
-    pass
 
 
 class RootWidget(BoxLayout):
@@ -433,9 +131,17 @@ class RootWidget(BoxLayout):
         self.system = detector.detect()
         # En modo fuente version.py vale 0.0.0: mostramos el último tag del repo.
         self.current_version = updater.app_version()
-        self.platform_label = PLATFORM_LABELS.get(self.system.os_name, "GNU/Linux")
-        # En Windows la API llama "amd64" a la arquitectura de 64 bits.
-        self.arch_label = "x86_64" if self.system.arch in ("amd64", "x86_64") else self.system.arch
+        # Plataforma y arquitectura de destino: por defecto las del equipo, pero
+        # recordamos la última que eligió el usuario en la barra de filtros (así
+        # no hay que volver a seleccionarla para bajar builds de otra plataforma).
+        detected_platform = PLATFORM_LABELS.get(self.system.os_name, "GNU/Linux")
+        detected_arch = "x86_64" if self.system.arch in ("amd64", "x86_64") else self.system.arch
+        self.platform_label = (
+            self.settings.platform if self.settings.platform in PLATFORMS else detected_platform
+        )
+        self.arch_label = (
+            self.settings.arch if self.settings.arch in ARCH_LABELS else detected_arch
+        )
         self.language_label = tr(LANGUAGE_IDS.get(self.settings.language, "auto"))
         self.dest_folder = self.settings.dest_folder
         self.launch_args = self.settings.launch_args
@@ -522,11 +228,39 @@ class RootWidget(BoxLayout):
             return "amd64"
         return self.arch_label
 
+    @property
+    def platform_text(self):
+        """Plataforma de destino, pero solo si no es la del propio equipo.
+
+        Si estás en Linux y miras builds de Linux, repetir "GNU/Linux" en cada
+        tarjeta sobra. Cuando eliges otra plataforma (por ejemplo Windows, para
+        copiar Blender en un USB), sí lo mostramos para que no haya dudas.
+        """
+        if self.platform == self.system.os_name:
+            return ""
+        return detector.OS_LABELS.get(self.platform, self.platform)
+
     def set_platform(self, label):
+        """Cambia la plataforma de destino y la recuerda para el próximo arranque."""
+        if label not in PLATFORMS:
+            return
         self.platform_label = label
+        # Durante la construcción del widget el .kv puede disparar este método
+        # antes de que exista ``self.settings``; lo comprobamos con getattr.
+        settings = getattr(self, "settings", None)
+        if settings is not None and settings.platform != label:
+            settings.platform = label
+            settings.save()
 
     def set_arch(self, label):
+        """Cambia la arquitectura de destino y la recuerda para el próximo arranque."""
+        if label not in ARCH_LABELS:
+            return
         self.arch_label = label
+        settings = getattr(self, "settings", None)
+        if settings is not None and settings.arch != label:
+            settings.arch = label
+            settings.save()
 
     def set_channel(self, channel):
         self.channel = channel
@@ -579,25 +313,7 @@ class RootWidget(BoxLayout):
     def _filtered(self):
         """Aplica plataforma, arquitectura, canal y búsqueda a las compilaciones."""
         builds = api.available_for(self.builds, self.platform, self.arch)
-        channel = self.channel
-        if channel == "lts":
-            # Solo las versiones con soporte de larga duración.
-            builds = [build for build in builds if build.is_lts]
-        elif channel == "stable":
-            # Estables que no son LTS.
-            builds = [build for build in builds if build.risk == "stable" and not build.is_lts]
-        elif channel == "lts_stable":
-            # LTS y estables a la vez (todo lo estable).
-            builds = [build for build in builds if build.risk == "stable"]
-        elif channel == "daily":
-            builds = [build for build in builds if build.risk != "stable"]
-        text = (self.search or "").strip().lower()
-        if text:
-            builds = [
-                build for build in builds
-                if text in build.version.lower() or text in build.branch.lower()
-            ]
-        return builds
+        return api.filter_builds(builds, self.channel, self.search)
 
     def set_layout_mode(self, mode):
         if mode not in ("grid", "list") or mode == self.layout_mode:
@@ -679,9 +395,21 @@ class RootWidget(BoxLayout):
         self._update_cols()
         if not builds:
             container.cols = 1
-            container.add_widget(self._placeholder(
-                tr("No builds found"),
-                tr("Try clearing the search or another channel filter.")))
+            if self.channel == "experimental":
+                # El listado de ramas experimentales suele estar vacío: casi
+                # siempre no hay ninguna rama abierta, así que lo explicamos.
+                container.add_widget(self._placeholder(
+                    tr("No experimental builds right now"),
+                    tr("Feature branches with new features still in development.")))
+            elif self.channel == "patch":
+                # El listado de patch casi nunca está vacío, pero por si acaso.
+                container.add_widget(self._placeholder(
+                    tr("No patch builds right now"),
+                    tr("Proposed changes that are still under review.")))
+            else:
+                container.add_widget(self._placeholder(
+                    tr("No builds found"),
+                    tr("Try clearing the search or another channel filter.")))
             return
         card_class = BuildCard if self.layout_mode == "list" else GridBuildCard
         for index, build in enumerate(builds):
@@ -692,6 +420,9 @@ class RootWidget(BoxLayout):
             # La tienda no lleva salteado; solo la pestaña de instaladas.
             card.row_color = self._row_color(is_installed, index)
             card.installed = is_installed
+            # Hay que fijarlo ANTES de asignar `build`: al asignarlo se calcula
+            # la línea de metadatos y ya debe conocer la plataforma de destino.
+            card.platform_text = self.platform_text
             card.build = build
             container.add_widget(card)
 
@@ -704,32 +435,8 @@ class RootWidget(BoxLayout):
         self._rebuild_store()
 
     def _filtered_installed(self):
-        """Aplica el canal y la búsqueda a las versiones instaladas.
-
-        Las instaladas no guardan el "riesgo" de la compilación, así que lo
-        deducimos del nombre de la carpeta: las de builder/diarias llevan
-        'alpha', 'beta' o 'main'; el resto son estables.
-        """
-        entries = self.installed
-        channel = self.channel
-        if channel == "lts":
-            entries = [entry for entry in entries if entry.is_lts]
-        elif channel == "stable":
-            entries = [entry for entry in entries if not entry.is_lts]
-        elif channel == "daily":
-            tokens = ("alpha", "beta", "main")
-            entries = [
-                entry for entry in entries
-                if any(token in entry.name.lower() for token in tokens)
-            ]
-        # "all" y "lts_stable" muestran todas las instaladas.
-        text = (self.search or "").strip().lower()
-        if text:
-            entries = [
-                entry for entry in entries
-                if text in entry.name.lower() or text in entry.version.lower()
-            ]
-        return entries
+        """Aplica el canal y la búsqueda a las versiones instaladas."""
+        return installed_service.filter_installed(self.installed, self.channel, self.search)
 
     def _rebuild_installed(self):
         """Construye la lista de instaladas según filtros y modo cuadrícula/lista."""

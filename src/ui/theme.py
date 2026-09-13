@@ -45,21 +45,12 @@ TEXT_SEL = (1.0, 1.0, 1.0, 1)
 # --- Acentos y estados ---
 ACCENT = (0x50 / 255, 0x85 / 255, 0xB1 / 255, 1)      # azul de selección/resaltado
 ACCENT_DARK = (0x3F / 255, 0x6F / 255, 0x96 / 255, 1)
-SUCCESS = (0x18 / 255, 0x86 / 255, 0x25 / 255, 1)     # verde (lanzar)
-SUCCESS_DARK = (0x0F / 255, 0x5A / 255, 0x19 / 255, 1)
 DANGER = (0xB8 / 255, 0x4A / 255, 0x4A / 255, 1)      # rojo pastel algo más saturado (desinstalar)
 DANGER_DARK = (0x9C / 255, 0x3C / 255, 0x3C / 255, 1)
-INFO = (0x28 / 255, 0x48 / 255, 0x7D / 255, 1)        # azul apagado (fondos)
 WARNING = (0xFF / 255, 0xAF / 255, 0x23 / 255, 1)     # naranja (LTS)
 
-# "Chrome" carbón de la extensión blender-dev-vscode, usado en el botón Lanzar.
-CHARCOAL = (0x1C / 255, 0x1F / 255, 0x28 / 255, 1)
-CHARCOAL_HOVER = (0x24 / 255, 0x28 / 255, 0x33 / 255, 1)
-CHARCOAL_LINE = (0x2C / 255, 0x30 / 255, 0x3C / 255, 1)
-PLAY_GREEN = (0x22 / 255, 0xC5 / 255, 0x5E / 255, 1)  # icono de play
-
 # Variantes claras de verde/azul para usar como TEXTO sobre fondo oscuro
-# (las de arriba son demasiado oscuras para leerlas en una tarjeta).
+# (los acentos de arriba son demasiado oscuros para leerlos en una tarjeta).
 SUCCESS_TEXT = (0x6F / 255, 0xCF / 255, 0x7A / 255, 1)
 INFO_TEXT = (0x7A / 255, 0xA7 / 255, 0xE0 / 255, 1)
 
