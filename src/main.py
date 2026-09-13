@@ -110,17 +110,23 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
     from ui.widgets import (
         AppModalView,
         AppPopup,
+        AppDropDown,
         AppProgressBar,
         BuildCard,
         CardButton,
         DarkSpinnerOption,
+        FolderRow,
         GridBuildCard,
         GridInstalledCard,
         HoverButton,
         HoverSpinner,
+        IconLinkButton,
         InstalledCard,
         Pill,
         RootWidget,
+        SettingsCard,
+        SettingsHeader,
+        SettingsInput,
         SideButton,
         SwitchPill,
         ZoomSlider,
@@ -132,6 +138,7 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
     # Las clases propias que aparecen dentro del .kv deben estar registradas
     # en la Factory para que el parser de Kivy sepa construirlas.
     widgets = (
+        AppDropDown,
         AppModalView,
         AppPopup,
         AppProgressBar,
@@ -139,13 +146,18 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
         SideButton,
         CardButton,
         DarkSpinnerOption,
+        FolderRow,
         HoverButton,
         HoverSpinner,
+        IconLinkButton,
         BuildCard,
         GridBuildCard,
         GridInstalledCard,
         InstalledCard,
         RootWidget,
+        SettingsCard,
+        SettingsHeader,
+        SettingsInput,
         SwitchPill,
         ZoomSlider,
     )
@@ -183,6 +195,14 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
             return RootWidget()
 
         def on_start(self):
+            # Traemos la ventana al frente y pedimos el foco: si el gestor de
+            # ventanas no la enfoca al abrir, el primer clic se lo come él
+            # (click-to-focus) y parece que los botones no responden.
+            try:
+                Window.raise_window()
+                Window.focus = True
+            except Exception:
+                pass
             if watch:
                 DevReloader(self, VIEWS_DIR / "gui.kv", [
                     VIEWS_DIR / "gui.kv",

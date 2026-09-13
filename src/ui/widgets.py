@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import webbrowser
 from pathlib import Path
 
 from kivy.clock import Clock
@@ -30,10 +31,11 @@ from kivy.properties import (
 )
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
-from kivy.uix.filechooser import FileChooserListView
+from kivy.uix.dropdown import DropDown
 from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.uix.popup import Popup
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.screenmanager import NoTransition, SlideTransition
 from kivy.uix.togglebutton import ToggleButton
@@ -46,6 +48,8 @@ from services import api, detector, installed as installed_service, settings as 
 from services.downloader import Downloader, log as download_log
 from services.extractor import extract, is_archive
 from services.launcher import Launcher
+from ui import icons
+from ui import theme as theme_module
 from ui.theme import (
     ACCENT,
     ACCENT_DARK,
@@ -54,6 +58,7 @@ from ui.theme import (
     CARD_DIM_ALT,
     DANGER,
     DANGER_DARK,
+    ICON_FONT,
     MUTED,
     ROW_ALT,
     SURFACE,
@@ -71,17 +76,21 @@ LANGUAGE_IDS = {"auto": "Automatic", "en": "English", "es": "Spanish"}
 MIN_ZOOM = 0.6
 MAX_ZOOM = 1.8
 
-
 class Pill(HoverBehavior, ToggleButton):
     """Botón con forma de pastilla para los filtros y el selector de vista."""
 
     pass
 
 
-class SideButton(HoverBehavior, ToggleButton):
-    """Botón cuadrado de la barra lateral (tienda, instaladas, ajustes)."""
+class SideButton(HoverBehavior, Button):
+    """Botón cuadrado de la barra lateral (tienda, instaladas, ajustes).
 
-    pass
+    No usamos ToggleButton: el estado "activo" es solo visual y lo marca
+    ``active`` desde el .kv, así que un clic siempre dispara ``on_release``
+    (con ToggleButton + grupo el primer clic podía quedarse en el toggle).
+    """
+
+    active = BooleanProperty(False)
 
 
 class CardButton(HoverBehavior, Button):
@@ -97,10 +106,27 @@ class CardButton(HoverBehavior, Button):
     use_gradient = BooleanProperty(False)
 
 
+class IconLinkButton(HoverBehavior, Button):
+    """Icono de información de una tarjeta (abre las notas de la versión).
+
+    Se dibuja como el clásico disco azul con la "i" blanca: el círculo lo pinta
+    el .kv (la fuente de iconos es de un solo color) y el glifo va encima.
+    ``disc`` es el diámetro de ese círculo, en píxeles.
+    """
+
+    disc = NumericProperty(0)
+
+
 class HoverButton(HoverBehavior, Button):
     """Botón normal con tooltip (por ejemplo, actualizar o borrar)."""
 
     pass
+
+
+class FolderRow(HoverBehavior, Button):
+    """Fila del selector de carpetas: icono + nombre, al estilo de la app."""
+
+    icon = StringProperty("")
 
 
 class AppPopup(Popup):
@@ -131,6 +157,25 @@ class AppProgressBar(Widget):
     max = NumericProperty(100)
 
 
+class SettingsCard(BoxLayout):
+    """Tarjeta de sección de la pantalla de ajustes."""
+
+    pass
+
+
+class SettingsHeader(BoxLayout):
+    """Cabecera de una tarjeta de ajustes: icono + título."""
+
+    icon = StringProperty("")
+    title = StringProperty("")
+
+
+class SettingsInput(BoxLayout):
+    """Envoltorio redondeado de un campo de texto (igual que el buscador)."""
+
+    pass
+
+
 class SwitchPill(HoverBehavior, ToggleButton):
     """Interruptor de sí/no con el mismo aspecto que los botones del tema.
 
@@ -148,15 +193,44 @@ class SwitchPill(HoverBehavior, ToggleButton):
 
 
 class HoverSpinner(HoverBehavior, Spinner):
-    """Selector con tooltip (sistema operativo y arquitectura)."""
+    """Selector desplegable con tooltip (plataforma, arquitectura, idioma)."""
+
+    def on_is_open(self, instance, value):
+        """Marca la opción que está activa al abrir la lista.
+
+        El Spinner de Kivy no distingue la opción actual de las demás, así que
+        al desplegar no se sabe cuál está puesta. Aquí se lo decimos a cada
+        fila y el .kv la pinta con el azul apagado del tema.
+        """
+        super_on_is_open = getattr(super(), "on_is_open", None)
+        if super_on_is_open is not None:
+            super_on_is_open(instance, value)
+        if not value:
+            return
+        dropdown = getattr(self, "_dropdown", None)
+        container = getattr(dropdown, "container", None) if dropdown else None
+        if container is None:
+            return
+        for option in container.children:
+            if hasattr(option, "selected"):
+                option.selected = option.text == self.text
+
+
+class AppDropDown(DropDown):
+    """Lista desplegable de un ``HoverSpinner`` con el aspecto de la app.
+
+    La de Kivy es un panel negro sin borde con opciones muy altas; esta se
+    dibuja como un menú de Blender: panel hundido, borde fino y filas
+    compactas (el aspecto vive en la regla ``<AppDropDown>`` del .kv).
+    """
 
     pass
 
 
 class DarkSpinnerOption(HoverBehavior, SpinnerOption):
-    """Opción del desplegable de un Spinner, con el estilo oscuro de la app."""
+    """Fila de un desplegable. ``selected`` marca la opción activa."""
 
-    pass
+    selected = BooleanProperty(False)
 
 
 class ZoomSlider(HoverBehavior, Widget):
@@ -273,6 +347,7 @@ class BaseInstalledCard(HoverBehavior, BoxLayout):
     entry = ObjectProperty(None, allownone=True)
     owner = ObjectProperty(None, allownone=True)
     title = StringProperty("")
+    version_text = StringProperty("")
     meta_text = StringProperty("")
     action_text = StringProperty("")
     is_lts = BooleanProperty(False)
@@ -285,6 +360,7 @@ class BaseInstalledCard(HoverBehavior, BoxLayout):
         if entry is None:
             return
         self.title = entry.name
+        self.version_text = entry.version
         self.meta_text = f"Blender {entry.version}   ·   {entry.path}"
         self.is_lts = entry.is_lts
         self.can_launch = entry.can_launch
@@ -305,6 +381,11 @@ class GridInstalledCard(BaseInstalledCard):
 
 class RootWidget(BoxLayout):
     """Pantalla principal: cabecera, filtros, listas y pie con progreso/zoom."""
+
+    # Al cambiar el idioma se reconstruye la pantalla entera (``_reload_ui``);
+    # sin esta marca de clase, cada reconstrucción volvería a buscar
+    # actualizaciones y podría reabrir el diálogo encima del trabajo del usuario.
+    _auto_checked = False
 
     # Propiedades reactivas que la vista .kv observa para redibujarse.
     view = StringProperty("store")
@@ -406,6 +487,10 @@ class RootWidget(BoxLayout):
         installed_container = self.ids.get("installed_list")
         if installed_container is not None:
             installed_container.bind(width=lambda *_: self._update_installed_cols())
+        dest_input = self.ids.get("dest_input")
+        if dest_input is not None:
+            # El texto ya está puesto por el .kv: lo dejamos al principio.
+            self.reset_input_scroll(dest_input)
         Clock.schedule_once(lambda dt: self.refresh(force=False), 0.1)
         Clock.schedule_once(lambda dt: self.refresh_installed(), 0.2)
         # Limpiamos restos de una actualización ya aplicada y, si está activado,
@@ -594,7 +679,9 @@ class RootWidget(BoxLayout):
         self._update_cols()
         if not builds:
             container.cols = 1
-            container.add_widget(self._placeholder(tr("No builds found")))
+            container.add_widget(self._placeholder(
+                tr("No builds found"),
+                tr("Try clearing the search or another channel filter.")))
             return
         card_class = BuildCard if self.layout_mode == "list" else GridBuildCard
         for index, build in enumerate(builds):
@@ -655,7 +742,9 @@ class RootWidget(BoxLayout):
         self._update_installed_cols()
         if not entries:
             container.cols = 1
-            container.add_widget(self._placeholder(tr("No installed versions found")))
+            container.add_widget(self._placeholder(
+                tr("No installed versions found"),
+                tr("Download one from the store to see it here.")))
             return
         card_class = InstalledCard if self.layout_mode == "list" else GridInstalledCard
         for index, entry in enumerate(entries):
@@ -666,12 +755,32 @@ class RootWidget(BoxLayout):
             card.entry = entry
             container.add_widget(card)
 
-    def _placeholder(self, text):
-        """Etiqueta que se muestra cuando una lista está vacía."""
-        label = Label(text=text, color=MUTED, font_size="16sp")
-        label.size_hint_y = None
-        label.height = dp(80)
-        return label
+    def _placeholder(self, text, hint=""):
+        """Bloque que se muestra cuando una lista está vacía.
+
+        Un aviso a secas ("No se encontraron compilaciones") deja al usuario
+        sin saber qué hacer, así que va con un icono y una segunda línea que
+        dice cómo volver a ver algo.
+        """
+        box = BoxLayout(orientation="vertical", spacing=dp(6), padding=[0, dp(50), 0, 0])
+        box.size_hint_y = None
+        box.height = dp(190)
+        icon = Label(text=icons.SEARCH, font_name=theme_module.ICON_FONT,
+                     font_size="34sp", color=(MUTED[0], MUTED[1], MUTED[2], 0.55))
+        icon.size_hint_y = None
+        icon.height = dp(46)
+        box.add_widget(icon)
+        title = Label(text=text, color=MUTED, font_size="16sp")
+        title.size_hint_y = None
+        title.height = dp(28)
+        box.add_widget(title)
+        if hint:
+            subtitle = Label(text=hint, color=(MUTED[0], MUTED[1], MUTED[2], 0.75),
+                             font_size="13sp")
+            subtitle.size_hint_y = None
+            subtitle.height = dp(22)
+            box.add_widget(subtitle)
+        return box
 
     def refresh(self, force=False):
         """Descarga el listado de compilaciones sin bloquear la interfaz."""
@@ -701,6 +810,27 @@ class RootWidget(BoxLayout):
         self._status_event = Clock.schedule_once(
             lambda dt: setattr(self, "status_text", tr("Ready")), timeout
         )
+
+    def open_release_notes(self, version):
+        """Abre en el navegador las notas de la versión de esa serie de Blender.
+
+        Se lanza en un hilo porque ``webbrowser.open`` puede tardar en volver
+        (arranca el navegador) y congelaría la interfaz mientras tanto.
+        """
+        url = api.release_notes_url(version)
+        self._show_message(tr("Opening the release notes..."))
+
+        def worker():
+            try:
+                opened = webbrowser.open(url)
+            except Exception:
+                opened = False
+            if not opened:
+                Clock.schedule_once(
+                    lambda dt: self._show_message(tr("Could not open the browser")), 0
+                )
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _set_progress(self, downloaded, total):
         if total:
@@ -838,9 +968,18 @@ class RootWidget(BoxLayout):
         """Ventana modal con el detalle técnico de un error."""
         content = BoxLayout(orientation="vertical", padding=12, spacing=8)
         content.add_widget(self._wrapped_label(message))
+        # Un único botón a todo el ancho del diálogo desentona con el resto
+        # (los demás diálogos reparten dos): lo dejamos centrado y estrecho.
+        row = BoxLayout(size_hint_y=None, height=dp(40))
         button = self._dialog_button(tr("Close"))
-        content.add_widget(button)
-        popup = AppPopup(title=tr("Error"), content=content, size_hint=(0.7, 0.4))
+        button.size_hint_x = None
+        button.width = dp(150)
+        row.add_widget(Widget())
+        row.add_widget(button)
+        row.add_widget(Widget())
+        content.add_widget(row)
+        popup = AppPopup(title=tr("Error"), content=content,
+                         size_hint=(0.7, None), height=dp(210))
         button.bind(on_release=popup.dismiss)
         popup.open()
 
@@ -887,7 +1026,8 @@ class RootWidget(BoxLayout):
         buttons.add_widget(cancel)
         buttons.add_widget(accept)
         content.add_widget(buttons)
-        popup = AppPopup(title=title, content=content, size_hint=(0.6, 0.35))
+        popup = AppPopup(title=title, content=content,
+                         size_hint=(0.6, None), height=dp(190))
         cancel.bind(on_release=popup.dismiss)
 
         def _accept(*_):
@@ -896,6 +1036,19 @@ class RootWidget(BoxLayout):
 
         accept.bind(on_release=_accept)
         popup.open()
+
+    def reset_input_scroll(self, widget):
+        """Deja un campo de texto mostrando el principio, no el final.
+
+        Con una ruta larga el TextInput se queda desplazado al final y se lee
+        "...cargas/Blenders" en vez de la carpeta. Hay que esperar un fotograma:
+        el desplazamiento se recalcula después de colocar el texto.
+        """
+        def _reset(dt):
+            widget.cursor = (0, 0)
+            widget.scroll_x = 0
+
+        Clock.schedule_once(_reset, 0)
 
     def browse_dest(self):
         """Abre el explorador y deja la carpeta elegida en el campo de texto."""
@@ -909,28 +1062,93 @@ class RootWidget(BoxLayout):
         self.browse_folder(current, on_select)
 
     def browse_folder(self, current, on_select):
-        """Selector de carpetas (Kivy no trae uno nativo en el escritorio)."""
-        view = AppModalView(size_hint=(0.9, 0.9))
-        layout = BoxLayout(orientation="vertical", padding=10, spacing=10)
-        chooser = FileChooserListView(path=str(Path(current).expanduser().parent), dirselect=True)
-        layout.add_widget(chooser)
-        buttons = BoxLayout(size_hint_y=None, height=44, spacing=8)
+        """Selector de carpetas propio, con el aspecto de la app.
+
+        Kivy no trae uno nativo en el escritorio y el FileChooser de serie
+        desentona con el tema, así que montamos una lista de carpetas sencilla:
+        se navega haciendo clic y se confirma con "Elegir esta carpeta".
+        """
+        view = AppModalView(size_hint=(0.82, 0.82))
+        layout = BoxLayout(orientation="vertical", padding=dp(14), spacing=dp(10))
+
+        start = Path(current).expanduser()
+        if not start.is_dir():
+            start = start.parent
+        state = {"path": start}
+
+        # Cabecera: subir, ir al inicio y la ruta actual.
+        header = BoxLayout(size_hint_y=None, height=dp(34), spacing=dp(8))
+        up = self._icon_button(icons.ARROW_UP, tr("Parent folder"))
+        up.bind(on_release=lambda *_: navigate(state["path"].parent))
+        home = self._icon_button(icons.HOME, tr("Home folder"))
+        home.bind(on_release=lambda *_: navigate(Path.home()))
+        path_label = Label(color=MUTED, halign="left", valign="middle", shorten=True)
+        path_label.bind(size=lambda widget, value: setattr(widget, "text_size", value))
+        header.add_widget(up)
+        header.add_widget(home)
+        header.add_widget(path_label)
+
+        scroll = ScrollView()
+        container = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(2))
+        container.bind(minimum_height=lambda widget, value: setattr(widget, "height", value))
+        scroll.add_widget(container)
+
+        footer = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
         cancel = self._dialog_button(tr("Cancel"))
-        select = self._dialog_button(tr("Save"), ACCENT, ACCENT_DARK)
-        buttons.add_widget(cancel)
-        buttons.add_widget(select)
-        layout.add_widget(buttons)
+        select = self._dialog_button(tr("Use this folder"), ACCENT, ACCENT_DARK)
+        footer.add_widget(cancel)
+        footer.add_widget(select)
+
+        layout.add_widget(header)
+        layout.add_widget(scroll)
+        layout.add_widget(footer)
         view.add_widget(layout)
 
+        def populate():
+            container.clear_widgets()
+            path = state["path"]
+            if path.parent != path:
+                row = FolderRow(text="..", icon=icons.ARROW_UP)
+                row.bind(on_release=lambda *_: navigate(path.parent))
+                container.add_widget(row)
+            try:
+                entries = sorted(
+                    (entry for entry in os.scandir(path)
+                     if entry.is_dir() and not entry.name.startswith(".")),
+                    key=lambda entry: entry.name.lower(),
+                )
+            except OSError:
+                entries = []
+            for entry in entries:
+                row = FolderRow(text=entry.name, icon=icons.FOLDER)
+                row.bind(on_release=lambda *_, target=entry.path: navigate(Path(target)))
+                container.add_widget(row)
+            path_label.text = str(path)
+            scroll.scroll_y = 1
+
+        def navigate(target):
+            candidate = Path(target)
+            if candidate.is_dir():
+                state["path"] = candidate
+                populate()
+
         def _select(*_):
-            selection = chooser.selection
-            target = selection[0] if selection else chooser.path
             view.dismiss()
-            on_select(target)
+            on_select(str(state["path"]))
 
         cancel.bind(on_release=view.dismiss)
         select.bind(on_release=_select)
+        populate()
         view.open()
+
+    def _icon_button(self, glyph, tooltip=""):
+        """Botón cuadrado con un icono, para la cabecera de diálogos."""
+        button = CardButton(text=glyph)
+        button.font_name = ICON_FONT
+        button.tooltip_text = tooltip
+        button.size_hint_x = None
+        button.width = dp(40)
+        return button
 
     def language_values(self):
         return [tr(LANGUAGE_IDS[key]) for key in LANGUAGE_IDS]
@@ -974,8 +1192,9 @@ class RootWidget(BoxLayout):
         self.settings.save()
 
     def _auto_check_updates(self):
-        if not self.auto_update:
+        if not self.auto_update or RootWidget._auto_checked:
             return
+        RootWidget._auto_checked = True
         # En modo fuente sin checkout git no hay nada que actualizar; si no,
         # ofrecería en cada arranque una descarga que además no se puede aplicar.
         if not getattr(sys, "frozen", False) and updater.source_root() is None:
@@ -1021,6 +1240,10 @@ class RootWidget(BoxLayout):
             if updater.source_root() is not None:
                 self._show_source_update(tag)
             elif manual:
+                # Sin checkout git no hay nada que reemplazar: que al menos vea
+                # la release en el navegador, y que sepa por qué se ha abierto.
+                self._show_message(
+                    tr("A new version is available: {version}", version=tag), timeout=8)
                 updater.open_releases()
             return
         asset_name = updater.asset_for(self.system)
@@ -1054,7 +1277,7 @@ class RootWidget(BoxLayout):
         buttons.add_widget(primary)
         content.add_widget(buttons)
         popup = AppPopup(title=tr("Update available"), content=content,
-                         size_hint=(0.68, 0.45), auto_dismiss=False)
+                         size_hint=(0.68, None), height=dp(230), auto_dismiss=True)
 
         def _error_text(reason):
             if reason == "dirty":
@@ -1064,6 +1287,7 @@ class RootWidget(BoxLayout):
         def _done(ok, reason):
             if not ok:
                 info.text = _error_text(reason)
+                popup.auto_dismiss = True
                 primary.disabled = False
                 secondary.disabled = False
                 secondary.text = tr("Close")
@@ -1079,6 +1303,7 @@ class RootWidget(BoxLayout):
         def _start(*_):
             primary.disabled = True
             secondary.disabled = True
+            popup.auto_dismiss = False  # git pull en marcha: no se cierra
             info.text = tr("Updating...")
 
             def worker():
@@ -1109,13 +1334,15 @@ class RootWidget(BoxLayout):
         buttons.add_widget(secondary)
         buttons.add_widget(primary)
         content.add_widget(buttons)
-        # auto_dismiss=False: mientras se descarga o se instala, un clic fuera
-        # no debe dejar el proceso en marcha sin interfaz que lo cuente.
+        # Mientras se descarga o se instala, auto_dismiss se apaga: un clic
+        # fuera (o Esc) no debe dejar el proceso en marcha sin interfaz que lo
+        # cuente. Antes de empezar, en cambio, se cierra como cualquier aviso.
         popup = AppPopup(title=tr("Update available"), content=content,
-                         size_hint=(0.7, 0.5), auto_dismiss=False)
+                         size_hint=(0.7, None), height=dp(250), auto_dismiss=True)
 
         def _reset():
             state["downloading"] = False
+            popup.auto_dismiss = True
             progress.opacity = 0
             primary.disabled = False
             secondary.disabled = False
@@ -1141,6 +1368,7 @@ class RootWidget(BoxLayout):
             # No cerramos el diálogo: aquí mismo informamos de la instalación y
             # del reinicio, que es lo que antes no quedaba claro.
             state["downloading"] = False
+            popup.auto_dismiss = False  # instalando: que no se cierre solo
             progress.opacity = 0
             primary.disabled = True
             secondary.disabled = True
@@ -1180,6 +1408,7 @@ class RootWidget(BoxLayout):
         def _start(*_):
             state["downloading"] = True
             state["cancelled"] = False
+            popup.auto_dismiss = False
             info.text = tr("Downloading...")
             progress.opacity = 1
             primary.disabled = True

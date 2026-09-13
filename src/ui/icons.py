@@ -24,3 +24,6 @@ GRID = "\uf00a"
 LIST = "\uf0ca"
 MINUS = "\uf068"
 PLUS = "\uf067"
+ARROW_UP = "\uf062"
+HOME = "\uf015"
+INFO = "\uf129"     # "i" suelta (el circulo azul lo pinta el .kv)

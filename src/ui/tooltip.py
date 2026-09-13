@@ -31,7 +31,6 @@ class Tooltip(Label):
         # Colores del tooltip de Blender (#1d1d1d de fondo, texto #d9d9d9).
         self.color = (0xD9 / 255, 0xD9 / 255, 0xD9 / 255, 1)
         self.opacity = 0
-        self.disabled = True  # que no capture clics
         with self.canvas.before:
             Color(0x1D / 255, 0x1D / 255, 0x1D / 255, 0.96)
             self._background = RoundedRectangle(radius=[dp(6)])
@@ -46,6 +45,21 @@ class Tooltip(Label):
 
     def _move(self, *_):
         self._background.pos = self.pos
+
+    # El tooltip vive pegado a la ventana, por encima de todo, así que NUNCA
+    # debe participar en los toques. Ojo: marcarlo como ``disabled`` no vale,
+    # porque un widget deshabilitado en Kivy *se traga* el toque que cae dentro
+    # (Widget.on_touch_down devuelve True). Con el tamaño inicial de 100x100 en
+    # (0, 0) eso dejaba muerto el primer clic sobre el botón de ajustes, abajo
+    # a la izquierda: hacía falta un segundo clic.
+    def on_touch_down(self, touch):
+        return False
+
+    def on_touch_move(self, touch):
+        return False
+
+    def on_touch_up(self, touch):
+        return False
 
 
 class TooltipManager:
@@ -67,7 +81,6 @@ class TooltipManager:
         self.tooltip.text = text
         self.tooltip.texture_update()
         self.tooltip.opacity = 1
-        self.tooltip.disabled = True
         # Nos aseguramos de que quede por encima del resto de widgets.
         if not Window.children or Window.children[0] is not self.tooltip:
             Window.remove_widget(self.tooltip)
@@ -86,7 +99,6 @@ class TooltipManager:
 
     def hide(self) -> None:
         self.tooltip.opacity = 0
-        self.tooltip.disabled = True
 
 
 class HoverBehavior:
@@ -156,8 +168,27 @@ class HoverBehavior:
 
     def _display_tooltip(self, dt):
         self._tooltip_event = None
-        if self._hovering and self.tooltip_text:
+        if self._hovering and self.tooltip_text and not self._covered_by_modal():
             TooltipManager.get().show(self.tooltip_text, Window.mouse_pos)
+
+    def _covered_by_modal(self):
+        """True si hay un diálogo abierto y este widget se ha quedado debajo.
+
+        Sin esto, el texto de ayuda de un botón tapado por un diálogo seguía
+        saliendo (flotando sobre el diálogo) al pasar el ratón por su sitio.
+        """
+        from kivy.uix.modalview import ModalView
+
+        for child in Window.children:
+            if not isinstance(child, ModalView):
+                continue
+            node = self
+            while node is not None:
+                if node is child:
+                    return False  # el widget es del propio diálogo
+                node = node.parent
+            return True
+        return False
 
     def _cancel_tooltip(self):
         if self._tooltip_event is not None:

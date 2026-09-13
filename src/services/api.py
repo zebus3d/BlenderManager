@@ -11,6 +11,7 @@ extra al empaquetado.
 """
 
 import json
+import re
 import time
 import urllib.request
 from dataclasses import asdict, fields
@@ -129,3 +130,26 @@ def available_for(builds, platform: str, arch: str):
         if current is None or build.mtime > current.mtime:
             best[key] = build
     return sorted(best.values(), key=lambda build: build.sort_key, reverse=True)
+
+
+# Notas de versión de Blender. Cada serie tiene su propia página:
+# https://developer.blender.org/docs/release_notes/4.2/
+RELEASE_NOTES_URL = "https://developer.blender.org/docs/release_notes/"
+# La serie más antigua que tiene página propia publicada.
+OLDEST_RELEASE_NOTES = (2, 79)
+
+
+def release_notes_url(version: str) -> str:
+    """Devuelve la URL de las notas de versión de una compilación.
+
+    Las páginas van por serie (mayor.menor), así que de "4.2.1" o de
+    "5.2.0-alpha" nos quedamos con "4.2" y "5.2". Si la versión no se entiende
+    o es anterior a las notas publicadas, abrimos el índice general.
+    """
+    match = re.search(r"(\d+)\.(\d+)", version or "")
+    if not match:
+        return RELEASE_NOTES_URL
+    series = (int(match.group(1)), int(match.group(2)))
+    if series < OLDEST_RELEASE_NOTES:
+        return RELEASE_NOTES_URL
+    return f"{RELEASE_NOTES_URL}{series[0]}.{series[1]}/"
