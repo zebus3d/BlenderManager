@@ -350,6 +350,8 @@ class RootWidget(BoxLayout):
         self.settings = settings_service.Settings.load()
         i18n.set_language(self.settings.language)
         self.system = detector.detect()
+        # En modo fuente version.py vale 0.0.0: mostramos el último tag del repo.
+        self.current_version = updater.app_version()
         self.platform_label = PLATFORM_LABELS.get(self.system.os_name, "GNU/Linux")
         # En Windows la API llama "amd64" a la arquitectura de 64 bits.
         self.arch_label = "x86_64" if self.system.arch in ("amd64", "x86_64") else self.system.arch

@@ -165,6 +165,17 @@ class SourceUpdateTests(unittest.TestCase):
                 mock.patch.object(updater.subprocess, "run", return_value=result):
             self.assertEqual(updater.source_update(), (False, "failed"))
 
+    def test_app_version_uses_tag_in_source(self):
+        # En modo fuente version.py es 0.0.0: la versión mostrada es el tag.
+        with mock.patch.object(updater.version, "__version__", "0.0.0"), \
+                mock.patch.object(updater, "source_tag", return_value="v1.2.3"):
+            self.assertEqual(updater.app_version(), "1.2.3")
+
+    def test_app_version_uses_injected_version(self):
+        with mock.patch.object(updater.version, "__version__", "1.9.9"), \
+                mock.patch.object(updater, "source_tag", return_value="v1.2.3"):
+            self.assertEqual(updater.app_version(), "1.9.9")
+
 
 if __name__ == "__main__":
     unittest.main()

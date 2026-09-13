@@ -116,6 +116,19 @@ def source_tag() -> str:
     return output.decode("utf-8", "ignore").strip()
 
 
+def app_version() -> str:
+    """Versión que se muestra en la app.
+
+    Si el CI inyectó una versión, esa. En modo fuente ``version.py`` vale
+    ``0.0.0``, así que usamos el último tag del checkout para no enseñar
+    siempre "0.0.0".
+    """
+    if version.__version__ != "0.0.0":
+        return version.__version__
+    tag = source_tag()
+    return tag.lstrip("vV") if tag else version.__version__
+
+
 def source_update(timeout: int = 120):
     """Actualiza el checkout con ``git pull --ff-only``.
 
