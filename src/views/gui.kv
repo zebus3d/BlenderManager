@@ -551,55 +551,71 @@
             width: self.texture_size[0]
             pos_hint: {"center_y": .5}
         Widget:
+        # Búsqueda y refresco: el refresco va a la izquierda de la caja.
+        # El bloque entero se oculta (colapsando su ancho) en los ajustes.
         BoxLayout:
+            id: header_tools
             size_hint: None, None
-            width: dp(240)
-            height: dp(34)
+            width: dp(288) if root.show_filters else 0
+            height: dp(38)
+            spacing: dp(10)
+            opacity: 1 if root.show_filters else 0
+            disabled: not root.show_filters
             pos_hint: {"center_y": .5}
-            canvas.before:
-                Color:
-                    rgba: theme.FIELD
-                RoundedRectangle:
-                    pos: self.pos
-                    size: self.size
-                    radius: [dp(8)]
-            Label:
-                text: icons.SEARCH
+            HoverButton:
+                size_hint: None, None
+                size: dp(38), dp(38)
+                text: icons.REFRESH
+                tooltip_text: tr("Refresh the list of builds")
                 font_name: theme.ICON_FONT
-                font_size: sp(13)
-                color: theme.MUTED
-                size_hint_x: None
-                width: dp(32)
-            TextInput:
-                id: search_input
-                hint_text: tr("Search...")
+                font_size: sp(16)
+                color: theme.TEXT
                 background_normal: ""
-                background_active: ""
+                background_down: ""
                 background_color: 0, 0, 0, 0
-                foreground_color: theme.TEXT
-                hint_text_color: theme.MUTED
-                cursor_color: theme.ACCENT
-                multiline: False
-                on_text: root.set_search(self.text)
-        HoverButton:
-            size_hint: None, None
-            size: dp(38), dp(38)
-            text: icons.REFRESH
-            tooltip_text: tr("Refresh the list of builds")
-            font_name: theme.ICON_FONT
-            font_size: sp(16)
-            color: theme.TEXT
-            background_normal: ""
-            background_down: ""
-            background_color: 0, 0, 0, 0
-            pos_hint: {"center_y": .5}
-            on_release: root.refresh(force=True)
+                disabled: not root.show_filters
+                pos_hint: {"center_y": .5}
+                on_release: root.refresh(force=True)
+            BoxLayout:
+                size_hint: None, None
+                width: dp(240)
+                height: dp(34)
+                pos_hint: {"center_y": .5}
+                canvas.before:
+                    Color:
+                        rgba: theme.FIELD
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [dp(8)]
+                Label:
+                    text: icons.SEARCH
+                    font_name: theme.ICON_FONT
+                    font_size: sp(13)
+                    color: theme.MUTED
+                    size_hint_x: None
+                    width: dp(32)
+                TextInput:
+                    id: search_input
+                    hint_text: tr("Search...")
+                    background_normal: ""
+                    background_active: ""
+                    background_color: 0, 0, 0, 0
+                    foreground_color: theme.TEXT
+                    hint_text_color: theme.MUTED
+                    cursor_color: theme.ACCENT
+                    multiline: False
+                    disabled: not root.show_filters
+                    on_text: root.set_search(self.text)
 
     # Barra de filtros: fondo gris claro con los botones oscuros encima,
     # al estilo de las pestañas de Blender.
     BoxLayout:
         size_hint_y: None
-        height: dp(44)
+        # Colapsada e invisible en los ajustes; los hijos se desactivan para
+        # que no capturen toques cuando está oculta.
+        height: dp(44) if root.show_filters else 0
+        opacity: 1 if root.show_filters else 0
         padding: [dp(16), dp(6)]
         spacing: dp(8)
         canvas.before:
@@ -612,26 +628,31 @@
             text: tr("All")
             tooltip_text: tr("Filter: all channels")
             state: "down" if root.channel == "all" else "normal"
+            disabled: not root.show_filters
             on_release: root.set_channel("all")
         Pill:
             text: tr("LTS")
             tooltip_text: tr("Filter: LTS only")
             state: "down" if root.channel == "lts" else "normal"
+            disabled: not root.show_filters
             on_release: root.set_channel("lts")
         Pill:
             text: tr("Stable")
             tooltip_text: tr("Filter: stable only")
             state: "down" if root.channel == "stable" else "normal"
+            disabled: not root.show_filters
             on_release: root.set_channel("stable")
         Pill:
             text: tr("LTS + Stable")
             tooltip_text: tr("Filter: LTS and stable")
             state: "down" if root.channel == "lts_stable" else "normal"
+            disabled: not root.show_filters
             on_release: root.set_channel("lts_stable")
         Pill:
             text: tr("Daily")
             tooltip_text: tr("Filter: daily and alpha")
             state: "down" if root.channel == "daily" else "normal"
+            disabled: not root.show_filters
             on_release: root.set_channel("daily")
         Widget:
         Pill:
@@ -640,6 +661,7 @@
             font_name: theme.ICON_FONT
             font_size: sp(14)
             state: "down" if root.layout_mode == "grid" else "normal"
+            disabled: not root.show_filters
             on_release: root.set_layout_mode("grid")
         Pill:
             text: icons.LIST
@@ -647,6 +669,7 @@
             font_name: theme.ICON_FONT
             font_size: sp(14)
             state: "down" if root.layout_mode == "list" else "normal"
+            disabled: not root.show_filters
             on_release: root.set_layout_mode("list")
         HoverSpinner:
             text: root.platform_label
@@ -655,6 +678,7 @@
             size_hint: None, None
             width: dp(118)
             height: dp(32)
+            disabled: not root.show_filters
             pos_hint: {"center_y": .5}
             on_text: root.set_platform(self.text)
         HoverSpinner:
@@ -664,6 +688,7 @@
             size_hint: None, None
             width: dp(96)
             height: dp(32)
+            disabled: not root.show_filters
             pos_hint: {"center_y": .5}
             on_text: root.set_arch(self.text)
 
@@ -867,23 +892,33 @@
             opacity: 1 if root.downloading else 0
             disabled: not root.downloading
             on_release: root.cancel_download()
-        Label:
-            text: icons.MINUS
-            font_name: theme.ICON_FONT
-            font_size: sp(13)
-            color: theme.MUTED
+        # Barra de zoom: solo en modo rejilla y fuera de los ajustes.
+        # El bloque se oculta colapsando su ancho en los demás casos.
+        BoxLayout:
+            id: zoom_box
             size_hint_x: None
-            width: dp(20)
-        ZoomSlider:
-            id: zoom_slider
-            min: 0.6
-            max: 1.8
-            value: root.zoom
-            on_value: root.set_zoom(self.value)
-        Label:
-            text: icons.PLUS
-            font_name: theme.ICON_FONT
-            font_size: sp(13)
-            color: theme.MUTED
-            size_hint_x: None
-            width: dp(20)
+            width: dp(178) if root.show_zoom else 0
+            spacing: dp(4)
+            opacity: 1 if root.show_zoom else 0
+            disabled: not root.show_zoom
+            Label:
+                text: icons.MINUS
+                font_name: theme.ICON_FONT
+                font_size: sp(13)
+                color: theme.MUTED
+                size_hint_x: None
+                width: dp(20)
+            ZoomSlider:
+                id: zoom_slider
+                min: 0.6
+                max: 1.8
+                value: root.zoom
+                disabled: not root.show_zoom
+                on_value: root.set_zoom(self.value)
+            Label:
+                text: icons.PLUS
+                font_name: theme.ICON_FONT
+                font_size: sp(13)
+                color: theme.MUTED
+                size_hint_x: None
+                width: dp(20)
