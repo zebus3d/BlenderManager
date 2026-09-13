@@ -1,0 +1,63 @@
+name: promote
+
+# Convierte una pre-release en la release estable ("latest") con un botón:
+# Actions -> promote -> Run workflow.
+#
+# Cada push a master publica una pre-release con los 3 binarios ya compilados
+# y verificados. El auto-update de la app consulta /releases/latest, que
+# ignora las pre-releases, así que a los usuarios no les llega nada hasta que
+# se promociona una. Promocionar NO recompila: reutiliza esos mismos binarios,
+# que es justo lo que queremos (la version va cocida dentro del binario, y
+# reetiquetar con otro numero provocaria un bucle de actualizacion).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag a promocionar (vacio = la pre-release mas reciente)"
+        required: false
+        type: string
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Promocionar a release estable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG}"
+          if [ -z "${TAG}" ]; then
+            TAG="$(gh release list --limit 30 --json tagName,isPrerelease,isDraft \
+              --jq 'map(select(.isPrerelease and (.isDraft | not))) | .[0].tagName // ""')"
+          fi
+          if [ -z "${TAG}" ]; then
+            echo "::error::No hay ninguna pre-release que promocionar."
+            exit 1
+          fi
+
+          # Comprobamos que la release trae los 3 binarios y los checksums
+          # antes de ponerla como latest: si falta uno, esa plataforma se
+          # quedaria sin actualizacion.
+          ASSETS="$(gh release view "${TAG}" --json assets --jq '.assets[].name')"
+          echo "Assets de ${TAG}:"; echo "${ASSETS}"
+          for NEEDED in \
+            BlenderManager-x86_64.AppImage \
+            BlenderManager-windows-x86_64.zip \
+            BlenderManager-macos.zip \
+            checksums.txt
+          do
+            if ! echo "${ASSETS}" | grep -qx "${NEEDED}"; then
+              echo "::error::A ${TAG} le falta el asset ${NEEDED}."
+              exit 1
+            fi
+          done
+
+          gh release edit "${TAG}" --prerelease=false --latest
+          echo "### Promocionada \`${TAG}\` a release estable" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Los usuarios con auto-update la veran en el siguiente arranque." >> "${GITHUB_STEP_SUMMARY}"

@@ -21,6 +21,22 @@ APP_NAME = "BlenderManager"
 PORTABLE_MARKERS = ("portable", "portable.txt", ".portable")
 
 
+def write_json_atomic(path: Path, payload, indent=None) -> Path:
+    """Guarda un JSON sin dejar el archivo a medias si algo falla.
+
+    Escribimos primero en un ``.tmp`` al lado y solo entonces lo movemos encima
+    del definitivo: ``os.replace`` es atómico dentro del mismo sistema de
+    archivos, así que un corte de luz o un disco lleno dejan intacto el
+    contenido anterior en lugar de un JSON truncado.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=indent), encoding="utf-8")
+    os.replace(temporary, path)
+    return path
+
+
 def config_dir() -> Path:
     """Devuelve la carpeta donde se guardan los ajustes."""
     for marker in PORTABLE_MARKERS:
@@ -96,8 +112,4 @@ class Settings:
         return settings
 
     def save(self) -> Path:
-        directory = config_dir()
-        directory.mkdir(parents=True, exist_ok=True)
-        path = directory / "settings.json"
-        path.write_text(json.dumps(asdict(self), indent=2), encoding="utf-8")
-        return path
+        return write_json_atomic(config_dir() / "settings.json", asdict(self), indent=2)

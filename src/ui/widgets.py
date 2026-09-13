@@ -10,8 +10,10 @@ que consume la vista (carpeta destino, idioma, etc.) se exponen como
 propiedades Kivy con valores por defecto y se rellenan después de super().__init__.
 """
 
+import os
 import shlex
 import shutil
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -41,10 +43,9 @@ from kivy.uix.widget import Widget
 import i18n
 import version
 from i18n import tr
-from model.build import version_tuple
 from services import api, detector, installed as installed_service, settings as settings_service, updater
-from services.downloader import Downloader
-from services.extractor import extract
+from services.downloader import Downloader, log as download_log
+from services.extractor import extract, is_archive
 from services.launcher import Launcher
 from ui.theme import (
     ACCENT,
@@ -354,6 +355,8 @@ class RootWidget(BoxLayout):
             manager.current = self.view
         self._status_event = None
         self._zoom_save_event = None
+        self._search_event = None
+        self._pending_search = ""
         self._update_checking = False
         # Cada vez que cambia un filtro o el modo de vista volvemos a montar la lista.
         self.bind(builds=lambda *_: self._rebuild_store(),
@@ -379,6 +382,8 @@ class RootWidget(BoxLayout):
         # Limpiamos restos de una actualización ya aplicada y, si está activado,
         # comprobamos si hay versión nueva al arrancar.
         Clock.schedule_once(lambda dt: updater.cleanup_staging(), 0.5)
+        Clock.schedule_once(
+            lambda dt: updater.cleanup_partials(self.settings.dest_folder), 0.6)
         Clock.schedule_once(lambda dt: self._auto_check_updates(), 2.0)
 
     def _on_layout_mode_changed(self):
@@ -413,7 +418,20 @@ class RootWidget(BoxLayout):
         self.channel = channel
 
     def set_search(self, text):
-        self.search = text
+        """Filtra por texto, pero no en cada pulsación de tecla.
+
+        Cada cambio de ``search`` reconstruye las dos listas enteras (destruye
+        y vuelve a crear todas las tarjetas), así que esperamos a que el
+        usuario deje de escribir.
+        """
+        self._pending_search = text
+        if self._search_event is not None:
+            self._search_event.cancel()
+        self._search_event = Clock.schedule_once(self._apply_search, 0.2)
+
+    def _apply_search(self, dt):
+        self._search_event = None
+        self.search = self._pending_search
 
     def set_view(self, view):
         """Cambia entre la tienda, las instaladas y los ajustes.
@@ -551,7 +569,7 @@ class RootWidget(BoxLayout):
             return
         card_class = BuildCard if self.layout_mode == "list" else GridBuildCard
         for index, build in enumerate(builds):
-            is_installed = installed_service.is_version_installed(self.installed, build.version)
+            is_installed = installed_service.find_installed(self.installed, build) is not None
             card = card_class()
             card.owner = self
             card.zoom = self.zoom
@@ -663,17 +681,18 @@ class RootWidget(BoxLayout):
         """Descarga e instala una compilación, o lanza la ya instalada."""
         if build is None:
             return
-        # Si esa versión concreta ya está instalada, simplemente la lanzamos.
-        if installed_service.is_version_installed(self.installed, build.version):
-            match = next(
-                (entry for entry in self.installed
-                 if version_tuple(entry.version) == version_tuple(build.version)),
-                None,
-            )
-            if match is not None and match.can_launch:
+        # Si esa compilación concreta ya está instalada, simplemente la lanzamos.
+        match = installed_service.find_installed(self.installed, build)
+        if match is not None:
+            if match.can_launch:
                 self.launch_installed(match)
             else:
                 self._show_message(tr("No executable found"))
+            return
+        # Solo hay un hilo de descarga: sin esta guarda pondríamos la interfaz
+        # en modo "descargando" para una descarga que nunca arranca.
+        if self.downloader.running:
+            self._show_message(tr("A download is already in progress"))
             return
         self.busy = True
         self.downloading = True
@@ -698,6 +717,22 @@ class RootWidget(BoxLayout):
 
     def _on_download_done(self, path, build):
         archive = Path(path)
+        # En macOS la API solo publica .dmg, que no es un contenedor que
+        # sepamos abrir. La descarga ha ido bien: dejamos el archivo donde
+        # está (sin borrarlo) y le decimos al usuario qué hacer con él, en vez
+        # de fingir un fallo de descarga.
+        if not is_archive(archive):
+            self.busy = False
+            self.downloading = False
+            self.progress = 0
+            self._reveal(archive)
+            self._show_message(
+                tr("Downloaded to {folder}", folder=archive.parent)
+                + "  ·  "
+                + tr("Open it to install Blender manually."),
+                timeout=10,
+            )
+            return
         self.status_text = tr("Extracting {name}", name=archive.name)
 
         def worker():
@@ -705,16 +740,35 @@ class RootWidget(BoxLayout):
                 target = extract(archive, self.settings.dest_folder)
                 if self.settings.delete_archive:
                     archive.unlink(missing_ok=True)
-                Clock.schedule_once(lambda dt: self._on_extract_done(target), 0)
+                Clock.schedule_once(lambda dt: self._on_extract_done(target, build), 0)
             except Exception as error:
                 Clock.schedule_once(lambda dt: self._on_download_error(str(error)), 0)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_extract_done(self, target):
+    def _reveal(self, path):
+        """Abre el gestor de archivos en la carpeta donde quedó la descarga."""
+        folder = Path(path).parent
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(path)])
+            elif sys.platform.startswith("win"):
+                os.startfile(str(folder))  # noqa: S606 (solo Windows)
+            else:
+                subprocess.Popen(["xdg-open", str(folder)])
+        except Exception as error:
+            download_log(f"reveal failed: {error}")
+
+    def _on_extract_done(self, target, build=None):
         self.busy = False
         self.downloading = False
         self.progress = 0
+        # El nombre de la carpeta extraída no lleva el hash de la compilación,
+        # así que lo anotamos nosotros: es lo único que distingue dos diarias
+        # de la misma versión bajadas en días distintos.
+        destination = Path(self.settings.dest_folder).expanduser()
+        if build is not None and Path(target) != destination:
+            installed_service.write_marker(target, build)
         self.refresh_installed()
         self._show_message(tr("Extraction complete"))
 
@@ -741,10 +795,20 @@ class RootWidget(BoxLayout):
             button.pressed_color = list(pressed)
         return button
 
+    def _wrapped_label(self, text):
+        """Etiqueta que parte el texto en varias líneas dentro del diálogo.
+
+        Sin ``text_size`` un mensaje de error largo se sale del popup por los
+        lados en lugar de partirse.
+        """
+        label = Label(text=str(text), halign="center", valign="middle")
+        label.bind(size=lambda widget, value: setattr(widget, "text_size", value))
+        return label
+
     def _show_error(self, message):
         """Ventana modal con el detalle técnico de un error."""
         content = BoxLayout(orientation="vertical", padding=12, spacing=8)
-        content.add_widget(Label(text=str(message)))
+        content.add_widget(self._wrapped_label(message))
         button = self._dialog_button(tr("Close"))
         content.add_widget(button)
         popup = Popup(title=tr("Error"), content=content, size_hint=(0.7, 0.4))
@@ -787,8 +851,8 @@ class RootWidget(BoxLayout):
     def _confirm(self, title, message, on_confirm):
         """Ventana de confirmación reutilizable para acciones destructivas."""
         content = BoxLayout(orientation="vertical", padding=12, spacing=10)
-        content.add_widget(Label(text=message))
-        buttons = BoxLayout(size_hint_y=None, height=40, spacing=8)
+        content.add_widget(self._wrapped_label(message))
+        buttons = BoxLayout(size_hint_y=None, height=dp(40), spacing=8)
         cancel = self._dialog_button(tr("Cancel"))
         accept = self._dialog_button(tr("Delete"), DANGER, DANGER_DARK)
         buttons.add_widget(cancel)
@@ -860,6 +924,12 @@ class RootWidget(BoxLayout):
         # Los textos del .kv se evalúan al construirse; si cambia el idioma
         # hay que volver a montar la interfaz para que se retraduzca.
         if i18n.get_language() != previous_language:
+            if self.downloader.running:
+                # Recargar la interfaz cambia la raíz de la aplicación y los
+                # avisos de la descarga en curso irían al widget viejo: el
+                # progreso dejaría de verse. Mejor esperar al reinicio.
+                self._show_message(tr("The language will change when you restart"), timeout=6)
+                return
             self._reload_ui()
             return
         self.set_view("store")
@@ -916,7 +986,7 @@ class RootWidget(BoxLayout):
 
     def _show_update_available(self, tag, asset):
         """Diálogo para descargar e instalar la versión nueva."""
-        state = {"downloading": False}
+        state = {"downloading": False, "cancelled": False}
         content = BoxLayout(orientation="vertical", padding=12, spacing=10)
         title = Label(text=tr("A new version is available: {version}", version=tag))
         content.add_widget(title)
@@ -937,7 +1007,11 @@ class RootWidget(BoxLayout):
 
         def _on_secondary(*_):
             if state["downloading"]:
+                # Puede que aún estemos pidiendo el checksum y la descarga no
+                # haya arrancado: lo anotamos para no arrancarla después.
+                state["cancelled"] = True
                 self.update_downloader.cancel()
+                Clock.schedule_once(lambda dt: _on_error("cancelled"), 0)
             else:
                 popup.dismiss()
 
@@ -965,20 +1039,31 @@ class RootWidget(BoxLayout):
 
         def _start(*_):
             state["downloading"] = True
+            state["cancelled"] = False
             info.text = tr("Downloading...")
             progress.opacity = 1
             primary.disabled = True
             secondary.text = tr("Cancel")
-            checksum = updater.checksum_for(self._update_assets, asset["name"])
-            self.update_downloader.start(
-                asset["url"],
-                str(updater.updates_dir()),
-                asset["name"],
-                checksum,
-                on_progress=_on_progress,
-                on_done=lambda path: Clock.schedule_once(lambda dt: _on_done(path), 0),
-                on_error=lambda message: Clock.schedule_once(lambda dt: _on_error(message), 0),
-            )
+
+            def worker():
+                # checksum_for hace su propia petición HTTP (hasta 15 s de
+                # espera): en el hilo de Kivy dejaría la ventana clavada.
+                checksum = updater.checksum_for(self._update_assets, asset["name"])
+                if state["cancelled"]:
+                    # Cancelado mientras pedíamos el checksum: no arrancamos
+                    # (start() limpiaría el aviso de cancelación).
+                    return
+                self.update_downloader.start(
+                    asset["url"],
+                    str(updater.updates_dir()),
+                    asset["name"],
+                    checksum,
+                    on_progress=_on_progress,
+                    on_done=lambda path: Clock.schedule_once(lambda dt: _on_done(path), 0),
+                    on_error=lambda message: Clock.schedule_once(lambda dt: _on_error(message), 0),
+                )
+
+            threading.Thread(target=worker, daemon=True).start()
 
         secondary.bind(on_release=_on_secondary)
         primary.bind(on_release=_start)

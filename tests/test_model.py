@@ -22,12 +22,10 @@ class ModelTests(unittest.TestCase):
     def test_is_lts(self):
         stable = Build("4.5.13", "v45", "stable", "linux", "x86_64", "u", "f.tar.xz")
         self.assertTrue(stable.is_lts)
-        self.assertEqual(stable.channel, "lts")
         non_lts = Build("4.4.3", "v44", "stable", "linux", "x86_64", "u", "f.tar.xz")
         self.assertFalse(non_lts.is_lts)
         alpha = Build("5.3.0", "main", "alpha", "linux", "x86_64", "u", "f.tar.xz")
         self.assertFalse(alpha.is_lts)
-        self.assertEqual(alpha.channel, "alpha")
 
     def test_installed_build(self):
         entry = InstalledBuild("blender-4.5.13-linux-x64", "/tmp/x", "4.5.13", "/tmp/x/blender")

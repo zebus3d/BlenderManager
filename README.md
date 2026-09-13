@@ -14,7 +14,9 @@ designed to be **portable**: once packaged, users don't need to install anything
 - **Grid or list view**, with a **zoom slider** to choose the icon size (Dolphin-style).
 - **Automatic detection** of the operating system and architecture.
 - **Downloads with progress**, **SHA-256** integrity verification and automatic
-  extraction (`.tar.xz` on Linux, `.zip` on Windows, `.dmg` on macOS).
+  extraction (`.tar.xz` on Linux, `.zip` on Windows). On macOS Blender is only
+  published as `.dmg`, which is not extracted: the app downloads it, reveals it
+  in Finder and tells you to open it.
 - **Configurable destination folder**, **remembered window size** and a list of
   **installed versions** (launch or uninstall them from the app).
 - **Filters and search also apply to installed versions**.
@@ -111,9 +113,14 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 
 - On every push to `master` it also publishes a **pre-release** with a per-build
   version (e.g. `v1.1.42`), so every compilation is downloadable from Releases.
-- Pushing a `vX.Y.Z` tag publishes a **stable Release** (not a pre-release).
-  Only these stable releases trigger the in-app auto-update, because the app
-  checks `.../releases/latest`, which ignores pre-releases.
+- `.github/workflows/promote.yml` turns a pre-release into the **stable
+  Release** with one click (Actions → *promote* → *Run workflow*). It reuses the
+  binaries that were already built and verified, so the version baked into them
+  keeps matching the tag.
+- Pushing a `vX.Y.Z` tag also publishes a **stable Release**, rebuilding the
+  binaries with that version.
+- Only stable releases trigger the in-app auto-update, because the app checks
+  `.../releases/latest`, which ignores pre-releases.
 
 The binaries are **not** committed to the repository; they are downloadable from
 the Release (or from the workflow run).

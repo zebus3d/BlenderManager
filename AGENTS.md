@@ -59,8 +59,25 @@ pre-releases **no** disparan el auto-update de los usuarios.
 
 ### Publicar una release estable (la que sí actualiza a los usuarios)
 
-Cuando quieras que las apps instaladas se actualicen solas, empuja un tag
-`vX.Y.Z`:
+**Forma recomendada: el botón de promoción.** En Actions → **promote** → *Run
+workflow*. Sin argumentos coge la pre-release más reciente; opcionalmente se le
+pasa un tag concreto. El workflow comprueba que la release trae los 3 binarios
+y el `checksums.txt`, y entonces le quita la marca de pre-release y la deja
+como `latest`.
+
+No recompila nada: promociona **los mismos binarios** que ya generó el push a
+master. El auto-update de la app consulta `.../releases/latest`, que **ignora
+pre-releases y drafts**, así que en cuanto se promociona una, a los usuarios
+con `auto_update` les salta el aviso en el siguiente arranque.
+
+**Por qué no hay que reetiquetar a mano unos binarios ya subidos**: la versión
+va *cocida dentro del binario* (`inject_version.py` reescribe `src/version.py`
+antes de compilar). Si creas un tag `v1.2.0` apuntando a los binarios de la
+pre-release `v1.1.87`, la app instalada seguirá diciendo «1.1.87», verá que
+`1.2.0` es más nueva, se actualizará... y volverá a decir «1.1.87»: **bucle
+infinito de actualización**.
+
+**Forma alternativa (recompilando)**: empujar un tag `vX.Y.Z`.
 
 ```bash
 git tag -a v1.2.0 -m "Blender Manager v1.2.0"
@@ -68,9 +85,14 @@ git push origin master   # si aún no está empujado
 git push origin v1.2.0
 ```
 
-Esto compila los 3 binarios con esa versión y publica la release como `latest`.
-El auto-update de la app consulta `.../releases/latest`, que **ignora
-pre-releases y drafts**: solo salta con tags estables.
+Esto sí compila los 3 binarios con esa versión y publica la release como
+`latest`, así que la versión del binario y la del tag coinciden.
+
+**Cuidado con la numeración**: el parche de las pre-releases es el número de
+run de GitHub Actions, que solo sube (`v1.1.87`, `v1.1.88`...). Si etiquetas a
+mano una estable con un parche más bajo (`v1.1.2`), será *más antigua* que la
+que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
+**sube siempre la minor** (`v1.2.0`).
 
 ### Reglas que no hay que romper
 
@@ -85,6 +107,10 @@ pre-releases y drafts**: solo salta con tags estables.
   el recurso de versión de Windows, `packaging/version_info.txt`, ignorado por
   git).
 - Antes de etiquetar, los tests deben pasar (`release` depende de `test`).
+- **Marcador de instalación**: al extraer una build se escribe
+  `.blendermanager.json` dentro de su carpeta con el hash de la compilación
+  (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
+  la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
 
 ## Auto-update
 

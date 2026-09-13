@@ -53,16 +53,15 @@ class Build:
     size: int = 0
     checksum: Optional[str] = None
     mtime: int = 0
-    release_cycle: str = ""
+    # Hash corto del commit con el que se compiló (lo da la API en "hash").
+    # Es lo único que distingue dos compilaciones diarias del mismo día a día:
+    # todas las alfa de 'main' comparten número de versión.
+    build_hash: str = ""
 
     @property
     def is_lts(self) -> bool:
         # Solo las estables pueden ser LTS.
         return self.risk == "stable" and minor_of(self.version) in LTS_MINORS
-
-    @property
-    def channel(self) -> str:
-        return "lts" if self.is_lts else self.risk
 
     @property
     def sort_key(self):
@@ -82,6 +81,10 @@ class InstalledBuild:
     path: Path
     version: str
     executable: Optional[Path] = None
+    # Hash de la compilación, leído del marcador que dejamos al instalar.
+    # Las carpetas instaladas antes de que existiera el marcador lo traen
+    # vacío, y entonces se compara solo por versión (como se hacía siempre).
+    build_hash: str = ""
 
     @property
     def is_lts(self) -> bool:

@@ -192,8 +192,14 @@ def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> 
             )
 
         def _save_window_size(self, width, height):
-            try:
+            # Importante: reutilizamos el MISMO objeto Settings que tiene la
+            # pantalla principal. Si cargásemos uno nuevo del disco, el de la
+            # pantalla (con el tamaño viejo) lo sobrescribiría en cuanto el
+            # usuario tocase el zoom o el modo de vista, y el tamaño se perdería.
+            settings = getattr(self.root, "settings", None)
+            if settings is None:
                 settings = settings_service.Settings.load()
+            try:
                 settings.window_width = int(width)
                 settings.window_height = int(height)
                 settings.save()

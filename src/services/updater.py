@@ -33,7 +33,7 @@ from pathlib import Path
 import version
 from services.downloader import log
 from services.extractor import extract
-from services.settings import cache_dir
+from services.settings import cache_dir, write_json_atomic
 
 REPO = "zebus3d/BlenderManager"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
@@ -137,8 +137,7 @@ def latest_release(force: bool = False, timeout: int = 15):
         return None
 
     try:
-        json_path.parent.mkdir(parents=True, exist_ok=True)
-        json_path.write_text(json.dumps(payload), encoding="utf-8")
+        write_json_atomic(json_path, payload)
         if new_etag:
             etag_path.write_text(new_etag, encoding="utf-8")
     except OSError:
@@ -297,7 +296,13 @@ def apply_update(app_dir, pid) -> None:
     """
     target = Path(app_dir)
     source = Path(sys.executable).resolve().parent
-    _wait_for_exit(int(pid))
+    try:
+        # Este proceso no tiene ventana ni consola: un PID mal formado no
+        # puede abortar la actualización en silencio, así que lo registramos
+        # y copiamos igualmente (la app antigua ya se está cerrando).
+        _wait_for_exit(int(pid))
+    except (TypeError, ValueError):
+        log(f"update: pid invalido ({pid!r}), copiando sin esperar")
     _copy_tree(source, target)
     exe = target / EXE_NAME
     try:
@@ -307,9 +312,39 @@ def apply_update(app_dir, pid) -> None:
 
 
 def cleanup_staging() -> None:
-    """Borra los directorios de staging de actualizaciones ya aplicadas."""
+    """Borra los restos de actualizaciones ya aplicadas.
+
+    Son los directorios de staging de Windows y los binarios descargados
+    (una AppImage ronda los 60 MB), que hasta ahora se quedaban en el caché
+    para siempre. El JSON y el ETag de la release sí se conservan: son
+    diminutos y evitan gastar cuota de la API de GitHub.
+    """
     base = updates_dir()
     if not base.is_dir():
         return
-    for entry in base.glob("staging-*"):
-        shutil.rmtree(entry, ignore_errors=True)
+    keep = {"release.json", "release.etag"}
+    for entry in base.iterdir():
+        if entry.name in keep:
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            try:
+                entry.unlink()
+            except OSError:
+                pass
+
+
+def cleanup_partials(dest_folder) -> None:
+    """Borra descargas de Blender interrumpidas (.part) de la carpeta destino."""
+    try:
+        folder = Path(dest_folder).expanduser()
+        if not folder.is_dir():
+            return
+        for entry in folder.glob("*.part"):
+            try:
+                entry.unlink()
+            except OSError:
+                pass
+    except OSError:
+        pass
