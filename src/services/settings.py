@@ -65,6 +65,7 @@ class Settings:
     launch_args: str = ""
     layout_mode: str = "grid"
     zoom: float = 1.0
+    auto_update: bool = True
     window_width: int = 0
     window_height: int = 0
 
@@ -86,6 +87,7 @@ class Settings:
             launch_args=str(data.get("launch_args") or ""),
             layout_mode=str(data.get("layout_mode") or "grid"),
             zoom=float(data.get("zoom") or 1.0),
+            auto_update=bool(data.get("auto_update", True)),
             window_width=int(data.get("window_width") or 0),
             window_height=int(data.get("window_height") or 0),
         )

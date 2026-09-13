@@ -27,6 +27,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Inyectar version desde el tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" == v* ]]; then
+            python packaging/inject_version.py "${TAG#v}"
+          else
+            python packaging/inject_version.py 0.0.0
+          fi
       - name: Dependencias del sistema (headless)
         run: |
           sudo apt-get update
@@ -59,6 +68,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Inyectar version desde el tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" == v* ]]; then
+            python packaging/inject_version.py "${TAG#v}"
+          else
+            python packaging/inject_version.py 0.0.0
+          fi
       - name: Compilar binario portable
         env:
           # Runners sin GPU: evitamos que Kivy exija OpenGL al recolectar.
@@ -82,6 +100,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Inyectar version desde el tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$TAG" == v* ]]; then
+            python packaging/inject_version.py "${TAG#v}"
+          else
+            python packaging/inject_version.py 0.0.0
+          fi
       - name: Compilar bundle .app
         env:
           # Runners sin GPU: evitamos que Kivy exija OpenGL al recolectar.
@@ -108,6 +135,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
+      - name: Generar checksums SHA-256
+        working-directory: release-assets
+        run: |
+          find . -type f -not -name checksums.txt -print0 \
+            | sort -z | xargs -0 sha256sum > checksums.txt
+          cat checksums.txt
       - uses: softprops/action-gh-release@v2
         with:
           files: release-assets/**/*

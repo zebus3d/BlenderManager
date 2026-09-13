@@ -220,7 +220,21 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable verbose logging")
     parser.add_argument("--screenshot", metavar="PATH", help="Save a screenshot after startup and quit")
     parser.add_argument("--watch", action="store_true", help="Recargar .kv/tema al guardar (desarrollo)")
+    parser.add_argument(
+        "--apply-update",
+        nargs=2,
+        metavar=("APP_DIR", "PID"),
+        help="Uso interno: aplica una actualizacion ya descargada y relanza la app",
+    )
     args = parser.parse_args()
+
+    if args.apply_update:
+        # Modo ayudante del auto-update: espera a que salga la app antigua,
+        # copia los ficheros nuevos y relanza. No abrimos ninguna ventana.
+        from services import updater
+
+        updater.apply_update(args.apply_update[0], args.apply_update[1])
+        return
 
     if args.smoke:
         smoke()

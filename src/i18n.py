@@ -95,6 +95,23 @@ _TRANSLATIONS = {
         "Choose destination folder": "Elige la carpeta donde se guardaran las versiones",
         "Save settings": "Guarda los ajustes",
         "Zoom the icon size": "Ajusta el tamano de los iconos",
+        "Updates": "Actualizaciones",
+        "Check for updates automatically": "Buscar actualizaciones automaticamente",
+        "Check for updates now": "Buscar actualizaciones ahora",
+        "Check now": "Buscar ahora",
+        "Version {version}": "Version {version}",
+        "Checking for updates...": "Buscando actualizaciones...",
+        "Update check failed": "No se pudo comprobar la actualizacion",
+        "You are up to date": "Estas en la ultima version",
+        "No update for this platform": "No hay actualizacion para esta plataforma",
+        "A new version is available: {version}": "Hay una version nueva disponible: {version}",
+        "Download and install it now?": "¿Descargarla e instalarla ahora?",
+        "Update available": "Actualizacion disponible",
+        "Update": "Actualizar",
+        "Later": "Mas tarde",
+        "Installing the update...": "Instalando la actualizacion...",
+        "Restarting to install the update...": "Reiniciando para instalar la actualizacion...",
+        "Update downloaded. Install it manually.": "Actualizacion descargada. Instalala manualmente.",
     }
 }
 

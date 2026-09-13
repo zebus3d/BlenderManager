@@ -12,6 +12,7 @@ propiedades Kivy con valores por defecto y se rellenan después de super().__ini
 
 import shlex
 import shutil
+import sys
 import threading
 from pathlib import Path
 
@@ -31,20 +32,23 @@ from kivy.uix.filechooser import FileChooserListView
 from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.uix.popup import Popup
+from kivy.uix.progressbar import ProgressBar
 from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.screenmanager import NoTransition, SlideTransition
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 
 import i18n
+import version
 from i18n import tr
 from model.build import version_tuple
-from services import api, detector, installed as installed_service, settings as settings_service
+from services import api, detector, installed as installed_service, settings as settings_service, updater
 from services.downloader import Downloader
 from services.extractor import extract
 from services.launcher import Launcher
 from ui.theme import (
     ACCENT,
+    ACCENT_DARK,
     BUTTON,
     CARD_DIM,
     CARD_DIM_ALT,
@@ -295,6 +299,8 @@ class RootWidget(BoxLayout):
     builds = ListProperty([])
     has_builds = BooleanProperty(False)
     has_installed = BooleanProperty(False)
+    auto_update = BooleanProperty(True)
+    current_version = StringProperty(version.__version__)
 
     def _get_show_filters(self):
         """Los filtros solo tienen sentido fuera de la pantalla de ajustes."""
@@ -323,12 +329,15 @@ class RootWidget(BoxLayout):
         self.dest_folder = self.settings.dest_folder
         self.launch_args = self.settings.launch_args
         self.delete_archive = self.settings.delete_archive
+        self.auto_update = bool(self.settings.auto_update)
         self.layout_mode = self.settings.layout_mode if self.settings.layout_mode in ("grid", "list") else "grid"
         try:
             self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(self.settings.zoom)))
         except (TypeError, ValueError):
             self.zoom = 1.0
         self.downloader = Downloader()
+        self.update_downloader = Downloader()
+        self._update_assets = []
         self.launcher = Launcher()
         # Escaneo inicial: si ya hay versiones instaladas abrimos esa pestaña;
         # si no hay ninguna, abrimos la tienda de descargas.
@@ -345,6 +354,7 @@ class RootWidget(BoxLayout):
             manager.current = self.view
         self._status_event = None
         self._zoom_save_event = None
+        self._update_checking = False
         # Cada vez que cambia un filtro o el modo de vista volvemos a montar la lista.
         self.bind(builds=lambda *_: self._rebuild_store(),
                   channel=lambda *_: self._on_filter_changed(),
@@ -366,6 +376,10 @@ class RootWidget(BoxLayout):
             installed_container.bind(width=lambda *_: self._update_installed_cols())
         Clock.schedule_once(lambda dt: self.refresh(force=False), 0.1)
         Clock.schedule_once(lambda dt: self.refresh_installed(), 0.2)
+        # Limpiamos restos de una actualización ya aplicada y, si está activado,
+        # comprobamos si hay versión nueva al arrancar.
+        Clock.schedule_once(lambda dt: updater.cleanup_staging(), 0.5)
+        Clock.schedule_once(lambda dt: self._auto_check_updates(), 2.0)
 
     def _on_layout_mode_changed(self):
         # El modo cuadrícula/lista afecta tanto a la tienda como a las instaladas.
@@ -839,6 +853,7 @@ class RootWidget(BoxLayout):
         self.settings.dest_folder = str(Path(dest).expanduser())
         self.settings.language = self.language_id_for(language_label)
         self.settings.delete_archive = bool(delete_archive)
+        self.settings.auto_update = self.auto_update
         self.settings.launch_args = launch_args or ""
         self.settings.save()
         i18n.set_language(self.settings.language)
@@ -850,6 +865,145 @@ class RootWidget(BoxLayout):
         self.set_view("store")
         self.refresh_installed()
         self._show_message(tr("Ready"))
+
+    # --- Actualizaciones ---------------------------------------------------
+
+    def set_auto_update(self, active):
+        """Guarda si hay que buscar actualizaciones al arrancar."""
+        self.auto_update = bool(active)
+        self.settings.auto_update = self.auto_update
+        self.settings.save()
+
+    def _auto_check_updates(self):
+        # En modo fuente no tiene sentido (no hay binario que reemplazar).
+        if self.auto_update and getattr(sys, "frozen", False):
+            self.check_updates(manual=False)
+
+    def check_updates(self, manual=False):
+        """Comprueba en segundo plano si hay una versión nueva publicada."""
+        if self._update_checking:
+            return
+        self._update_checking = True
+        if manual:
+            self.status_text = tr("Checking for updates...")
+
+        def worker():
+            # Fuera del hilo de la interfaz: la red puede tardar.
+            result = updater.latest_release(force=manual)
+            Clock.schedule_once(lambda dt: self._on_update_result(result, manual), 0)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_update_result(self, result, manual):
+        self._update_checking = False
+        if result is None:
+            if manual:
+                self._show_message(tr("Update check failed"))
+            return
+        tag, assets = result
+        if not updater.is_newer(self.current_version, tag):
+            if manual:
+                self._show_message(tr("You are up to date"))
+            return
+        asset_name = updater.asset_for(self.system)
+        asset = next((item for item in assets if item["name"] == asset_name), None)
+        if asset is None:
+            if manual:
+                self._show_message(tr("No update for this platform"))
+            return
+        self._update_assets = assets
+        self._show_update_available(tag, asset)
+
+    def _show_update_available(self, tag, asset):
+        """Diálogo para descargar e instalar la versión nueva."""
+        state = {"downloading": False}
+        content = BoxLayout(orientation="vertical", padding=12, spacing=10)
+        title = Label(text=tr("A new version is available: {version}", version=tag))
+        content.add_widget(title)
+        info = Label(text=tr("Download and install it now?"))
+        content.add_widget(info)
+        progress = ProgressBar(max=100, value=0)
+        progress.size_hint_y = None
+        progress.height = dp(10)
+        progress.opacity = 0
+        content.add_widget(progress)
+        buttons = BoxLayout(size_hint_y=None, height=40, spacing=8)
+        secondary = self._dialog_button(tr("Later"))
+        primary = self._dialog_button(tr("Update"), ACCENT, ACCENT_DARK)
+        buttons.add_widget(secondary)
+        buttons.add_widget(primary)
+        content.add_widget(buttons)
+        popup = Popup(title=tr("Update available"), content=content, size_hint=(0.7, 0.45))
+
+        def _on_secondary(*_):
+            if state["downloading"]:
+                self.update_downloader.cancel()
+            else:
+                popup.dismiss()
+
+        def _on_progress(downloaded, total):
+            Clock.schedule_once(
+                lambda dt: setattr(progress, "value", (downloaded * 100.0 / total) if total else 0),
+                0,
+            )
+
+        def _on_done(path):
+            popup.dismiss()
+            self._on_update_downloaded(path)
+
+        def _on_error(message):
+            state["downloading"] = False
+            progress.opacity = 0
+            primary.disabled = False
+            secondary.text = tr("Close")
+            if message == "cancelled":
+                info.text = tr("Cancelled")
+            elif message == "checksum":
+                info.text = tr("Checksum error")
+            else:
+                info.text = tr("Download failed")
+
+        def _start(*_):
+            state["downloading"] = True
+            info.text = tr("Downloading...")
+            progress.opacity = 1
+            primary.disabled = True
+            secondary.text = tr("Cancel")
+            checksum = updater.checksum_for(self._update_assets, asset["name"])
+            self.update_downloader.start(
+                asset["url"],
+                str(updater.updates_dir()),
+                asset["name"],
+                checksum,
+                on_progress=_on_progress,
+                on_done=lambda path: Clock.schedule_once(lambda dt: _on_done(path), 0),
+                on_error=lambda message: Clock.schedule_once(lambda dt: _on_error(message), 0),
+            )
+
+        secondary.bind(on_release=_on_secondary)
+        primary.bind(on_release=_start)
+        popup.open()
+
+    def _on_update_downloaded(self, path):
+        """Aplica la actualización descargada (extraer en Windows puede tardar)."""
+        self.status_text = tr("Installing the update...")
+
+        def worker():
+            quit_app = updater.apply(path)
+            Clock.schedule_once(lambda dt: self._finish_update(quit_app), 0)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _finish_update(self, quit_app):
+        from kivy.app import App
+
+        if quit_app:
+            self.status_text = tr("Restarting to install the update...")
+            app = App.get_running_app()
+            if app is not None:
+                Clock.schedule_once(lambda dt: app.stop(), 0.5)
+        else:
+            self._show_message(tr("Update downloaded. Install it manually."))
 
     def _reload_ui(self):
         """Sustituye la raíz de la aplicación por una nueva, ya traducida."""
