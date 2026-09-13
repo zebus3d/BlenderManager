@@ -1,13 +1,48 @@
 name: build
 
-# Se ejecuta al empujar una etiqueta de versión (v1.0, v1.0.1...) o a mano.
+# Se ejecuta en cada push a master (release automatica como pre-release), al
+# empujar una etiqueta de version (release estable) o a mano desde Actions.
 on:
   push:
+    branches:
+      - master
     tags:
       - "v*"
   workflow_dispatch:
 
 jobs:
+  # Calcula la version que se inyecta en los binarios y el tag de la release.
+  # Con un tag vX.Y.Z usa esa version y publica release estable; en cualquier
+  # otro caso usa el ultimo tag como base y el numero de build como parche
+  # (p. ej. v1.1.42), marcado como pre-release para no disparar el auto-update
+  # de los usuarios (que solo mira /releases/latest, sin pre-releases).
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+      tag: ${{ steps.compute.outputs.tag }}
+      prerelease: ${{ steps.compute.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Calcular version
+        id: compute
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            PRERELEASE="false"
+          else
+            BASE="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo 'v0.0')"
+            MAJOR_MINOR="$(echo "$BASE" | sed -E 's/^v?([0-9]+)\.([0-9]+).*/\1.\2/')"
+            VERSION="${MAJOR_MINOR}.${GITHUB_RUN_NUMBER}"
+            PRERELEASE="true"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
+
   # Pruebas unitarias sin interfaz gráfica.
   test:
     runs-on: ubuntu-latest
@@ -21,21 +56,16 @@ jobs:
   # Nota: usamos ubuntu-22.04 (glibc 2.35) porque los contenedores manylinux
   # traen un Python sin librería compartida y PyInstaller no puede empaquetarlo.
   linux:
+    needs: version
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Inyectar version desde el tag
+      - name: Inyectar version
         shell: bash
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" == v* ]]; then
-            python packaging/inject_version.py "${TAG#v}"
-          else
-            python packaging/inject_version.py 0.0.0
-          fi
+        run: python packaging/inject_version.py "${{ needs.version.outputs.version }}"
       - name: Dependencias del sistema (headless)
         run: |
           sudo apt-get update
@@ -62,21 +92,16 @@ jobs:
           path: BlenderManager-x86_64.AppImage
 
   windows:
+    needs: version
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Inyectar version desde el tag
+      - name: Inyectar version
         shell: bash
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" == v* ]]; then
-            python packaging/inject_version.py "${TAG#v}"
-          else
-            python packaging/inject_version.py 0.0.0
-          fi
+        run: python packaging/inject_version.py "${{ needs.version.outputs.version }}"
       - name: Compilar binario portable
         env:
           # Runners sin GPU: evitamos que Kivy exija OpenGL al recolectar.
@@ -94,21 +119,16 @@ jobs:
           path: BlenderManager-windows-x86_64.zip
 
   macos:
+    needs: version
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Inyectar version desde el tag
+      - name: Inyectar version
         shell: bash
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" == v* ]]; then
-            python packaging/inject_version.py "${TAG#v}"
-          else
-            python packaging/inject_version.py 0.0.0
-          fi
+        run: python packaging/inject_version.py "${{ needs.version.outputs.version }}"
       - name: Compilar bundle .app
         env:
           # Runners sin GPU: evitamos que Kivy exija OpenGL al recolectar.
@@ -123,11 +143,11 @@ jobs:
           name: BlenderManager-macos
           path: BlenderManager-macos.zip
 
-  # Al empujar una etiqueta vX.Y.Z se crea una Release con los binarios
-  # adjuntos (asi no hace falta versionarlos dentro del repositorio).
+  # Crea una Release con los binarios adjuntos. En cada push a master se
+  # publica como pre-release; al empujar un tag vX.Y.Z, como release estable.
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, windows, macos]
+    needs: [version, test, linux, windows, macos]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -143,4 +163,8 @@ jobs:
           cat checksums.txt
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: ${{ needs.version.outputs.tag }}
+          prerelease: ${{ needs.version.outputs.prerelease }}
+          generate_release_notes: true
           files: release-assets/**/*
