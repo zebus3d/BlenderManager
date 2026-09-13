@@ -847,6 +847,45 @@
                         size_hint_y: None
                         height: dp(40)
                         multiline: False
+                    Label:
+                        text: tr("Updates")
+                        color: theme.TEXT
+                        size_hint_y: None
+                        height: dp(22)
+                        halign: "left"
+                        valign: "middle"
+                        text_size: self.size
+                    BoxLayout:
+                        size_hint_y: None
+                        height: dp(40)
+                        Label:
+                            text: tr("Check for updates automatically")
+                            color: theme.TEXT
+                            halign: "left"
+                            valign: "middle"
+                            text_size: self.size
+                        SwitchPill:
+                            id: update_switch
+                            text: tr("Yes") if self.active else tr("No")
+                            active: root.auto_update
+                            tooltip_text: tr("Check for updates automatically")
+                            on_release: root.set_auto_update(self.active)
+                    BoxLayout:
+                        size_hint_y: None
+                        height: dp(40)
+                        spacing: dp(8)
+                        Label:
+                            text: tr("Version {version}", version=root.current_version)
+                            color: theme.MUTED
+                            halign: "left"
+                            valign: "middle"
+                            text_size: self.size
+                        CardButton:
+                            text: tr("Check now")
+                            size_hint_x: None
+                            width: dp(150)
+                            tooltip_text: tr("Check for updates now")
+                            on_release: root.check_updates(True)
                     Widget:
                     CardButton:
                         text: tr("Save")
