@@ -1,76 +1,90 @@
 # Blender Downloads Manager
 
-A desktop app (built with Kivy) to **discover, download, organize and launch**
-[Blender](https://www.blender.org/) builds: LTS, stable and development
-(daily/alpha) versions. It is cross-platform (Linux, Windows and macOS) and
-designed to be **portable**: once packaged, users don't need to install anything.
+A desktop app (built with **Python + Kivy**) to **discover, download, organize
+and launch** [Blender](https://www.blender.org/) builds: stable, LTS, daily and
+the official experimental branches. It is cross-platform (Linux, Windows and
+macOS) and designed to be **portable**: once packaged, users don't need to
+install anything.
 
 ![Grid view](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/store_grid.png)
 
 ## Features
 
 - **Build store** with cards and icons, channel filters (LTS, Stable, LTS + Stable,
-  Daily, Experimental, Patch) and search by version or branch.
-- **Experimental and Patch builds**: the *Experimental* tab shows Blender's
-  official feature branches (empty most of the time — Blender rarely publishes
-  them), and *Patch* shows the pull-request builds (`main-PRxxxxx`), which are
-  the newest changes under review and are almost always available.
-- **Grid or list view**, with a **zoom slider** to choose the icon size (Dolphin-style).
-- **Automatic detection** of the operating system and architecture.
+  Daily, Experimental) and search by version or branch.
+- **Grid or list view**, with a **zoom slider** to choose the icon size
+  (Dolphin-style).
+- **Automatic detection** of your operating system and architecture.
 - **Download for another platform or architecture**: pick Windows, macOS or ARM64
   in the filter bar to grab a build for a friend or a USB stick, not just for the
-  machine you are running on.
+  machine you are running on. Your choice is remembered for next time.
 - **Downloads with progress**, **SHA-256** integrity verification and automatic
   extraction (`.tar.xz` on Linux, `.zip` on Windows). On macOS Blender is only
   published as `.dmg`, which is not extracted: the app downloads it, reveals it
   in Finder and tells you to open it.
-- **Self-updating**: packaged builds (Linux AppImage, Windows) replace themselves
-  and restart; a source checkout runs `git pull` and restarts instead.
-- **Configurable destination folder**, **remembered window size** and a list of
-  **installed versions** (launch or uninstall them from the app).
-- **Filters and search also apply to installed versions**.
+- **Installed versions**: launch or uninstall them from the app. The filters and
+  search apply to them too, and they are highlighted in the store.
 - **Blender runs detached**: closing the manager does **not** close the Blender
   instances you launched from it.
 - **Release notes one click away**: every build card has a small blue **i** that
-  opens that series' release notes (e.g. `developer.blender.org/docs/release_notes/5.2/`)
-  in your browser, so you can check what changed before downloading.
-- **Visual hints**: installed builds are highlighted, builds still to download
-  are dimmed; buttons and cards highlight on hover.
-- **Interface in English and Spanish** with automatic language detection.
-- **Tooltips** on the controls.
-- **Portable mode**: settings live next to the executable.
+  opens that series' release notes (e.g.
+  `developer.blender.org/docs/release_notes/5.2/`) in your browser, so you can
+  check what changed before downloading.
+- **Self-updating**: packaged builds (Linux AppImage, Windows) replace themselves
+  and restart; a source checkout runs `git pull` and restarts instead.
+- **Interface in English and Spanish** with automatic language detection, plus
+  **tooltips** and a **portable mode** (settings live next to the executable).
 
-![List view](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/installed_list.png)
+![Installed build list](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/installed_list.png)
 
 ![Update dialog](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/update_dialog.png)
+
+## A small, readable codebase
+
+Beyond being a useful tool, this project is meant to be **read and learned
+from**. It is a complete desktop application in about 4,000 lines of Python and
+Kivy, split into clear layers:
+
+- **`model/`** — plain data classes (`Build`, `InstalledBuild`).
+- **`services/`** — the real work (API, downloads, extraction, settings...).
+  They know nothing about Kivy, so they can be tested without a window.
+- **`ui/` + `views/`** — the interface. `.kv` files describe how things *look*;
+  Python describes what they *do*.
+
+If you are learning Python or Kivy, start with the guides in
+[`doc/`](doc/README.md) (in Spanish): they walk through the architecture, the
+Kivy concepts used, the design system and a full worked example of adding a new
+feature. The code comments are in Spanish (Spain) and explain not just *what*
+each part does, but *why* the decisions were made.
 
 ## How is it different from Blender Launcher V2?
 
 [Blender Launcher V2](https://github.com/Victor-IX/Blender-Launcher-V2) is the
-de-facto tool for this job and the reason this project exists: it showed that
+de-facto tool for this job and the reason this project exists: it proved that
 Blender's official JSON API is all you need to manage builds reliably. It is
 also **more complete** than Blender Manager, especially on Windows — forks
-(Bforartists, UPBGE), experimental branches, favorites, templates, a tray icon,
-a running-instance counter and `.blend` association.
+(Bforartists, UPBGE), favorites, templates, a tray icon, a running-instance
+counter and `.blend` association.
 
-Blender Manager deliberately does **less**: find a build, download it, launch
-it. It covers the *official* Blender builds (stable, LTS, daily and the official
-experimental branches), and the bet is that most people only need those and want
-that one flow to have as little friction as possible, particularly on Linux.
+Blender Manager deliberately does **less**: find a build, download it, launch it.
+The bet is that most people only need the official builds and want that one flow
+to have as little friction as possible, particularly on Linux.
 
 | | **Blender Manager** | **Blender Launcher V2** |
 |---|---|---|
 | UI toolkit | Kivy (no Qt) | Qt-based |
-| Focus | Official builds and official experimental branches | Official builds, forks and experimental branches |
+| Focus | Official builds only | Official builds, forks and experimental branches |
 | Views | Grid **and** list, with a zoom slider | Library / downloads pages |
 | Languages | English and Spanish | English |
 | Linux download | One AppImage (~50 MB) | Two Linux zips (~95-107 MB), pick the right one |
 | Running from source | System Python + Kivy | Python + PySide/Qt dependencies |
 
-### Why it may suit you better on Linux
+> A note on **experimental branches**: both apps use the same endpoint
+> (`builder.blender.org/download/experimental/`). Blender has barely published
+> branch builds since ~2021, so that tab is usually empty. The app keeps it
+> implemented and lights it up automatically if a branch appears.
 
-Linux is where this project started, because getting the alternative running on
-a rolling-release distro was more work than it should be. Concretely:
+### Why it may suit you better on Linux
 
 - **One file, no install.** `BlenderManager-x86_64.AppImage` (~50 MB) is the
   whole app. Blender Launcher V2 ships two different Linux zips (`Linux_x64` and
@@ -83,14 +97,9 @@ a rolling-release distro was more work than it should be. Concretely:
   Kivy (`sudo pacman -S python-kivy`); everything else is the standard library.
   No virtualenv, no compiled dependencies, no lockfile.
 - **Updates the way you installed it.** The AppImage replaces itself and
-  restarts; a git checkout runs `git pull --ff-only` and restarts. Either way
-  you never go back to the browser to update.
+  restarts; a git checkout runs `git pull --ff-only` and restarts. Either way you
+  never go back to the browser to update.
 - **It speaks Spanish**, detected automatically from your locale.
-
-If you just want "the official Blender builds, downloaded and launched in a
-couple of clicks", this is the simpler tool. If you need forks, experimental
-branches or the tray integration, Blender Launcher V2 remains the more powerful
-option.
 
 ## Running from source
 
@@ -144,17 +153,23 @@ python3 src/main.py --watch             # hot-reload .kv/theme on save (developm
 python3 src/main.py --screenshot r.png  # start, save a screenshot and quit
 ```
 
+`--watch` is very handy while tweaking the interface: save a `.kv` file and the
+window updates itself, without restarting.
+
 ## Portable mode
 
 Create an empty file named `portable` next to the executable (or next to
-`src/main.py` if you run from source). Settings, cache and logs are then stored in
-that same folder instead of the user's config directory.
+`src/main.py` if you run from source). Settings, cache and logs are then stored
+in that same folder instead of the user's config directory.
 
 ## Tests
 
 ```bash
 python3 -m unittest discover -t . -s tests -v
 ```
+
+The tests run without a window and cover the data model and the services (API
+filtering, safe extraction, settings, updates...).
 
 ## Packaging
 
@@ -173,19 +188,18 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 `.github/workflows/build.yml` runs the tests and produces artifacts for **Linux**
 (`.AppImage`), **Windows** (`.zip`) and **macOS** (compressed `.app`).
 
-- On every push to `master` it also publishes a **pre-release** with a per-build
+- On every push to `master` it publishes a **pre-release** with a per-build
   version (e.g. `v1.1.42`), so every compilation is downloadable from Releases.
-- `.github/workflows/promote.yml` turns a pre-release into the **stable
-  Release** with one click (Actions → *promote* → *Run workflow*). It reuses the
-  binaries that were already built and verified, so the version baked into them
-  keeps matching the tag.
+- `.github/workflows/promote.yml` turns a pre-release into the **stable Release**
+  with one click (Actions → *promote* → *Run workflow*). It reuses the binaries
+  that were already built and verified, so the version baked into them keeps
+  matching the tag.
 - Pushing a `vX.Y.Z` tag also publishes a **stable Release**, rebuilding the
   binaries with that version.
 - Only stable releases trigger the in-app auto-update, because the app checks
   `.../releases/latest`, which ignores pre-releases.
-- When running from source (`python3 src/main.py`), the in-app update runs
-  `git pull --ff-only` on a clean checkout and restarts the app instead of
-  downloading a binary.
+- When running from source, the in-app update runs `git pull --ff-only` on a
+  clean checkout and restarts the app instead of downloading a binary.
 
 The binaries are **not** committed to the repository; they are downloadable from
 the Release (or from the workflow run).
@@ -194,8 +208,8 @@ the Release (or from the workflow run).
 
 Building on `ubuntu-22.04` means the portable binary needs **glibc 2.35 or
 higher**. The **AppImage** needs nothing installed, although on systems without
-`libfuse2` you have to run it with `--appimage-extract-and-run`. The file to
-share is `BlenderManager-x86_64.AppImage`.
+`libfuse2` you have to run it with `--appimage-extract-and-run` (on Arch:
+`sudo pacman -S fuse2`).
 
 ## Project structure
 
@@ -223,7 +237,7 @@ src/
   views/             # declarative UI (Kivy Language), one .kv per group:
                      #   widgets.kv, dialogs.kv, cards.kv, main.kv
   assets/            # Blender logo, app icon and icon font
-doc/                 # architecture guide in Spanish (for beginners)
+doc/                 # architecture guide in Spanish (start at doc/README.md)
 tests/               # unit tests (unittest)
 packaging/           # PyInstaller spec, AppImage script and .desktop
 dist/                # build output (binaries ignored by git)

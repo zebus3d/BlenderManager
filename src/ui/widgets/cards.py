@@ -52,11 +52,6 @@ class BaseBuildCard(HoverBehavior, BoxLayout):
             # No se traduce: es un nombre técnico.
             self.channel_text = build.branch
             self.is_lts = False
-        elif build.patch:
-            # Las builds de patch son de una propuesta de cambios concreta:
-            # mostramos su número de pull request.
-            self.channel_text = build.patch
-            self.is_lts = False
         else:
             if build.is_lts:
                 channel = "LTS"
@@ -66,10 +61,10 @@ class BaseBuildCard(HoverBehavior, BoxLayout):
                 channel = "Stable"
             self.channel_text = tr(channel)
             self.is_lts = build.is_lts
-        # En experimentales y patch el nombre de la rama ya se ve como etiqueta
-        # de canal, así que no lo repetimos en la línea de metadatos.
+        # La rama ya se ve como etiqueta de canal en las experimentales, así
+        # que no la repetimos en la línea de metadatos.
         details = [build.human_size]
-        if not build.experimental and not build.patch:
+        if not build.experimental:
             details.append(build.branch)
         if self.platform_text:
             details.append(self.platform_text)

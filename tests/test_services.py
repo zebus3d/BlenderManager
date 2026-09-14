@@ -12,9 +12,9 @@ from services.extractor import extract, is_archive
 
 
 def make_build(version, risk, branch, filename, platform="linux", arch="x86_64", mtime=0,
-               build_hash="", experimental=False, patch=""):
+               build_hash="", experimental=False):
     return Build(version, branch, risk, platform, arch, "https://example/" + filename, filename,
-                 mtime=mtime, build_hash=build_hash, experimental=experimental, patch=patch)
+                 mtime=mtime, build_hash=build_hash, experimental=experimental)
 
 
 class ApiTests(unittest.TestCase):
@@ -73,16 +73,6 @@ class ApiTests(unittest.TestCase):
         }
         self.assertTrue(api._to_build(entry, experimental=True).experimental)
         self.assertFalse(api._to_build(entry).experimental)
-
-    def test_to_build_patch_id(self):
-        entry = {
-            "version": "5.3.0", "branch": "main-PR161547", "risk_id": "alpha",
-            "platform": "linux", "architecture": "x86_64", "url": "u",
-            "file_name": "f.tar.xz", "patch": "PR161547",
-        }
-        self.assertEqual(api._to_build(entry).patch, "PR161547")
-        entry["patch"] = None
-        self.assertEqual(api._to_build(entry).patch, "")
 
     def test_available_prefers_dmg_on_darwin(self):
         # En macOS la API solo publica .dmg; que quede claro en los tests,
@@ -151,17 +141,6 @@ class ChannelFilterTests(unittest.TestCase):
         builds = self._builds()
         result = api.filter_builds(builds, "all", "5.3")
         self.assertEqual([build.version for build in result], ["5.3.0"])
-
-    def test_patch_only_in_its_own_channel(self):
-        builds = self._builds() + [
-            make_build("5.3.0", "alpha", "main-PR161547", "b.tar.xz", mtime=5,
-                       patch="PR161547"),
-        ]
-        patch = api.filter_builds(builds, "patch")
-        self.assertEqual([build.patch for build in patch], ["PR161547"])
-        for channel in ("all", "lts", "stable", "lts_stable", "daily", "experimental"):
-            selected = api.filter_builds(builds, channel)
-            self.assertNotIn("main-PR161547", [build.branch for build in selected])
 
 
 class InstalledTests(unittest.TestCase):

@@ -169,13 +169,6 @@
             disabled: not root.show_filters
             group: "channel"
             on_release: root.set_channel("experimental")
-        Pill:
-            text: tr("Patch")
-            tooltip_text: tr("Filter: pull request builds")
-            state: "down" if root.channel == "patch" else "normal"
-            disabled: not root.show_filters
-            group: "channel"
-            on_release: root.set_channel("patch")
         Widget:
         Pill:
             text: icons.GRID

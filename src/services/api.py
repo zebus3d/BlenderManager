@@ -25,13 +25,8 @@ API_URL = "https://builder.blender.org/download/daily/?format=json&v=2"
 # propio listado, el mismo que Blender Launcher usa para "experimental". Solo
 # aparece contenido cuando el equipo de Blender abre ramas de funciones nuevas;
 # la mayor parte del tiempo está vacío (y entonces la app lo explica en la
-# tienda). No confundir con las builds de "patch" (main-PRxxxxx), que son otra
-# sección y no se ofrecen aquí.
+# tienda).
 EXPERIMENTAL_URL = "https://builder.blender.org/download/experimental/?format=json&v=2"
-# Builds "patch": las propuestas de cambios (pull requests) que aún se están
-# revisando. Son lo más nuevo y experimental que publica Blender a diario, y a
-# diferencia de las ramas experimentales casi nunca faltan.
-PATCH_URL = "https://builder.blender.org/download/patch/?format=json&v=2"
 CACHE_MAX_AGE = 3600  # una hora de validez para el caché en disco
 
 # Extensiones descargables que nos interesan (descartamos .sha256, .msi, etc.).
@@ -69,9 +64,6 @@ def _to_build(entry: dict, experimental: bool = False) -> Build:
         mtime=int(entry.get("file_mtime") or 0),
         build_hash=str(entry.get("hash") or ""),
         experimental=experimental,
-        # El propio JSON trae a qué pull request pertenece ("PR161547"), y es
-        # null en todas las demás. Así no hace falta distinguir el endpoint.
-        patch=str(entry.get("patch") or ""),
     )
 
 
@@ -87,18 +79,16 @@ def _fetch_builds_from(url: str, timeout: int, experimental: bool):
 
 
 def fetch_builds(timeout: int = 20):
-    """Descarga el listado completo: diarias + experimentales + patch.
+    """Descarga el listado completo: diarias + ramas experimentales.
 
-    Los dos listados "extra" van cada uno en su propio try: casi siempre están
-    vacíos o fallan (no hay ramas abiertas, etc.) y eso no debe impedir que se
-    vean las compilaciones normales.
+    El listado experimental va en su propio try: casi siempre está vacío y eso
+    no debe impedir que se vean las compilaciones normales.
     """
     builds = _fetch_builds_from(API_URL, timeout, experimental=False)
-    for url, experimental in ((EXPERIMENTAL_URL, True), (PATCH_URL, False)):
-        try:
-            builds += _fetch_builds_from(url, timeout, experimental=experimental)
-        except Exception as error:
-            log(f"extra builds unavailable ({url}): {error}")
+    try:
+        builds += _fetch_builds_from(EXPERIMENTAL_URL, timeout, experimental=True)
+    except Exception as error:
+        log(f"experimental builds unavailable: {error}")
     return builds
 
 
@@ -167,16 +157,14 @@ def available_for(builds, platform: str, arch: str):
 def filter_builds(builds, channel: str, search: str = ""):
     """Aplica el filtro de canal y la búsqueda a las compilaciones de la tienda.
 
-    Las ramas experimentales y las builds de patch solo se ven en su propio
-    canal ("experimental" y "patch"): así no se cuelan entre las estables o las
-    diarias y no confunden a quien solo quiere una versión normal de Blender.
+    Las ramas experimentales solo se ven en su propio canal ("experimental"):
+    así no se cuelan entre las estables o las diarias y no confunden a quien
+    solo quiere una versión normal de Blender.
     """
     if channel == "experimental":
         selected = [build for build in builds if build.experimental]
-    elif channel == "patch":
-        selected = [build for build in builds if build.patch]
     else:
-        selected = [build for build in builds if not build.experimental and not build.patch]
+        selected = [build for build in builds if not build.experimental]
         if channel == "lts":
             # Solo las versiones con soporte de larga duración.
             selected = [build for build in selected if build.is_lts]
