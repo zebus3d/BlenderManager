@@ -144,8 +144,17 @@ class ZoomSlider(HoverBehavior, Widget):
     max = NumericProperty(1.8)
     value = NumericProperty(1.0)
     step = NumericProperty(0.0)
-    thumb_size = NumericProperty(dp(16))
+    # OJO: nada de ``dp()`` en una asignación de clase. Esto se evalúa al
+    # IMPORTAR el módulo, y ``dp()`` necesita una ventana para calcular la
+    # densidad. PyInstaller importa los módulos durante el empaquetado (sin
+    # ventana) y en Windows eso abortaba el build con ``SystemExit``. El valor
+    # real en píxeles se fija en ``__init__``, que ya corre con ventana.
+    thumb_size = NumericProperty(16)
     dragging = BooleanProperty(False)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.thumb_size = dp(16)
 
     def _get_thumb_x(self):
         span = max(0.0001, self.max - self.min)
