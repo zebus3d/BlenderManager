@@ -61,11 +61,6 @@ class Build:
     # "Branch" del builder, ramas con funciones nuevas que aún no están en una
     # versión oficial). Se muestra con su propio filtro "Experimental".
     experimental: bool = False
-    # Identificador de la pull request si es una build "patch" (por ejemplo
-    # "PR161547"); vacío en cualquier otra. Las builds de patch son las de las
-    # propuestas de cambios que aún se están revisando, y se ven en su propio
-    # filtro "Patch".
-    patch: str = ""
 
     @property
     def is_lts(self) -> bool:

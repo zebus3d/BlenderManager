@@ -401,11 +401,6 @@ class RootWidget(BoxLayout):
                 container.add_widget(self._placeholder(
                     tr("No experimental builds right now"),
                     tr("Feature branches with new features still in development.")))
-            elif self.channel == "patch":
-                # El listado de patch casi nunca está vacío, pero por si acaso.
-                container.add_widget(self._placeholder(
-                    tr("No patch builds right now"),
-                    tr("Proposed changes that are still under review.")))
             else:
                 container.add_widget(self._placeholder(
                     tr("No builds found"),
