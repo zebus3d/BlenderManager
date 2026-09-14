@@ -122,6 +122,11 @@ que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
 
 ### Reglas que no hay que romper
 
+- **Nada de `dp()`/`sp()` al definir una clase o en código de nivel de módulo.**
+  Se evalúa al *importar* el módulo y `dp()` necesita una ventana para calcular
+  la densidad. PyInstaller importa los módulos durante el empaquetado (sin
+  ventana) y en Windows eso abortaba el build con `SystemExit`. Defínelo con un
+  valor plano y fija el `dp()` real en `__init__` (que ya corre con ventana).
 - **Nombres de asset**: deben coincidir con `ASSET_NAMES` de
   `src/services/updater.py` (`BlenderManager-x86_64.AppImage`,
   `BlenderManager-windows-x86_64.zip`, `BlenderManager-macos.zip`). Si cambian
