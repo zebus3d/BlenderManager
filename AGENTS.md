@@ -143,6 +143,34 @@ que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
   (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
   la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
 
+## CI en contenedor Arch (Linux)
+
+El job `linux:` de `.github/workflows/build.yml` corre dentro de un
+contenedor `archlinux:latest` (con `runs-on: ubuntu-22.04` como host)
+porque Kivy 2.3.1 trae en `Kivy.libs/` una SDL2 2.30.0.7 incompatible
+con Mesa 26 + Wayland: pide
+`GLX_RGBA+DB+DRAWABLE_TYPE=WINDOW+DEPTH=16+STENCIL=8` y Xwayland devuelve
+0 configs (`No matching FB config found`).
+
+En Arch, `pacman -S python-kivy` trae el módulo Cython `_window_sdl2`
+compilado contra el SDL2 2.32+ del sistema, que sí sabe caer a EGL. Por
+eso el binario final es funcional tanto en Wayland como en X11.
+
+Detalles:
+- El contenedor usa `--privileged` porque `pacman` lo necesita.
+- `appimagetool` no está en pacman, lo descarga `packaging/build_appimage.sh`
+  si no está presente en `${DIST}/`.
+- El binario pesa ~170 MB (frente a los ~50 MB anteriores) porque
+  PyInstaller arrastra las libs gráficas del sistema para que SDL2 pueda
+  `dlopen()` `libEGL`/`libGL`/`libwayland-*` en cualquier distro moderna.
+- Hay un paso de **smoke test** (`./binario --smoke`) tras el build que
+  falla el job si el binario no arranca — atrapa regresiones futuras.
+- Cuando salga Kivy 3.0 (SDL3, sin este bug, ver
+  [milestones](https://github.com/kivy/kivy/milestones)), se puede volver
+  a `runs-on: ubuntu-22.04` sin contenedor y `pip install kivy==3.0`.
+  Mientras tanto, **no cambiar a `pip install kivy` en este job** sin
+  haber validado antes con el bugcheck de arriba.
+
 ## Auto-update
 
 - Lógica en `src/services/updater.py`; UI en `src/ui/widgets/root.py`
