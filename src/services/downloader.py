@@ -90,6 +90,16 @@ class Downloader:
             if final_path.exists():
                 final_path.unlink()
             part_path.replace(final_path)
+            # Bit de ejecución: si el fichero es una AppImage (o cualquier
+            # binario) el usuario puede querer abrirlo directamente. El
+            # updater hace su propio chmod 0755 antes del self-replace, pero
+            # si ese replace falla la app muestra "Downloaded to ... Open it
+            # to install the new version" y sin +x el doble-clic da
+            # "Permiso denegado". En .tar.xz/.zip el bit es inofensivo.
+            try:
+                final_path.chmod(final_path.stat().st_mode | 0o111)
+            except OSError as error:
+                log(f"chmod failed for {final_path}: {error}")
             log(f"downloaded {final_path}")
             if on_done:
                 on_done(final_path)
