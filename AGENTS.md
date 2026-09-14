@@ -150,7 +150,7 @@ contenedor `archlinux:latest` (con `runs-on: ubuntu-22.04` como host)
 porque Kivy 2.3.1 trae en `Kivy.libs/` una SDL2 2.30.0.7 incompatible
 con Mesa 26 + Wayland: pide
 `GLX_RGBA+DB+DRAWABLE_TYPE=WINDOW+DEPTH=16+STENCIL=8` y Xwayland devuelve
-0 configs (`No matching FB config found`).
+0 configs (`No matching FB config`).
 
 En Arch, `pacman -S python-kivy` trae el módulo Cython `_window_sdl2`
 compilado contra el SDL2 2.32+ del sistema, que sí sabe caer a EGL. Por
@@ -170,6 +170,65 @@ Detalles:
   a `runs-on: ubuntu-22.04` sin contenedor y `pip install kivy==3.0`.
   Mientras tanto, **no cambiar a `pip install kivy` en este job** sin
   haber validado antes con el bugcheck de arriba.
+
+### Gotchas específicos del contenedor Arch en GitHub Actions
+
+Hay varias cosas que NO son obvias y que ya nos han mordido. Si tocas
+este job, lee esto primero:
+
+1. **Keyring de pacman**: `archlinux:latest` viene sin claves de
+   pacman inicializadas. Sin `pacman-key --init && pacman-key
+   --populate archlinux` antes de `pacman -Syu`, el primer
+   install falla con `There is no secret key available to sign with`.
+
+2. **python-gobject obligatorio**: `gtk3` en Arch es solo la
+   librería C; `python-gobject` es optdep. PyInstaller tiene
+   `hook-gi.py` que llama a `compat.importlib_metadata.version("pygobject")`
+   en la fase de COLLECT. Si pygobject no está instalado, el COLLECT
+   no produce bundle (warning de "Failed to import module
+   __PyInstaller_hooks_0_gi" + exit code 1 silencioso). Hay que
+   añadir `python-gobject` explícitamente al `pacman -S`.
+
+3. **Comentarios en comandos multilínea**: El runner usa
+   `shell: sh -e {0}`, que pasa el bloque entero como UN SOLO string
+   a `/bin/sh`. Los `# comentarios` que pongas en medio de un
+   comando partido con `\\` se concatenan como ARGUMENTOS al
+   comando (no son comentarios después de `\\`). Ejemplo:
+   ```yaml
+   run: |
+     pacman -S --noconfirm \
+       pkg1 pkg2 \
+       # esto NO es uncomment, se vuelve argumento de pacman
+       pkg3
+   ```
+   El resultado real es `pacman -S pkg1 pkg2 # esto... pkg3` →
+   pacman intenta instalar `#`, `esto...` y `pkg3`. Lo correcto:
+   poner el `pacman -S` en una sola línea y los comentarios en sus
+   propias líneas fuera del comando.
+
+4. **libfuse no viene en `archlinux:latest`**: el AppImage generado
+   no puede montarse para el smoke test (`dlopen(): error loading
+   libfuse.so.2`). Hay que usar `APPIMAGE_EXTRACT_AND_RUN=1` en el
+   step de smoke test, igual que ya hace `build_appimage.sh` con
+   `appimagetool`.
+
+5. **Python no está en `archlinux:latest`** (es base pelada). Si
+   tocas el orden de steps, asegúrate de que `python` se instala
+   vía `pacman -S python` antes de cualquier step que use
+   `python ...`. El `inject_version.py` actual corre dentro del
+   step de instalación, después de `pip install` (que fuerza
+   `python` como dep).
+
+6. **Verificación antes de mergear cambios al job `linux:`**:
+   - Build local con `podman run --rm -v "$PWD":/src -w /src
+     --privileged archlinux:latest bash -c '...'` debe producir
+     un AppImage de 60-180 MB que pasa `--smoke`.
+   - El binario descomprimido (squashfs-root) debe contener
+     `libSDL2-2.0.so.0` en `_internal/` (vienen de pacman, NO el
+     Kivy.libs roto).
+   - El error "No matching FB config found" al abrir el binario
+     es exactamente el bug que justifica este workaround. Si vuelve
+     a aparecer, Kivy 3.0 probablemente ya salió.
 
 ## Auto-update
 
