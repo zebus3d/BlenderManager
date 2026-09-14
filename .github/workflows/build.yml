@@ -75,15 +75,14 @@ jobs:
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed \
-            python python-pip python-kivy \
-            sdl2 sdl2_image sdl2_mixer sdl2_ttf glew \
-            gtk3 libglvnd mesa libx11 libxrandr libpng mtdev binutils wget fakeroot \
-            # python-gobject: PyInstaller's hook-gi.py llama a
-            # compat.importlib_metadata.version("pygobject") y aborta el
-            # COLLECT si no lo encuentra. gtk3 no lo arrastra (es optdep),
-            # asi que hay que pedirlo explicitamente.
-            python-gobject
+          # python-gobject es optdep de gtk3 y NO lo arrastra. Lo pedimos
+          # explicito porque PyInstaller's hook-gi.py llama a
+          # compat.importlib_metadata.version("pygobject") y sin el aborta el
+          # COLLECT. Cuidado: los comentarios "#" dentro de un comando multi-
+          # linea con "\\" se concatenan como argumentos (sh -e {0} une las
+          # lineas antes de pasarlas al shell). Por eso los comentarios van
+          # en lineas separadas, nunca en medio del comando.
+          pacman -S --noconfirm --needed python python-pip python-kivy sdl2 sdl2_image sdl2_mixer sdl2_ttf glew gtk3 libglvnd mesa libx11 libxrandr libpng mtdev binutils wget fakeroot python-gobject
           # Solo pyinstaller por pip: kivy viene del sistema con Cython ABI
           # matching al SDL2 del sistema. requirements-build.txt instala
           # kivy==2.3.1 tambien, pero el resolver de pip ve que ya esta
