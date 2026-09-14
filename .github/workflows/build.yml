@@ -68,9 +68,6 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v4
-      - name: Inyectar version
-        shell: bash
-        run: python packaging/inject_version.py "${{ needs.version.outputs.version }}"
       - name: Instalar kivy (pacman) y pyinstaller (pip)
         run: |
           pacman -Syu --noconfirm
@@ -83,6 +80,11 @@ jobs:
           # kivy==2.3.1 tambien, pero el resolver de pip ve que ya esta
           # satisfecho por el paquete del sistema y lo deja igual.
           pip install --break-system-packages pyinstaller>=6.6
+          # Inyectar la version del tag en src/version.py y packaging/version_info.txt.
+          # Se hace aqui (tras instalar python) y antes de pyinstaller para que el
+          # binario lleve la version correcta y no se dispare el bucle de
+          # auto-update (ver AGENTS.md -> "Cuidado con la numeracion").
+          python packaging/inject_version.py "${{ needs.version.outputs.version }}"
       - name: Compilar binario portable y AppImage
         env:
           # Kivy no debe necesitar pantalla ni GPU durante el empaquetado: el
