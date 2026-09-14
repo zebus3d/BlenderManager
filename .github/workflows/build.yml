@@ -110,7 +110,12 @@ jobs:
       - name: Smoke test del AppImage generado
         run: |
           chmod +x BlenderManager-x86_64.AppImage
-          ./BlenderManager-x86_64.AppImage --smoke
+          # Los AppImages necesitan libfuse2 para montarse. En el contenedor
+          # Arch no lo tenemos y no queremos anadir una dep solo para tests.
+          # APPIMAGE_EXTRACT_AND_RUN=1 hace que el binario se autoextraiga
+          # en lugar de usar FUSE. Lo mismo que hace build_appimage.sh con
+          # appimagetool.
+          APPIMAGE_EXTRACT_AND_RUN=1 ./BlenderManager-x86_64.AppImage --smoke
       - uses: actions/upload-artifact@v4
         with:
           name: BlenderManager-linux
