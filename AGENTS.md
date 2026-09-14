@@ -33,22 +33,19 @@ sigue funcionando como cuando era un solo archivo.
 ## Canales de compilaciones
 
 Todo vive en `src/services/api.py`; el filtrado por canal es la función pura
-`filter_builds` (testeada en `tests/test_services.py`). Blender publica **tres
-listados** y se descargan los tres:
+`filter_builds` (testeada en `tests/test_services.py`). Blender publica **dos
+listados** y se descargan los dos:
 
 - **Daily** (`API_URL`): estables y LTS por rama, más las alfas de `main`.
 - **Experimental** (`EXPERIMENTAL_URL`, sección "Branch"): ramas de funciones
-  nuevas. **Casi siempre está vacío** (Blender solo las publica de vez en
-  cuando); por eso el canal muestra un aviso propio. Blender Launcher usa este
-  mismo endpoint.
-- **Patch** (`PATCH_URL`): builds de pull requests (`main-PR161547`). Son lo más
-  nuevo y casi nunca faltan; el campo `Build.patch` guarda el id de la PR.
+  nuevas. **Casi siempre está vacío** (Blender dejó de publicarlas en 2021 y no
+  se sabe si volverán); por eso el canal muestra un aviso propio. Blender
+  Launcher usa este mismo endpoint.
 
-Los canales *Experimental* y *Patch* solo se ven en su propia pestaña: el
-resto de canales los excluye para no confundir. En `fetch_builds` los dos
-listados "extra" van cada uno en su `try` (un fallo ahí no debe tumbar el
-listado normal). `Build.experimental` y `Build.patch` se cachean con `asdict` y
-los cachés viejos caen a sus valores por defecto.
+El canal *Experimental* solo se ve en su propia pestaña: el resto de canales lo
+excluye para no confundir. En `fetch_builds` va en su propio `try` (un fallo ahí
+no debe tumbar el listado normal). `Build.experimental` se cachea con `asdict` y
+los cachés viejos caen a su valor por defecto.
 
 ## Comandos
 

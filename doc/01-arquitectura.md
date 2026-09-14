@@ -45,7 +45,7 @@ Al ser dataclasses, crear una es directo: `Build(version="5.2.1", ...)`.
 
 | Archivo | Qué hace | Dato curioso |
 |---|---|---|
-| `api.py` | Descarga los listados JSON de Blender (diarias, experimentales y patch), los filtra y los cachea. | Usa `?format=json&v=2` y solo la librería estándar. |
+| `api.py` | Descarga los listados JSON de Blender (diarias y ramas experimentales), los filtra y los cachea. | Usa `?format=json&v=2` y solo la librería estándar. |
 | `detector.py` | Detecta SO y arquitectura con `platform`. | Traduce a los identificadores de Blender (`linux`, `amd64`...). |
 | `settings.py` | Carga/guarda ajustes en JSON de forma atómica. | Soporta **modo portable** (archivo `portable` junto al binario). |
 | `downloader.py` | Descargar un archivo en un hilo aparte, con progreso y verificación SHA-256. | Escribe a `.part` y renombra solo al terminar. |

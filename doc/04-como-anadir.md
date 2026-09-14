@@ -134,19 +134,12 @@ python3 -m unittest discover -t . -s tests -v
 - **Fíjate en las decisiones de diseño** (las experimentales no se mezclan con
   el resto). El código no basta; importa *cómo se comporta*.
 
-## Y después se añadió el canal "Patch"
+## Un aviso sobre las ramas experimentales
 
-Las ramas experimentales de Blender casi nunca están disponibles (las que
-recuerdas de "Sculpt Dev" o "Geometry Nodes" son de 2021). Para que ese hueco no
-quedara siempre vacío se añadió un canal **Patch** con las builds de pull
-request, siguiendo **exactamente los mismos 6 pasos**:
-
-- `model/build.py`: campo `patch: str = ""` (el id de la PR; vacío si no lo es).
-- `services/api.py`: `PATCH_URL`, se descarga junto a las demás, y
-  `filter_builds` gana la rama `elif channel == "patch"`.
-- `ui/widgets/cards.py`: la etiqueta de canal muestra el id de la PR.
-- `views/main.kv`: la pastilla `Patch`.
-- `i18n.py` y `tests/test_services.py`: textos y pruebas.
-
-Ese es justo el valor de tener el filtrado en una función pura y los canales
-bien separados: cada canal nuevo cuesta lo mismo y se prueba igual.
+Blender publica builds de ramas de funciones nuevas en el listado
+`/download/experimental/`. Antes eran habituales ("Sculpt Dev", "Geometry
+Nodes", "Eevee Dof Refactor"...), pero desde ~2021 casi no se publican, así que
+ese canal suele estar vacío. Aun así se deja implementado: el día que Blender
+abra una rama, aparecerá sola. Es un buen ejemplo de por qué conviene separar
+el filtrado en una función pura y probarlo: aunque hoy no haya datos, el código
+está listo y verificado.
