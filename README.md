@@ -204,6 +204,50 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 The binaries are **not** committed to the repository; they are downloadable from
 the Release (or from the workflow run).
 
+#### Why the Linux build runs in an Arch container
+
+The `linux:` job runs on `runs-on: ubuntu-22.04` but inside a container
+`archlinux:latest` (with `--privileged`). This is **intentional and not a typo**:
+
+Kivy 2.3.1's pip wheel bundles `Kivy.libs/libSDL2-2-d9872e50.0.so.0.3000.7`
+(SDL2 2.30.0.7). That SDL2 has a known incompatibility with Mesa 26 + Wayland:
+on a Wayland session running through Xwayland, it asks GLX for a config with
+`DRAWABLE_TYPE=WINDOW` and `STENCIL=8`, and gets 0 results, producing this
+error on launch:
+
+```
+Window: Provider: sdl2
+Window: Provider: x11(['window_sdl2'] ignored)
+No matching FB config found
+```
+
+Arch Linux's `python-kivy` package is built against the **system SDL2 2.32+**,
+which knows how to fall back to EGL on Wayland and works in both X11 and
+Wayland. So we install Kivy via `pacman -S python-kivy` (system package, ABI
+matches the system SDL2) and only pull `pyinstaller` from pip. The trade-off is
+that PyInstaller bundles the system graphics libs (`libGL`, `libEGL`,
+`libwayland-*`, glslang, gstgl, glycin...) alongside SDL2, so the resulting
+AppImage is **~170 MB** instead of the ~50 MB it would be on Ubuntu.
+
+This workaround is necessary until [Kivy 3.0 ships with SDL3](https://github.com/kivy/kivy/milestones)
+(milestone due January 2027). When that happens, revert to plain Ubuntu +
+`pip install kivy==3.0` and remove the `container:` block. The full reasoning,
+including a reproducible validation recipe with `podman`, is documented in
+`AGENTS.md` under "CI en contenedor Arch".
+
+If you change the CI Linux job:
+
+1. Build the AppImage locally with `podman` (or the actual container image the
+   CI uses) and verify it opens on a recent KDE Plasma / GNOME Wayland session
+   before pushing.
+2. Check that the resulting `dist/BlenderManager-x86_64.AppImage` is between
+   150 MB and 200 MB (lower means a graphics lib wasn't bundled; higher means
+   you bundled too much).
+3. Make sure `packaging/inject_version.py` was called **before** PyInstaller
+   with the same version the release tag carries — otherwise auto-update will
+   detect a mismatch and loop. The CI workflow does this in step "Inyectar
+   version".
+
 ## Linux requirements
 
 Building on `ubuntu-22.04` means the portable binary needs **glibc 2.35 or
