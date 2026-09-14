@@ -53,46 +53,52 @@ jobs:
           python-version: "3.12"
       - run: python -m unittest discover -t . -s tests -v
 
-  # Construimos dentro de un contenedor Arch porque Kivy 2.3.1 que viene
-  # por pip trae una SDL2 2.30.0.7 incompatible con Mesa 26 + Wayland
-  # ("No matching FB config found"). En Arch, pacman trae el modulo Cython
-  # de Kivy compilado contra la SDL2 2.32+ del sistema, que si sabe caer a
-  # EGL. Ver AGENTS.md -> "CI en contenedor Arch". El binario resultante
-  # pesa ~170 MB porque PyInstaller arrastra las libs graficas para que
-  # SDL2 pueda dlopen() libEGL/libGL/libwayland en cualquier distro.
+  # Construimos en Ubuntu 22.04 (glibc 2.35) para que el binario funcione en
+  # el maximo de distros. El intento anterior en contenedor Arch salia con el
+  # Python 3.14 de Arch, que exige glibc 2.44: funcionaba en Arch pero
+  # crasheaba en Linux Mint 22 / Ubuntu 24.04 (glibc 2.39) con
+  # "libm.so.6: version `GLIBC_2.44' not found".
+  #
+  # El Kivy que viene por pip trae en Kivy.libs una SDL2 2.30.0.7 con un bug
+  # en Mesa 26 + Wayland (pide GLX y Xwayland devuelve 0 configs -> "No
+  # matching FB config"). Lo arreglamos compilando SDL2 2.32 en el MISMO
+  # Ubuntu 22.04 y sustituyendo la SDL2 bundleada. SDL2 mantiene ABI dentro
+  # de 2.x, asi que el modulo Cython de Kivy (compilado contra 2.30) carga
+  # la 2.32 sin recompilar. Ver AGENTS.md -> "Build Linux portable".
   linux:
     needs: version
     runs-on: ubuntu-22.04
-    container:
-      image: archlinux:latest
-      options: --privileged
     steps:
       - uses: actions/checkout@v4
-      - name: Instalar kivy (pacman) y pyinstaller (pip)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inyectar version
+        shell: bash
+        run: python packaging/inject_version.py "${{ needs.version.outputs.version }}"
+      - name: Dependencias del sistema
         run: |
-          # La imagen archlinux:latest viene sin keyring inicializado, asi que
-          # pacman no puede verificar firmas. Inicializamos las claves antes.
-          pacman-key --init
-          pacman-key --populate archlinux
-          pacman -Syu --noconfirm
-          # python-gobject es optdep de gtk3 y NO lo arrastra. Lo pedimos
-          # explicito porque PyInstaller's hook-gi.py llama a
-          # compat.importlib_metadata.version("pygobject") y sin el aborta el
-          # COLLECT. Cuidado: los comentarios "#" dentro de un comando multi-
-          # linea con "\\" se concatenan como argumentos (sh -e {0} une las
-          # lineas antes de pasarlas al shell). Por eso los comentarios van
-          # en lineas separadas, nunca en medio del comando.
-          pacman -S --noconfirm --needed python python-pip python-kivy sdl2 sdl2_image sdl2_mixer sdl2_ttf glew gtk3 libglvnd mesa libx11 libxrandr libpng mtdev binutils wget fakeroot python-gobject
-          # Solo pyinstaller por pip: kivy viene del sistema con Cython ABI
-          # matching al SDL2 del sistema. requirements-build.txt instala
-          # kivy==2.3.1 tambien, pero el resolver de pip ve que ya esta
-          # satisfecho por el paquete del sistema y lo deja igual.
-          pip install --break-system-packages pyinstaller>=6.6
-          # Inyectar la version del tag en src/version.py y packaging/version_info.txt.
-          # Se hace aqui (tras instalar python) y antes de pyinstaller para que el
-          # binario lleve la version correcta y no se dispare el bucle de
-          # auto-update (ver AGENTS.md -> "Cuidado con la numeracion").
-          python packaging/inject_version.py "${{ needs.version.outputs.version }}"
+          sudo apt-get update
+          sudo apt-get install -y xvfb libmtdev1 build-essential cmake wget \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxinerama-dev libwayland-dev libxkbcommon-dev wayland-protocols \
+            libegl1-mesa-dev libgles2-mesa-dev libgl1-mesa-dev \
+            libasound2-dev libpulse-dev libudev-dev libdbus-1-dev
+      - name: Cachear SDL2 2.32 ya compilado
+        id: cache-sdl2
+        uses: actions/cache@v4
+        with:
+          path: sdl2-build
+          key: sdl2-2.32.10-ubuntu2204
+      - name: Compilar SDL2 2.32
+        if: steps.cache-sdl2.outputs.cache-hit != 'true'
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-2.32.10.tar.gz
+          tar xf SDL2-2.32.10.tar.gz
+          cmake -S SDL2-2.32.10 -B sdl2-build -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_X11=ON -DSDL_WAYLAND=ON \
+            -DSDL_OPENGL=ON -DSDL_OPENGLES=ON
+          cmake --build sdl2-build -j"$(nproc)"
       - name: Compilar binario portable y AppImage
         env:
           # Kivy no debe necesitar pantalla ni GPU durante el empaquetado: el
@@ -102,7 +108,14 @@ jobs:
           SDL_VIDEODRIVER: dummy
           KIVY_GL_BACKEND: mock
         run: |
-          pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+          xvfb-run -a pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+          # Sustituir la SDL2 2.30.0.7 que Kivy trae por pip (rota en Mesa 26
+          # + Wayland) por la 2.32 recien compilada. Mantenemos el nombre de
+          # fichero para que el NEEDED del modulo Cython la siga encontrando.
+          NEW_SDL2="$(ls sdl2-build/libSDL2-2.0.so.0.*)"
+          find dist/BlenderManager -name "libSDL2-2-*" -exec cp -f "${NEW_SDL2}" {} \;
           packaging/build_appimage.sh dist
           # Copiamos el AppImage a la raíz para que el artefacto contenga
           # únicamente el archivo, sin la carpeta dist/.
@@ -110,11 +123,7 @@ jobs:
       - name: Smoke test del AppImage generado
         run: |
           chmod +x BlenderManager-x86_64.AppImage
-          # Los AppImages necesitan libfuse2 para montarse. En el contenedor
-          # Arch no lo tenemos y no queremos anadir una dep solo para tests.
-          # APPIMAGE_EXTRACT_AND_RUN=1 hace que el binario se autoextraiga
-          # en lugar de usar FUSE. Lo mismo que hace build_appimage.sh con
-          # appimagetool.
+          # APPIMAGE_EXTRACT_AND_RUN=1 evita necesitar libfuse2 para montar.
           APPIMAGE_EXTRACT_AND_RUN=1 ./BlenderManager-x86_64.AppImage --smoke
       - uses: actions/upload-artifact@v4
         with:
