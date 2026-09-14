@@ -291,9 +291,25 @@ def open_releases() -> None:
 
 
 def _apply_appimage(archive: Path) -> bool:
-    """Reemplaza la AppImage en disco y relanza esa versión nueva."""
-    target = Path(os.environ.get("APPIMAGE", "")).resolve()
-    if not target.exists():
+    """Reemplaza la AppImage en disco y relanza esa versión nueva.
+
+    Devuelve True solo si el reemplazo y el relanzamiento han ido bien. Ante
+    cualquier fallo preferimos devolver False (y que la UI avise al usuario)
+    antes que cerrar la app y dejarle sin binario funcionando.
+    """
+    raw = os.environ.get("APPIMAGE", "")
+    if not raw:
+        # Lanzada desde fuera de una AppImage (p. ej. el binario extraído a
+        # mano, o un launcher que no propaga APPIMAGE). Sin esa variable no
+        # sabemos qué fichero reemplazar; que la UI ofrezca el .AppImage
+        # descargado para abrirlo a mano.
+        log("appimage update: $APPIMAGE no definido, no hay nada que reemplazar")
+        _make_executable(archive)
+        return False
+    target = Path(raw).resolve()
+    if not target.is_file():
+        log(f"appimage update: {target} no es un fichero (existe={target.exists()})")
+        _make_executable(archive)
         return False
     try:
         tmp = target.parent / (target.name + ".new")
@@ -301,14 +317,29 @@ def _apply_appimage(archive: Path) -> bool:
         os.chmod(tmp, 0o755)
         os.replace(tmp, target)
     except OSError as error:
-        log(f"appimage update failed: {error}")
+        log(f"appimage update failed ({target}): {error}")
+        # Aseguramos que la copia descargada se puede abrir a mano si el
+        # self-replace no ha funcionado (permiso de escritura en el dir,
+        # sistema de ficheros read-only, AppImage en una unidad montada...).
+        _make_executable(archive)
         return False
     try:
         subprocess.Popen([str(target)], start_new_session=True, close_fds=True)
     except OSError as error:
         log(f"appimage relaunch failed: {error}")
+        _make_executable(archive)
         return False
     return True
+
+
+def _make_executable(path) -> None:
+    """Bit +x al fichero descargado, para poder abrirlo a mano si hace falta."""
+    try:
+        candidate = Path(path)
+        if candidate.is_file():
+            candidate.chmod(candidate.stat().st_mode | 0o111)
+    except OSError as error:
+        log(f"chmod failed for {path}: {error}")
 
 
 def _apply_windows(archive: Path) -> bool:

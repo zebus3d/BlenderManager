@@ -135,6 +135,77 @@ class CleanupTests(unittest.TestCase):
         updater.cleanup_partials("/nonexistent/path/xyz")
 
 
+class AppImageApplyTests(unittest.TestCase):
+    """Self-replace de la AppImage en Linux.
+
+    El caso 1 (sin $APPIMAGE) es el que mordió a un usuario en Linux Mint:
+    lanzaba la AppImage desde un launcher que no propagaba la variable, el
+    updater no podía reemplazar nada y la app se cerraba igual, dejándole
+    con un fichero descargado sin bit de ejecución que no podía abrir.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def _archive(self):
+        # Simula el .AppImage descargado (sin +x, como lo deja el downloader).
+        archive = self.root / "update" / "BlenderManager-x86_64.AppImage"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        archive.write_bytes(b"contenido")
+        archive.chmod(0o644)
+        return archive
+
+    def test_make_executable_sets_exec_bit(self):
+        archive = self._archive()
+        self.assertFalse(archive.stat().st_mode & 0o111)
+        updater._make_executable(archive)
+        self.assertTrue(archive.stat().st_mode & 0o111)
+
+    def test_make_executable_missing_file_does_not_raise(self):
+        updater._make_executable(self.root / "no-existe")
+
+    def test_apply_without_appimage_env_falls_back(self):
+        archive = self._archive()
+        with mock.patch.dict(updater.os.environ, {}, clear=False):
+            updater.os.environ.pop("APPIMAGE", None)
+            self.assertFalse(updater._apply_appimage(archive))
+        # El fallback deja la copia ejecutable por si el usuario la abre a mano.
+        self.assertTrue(archive.stat().st_mode & 0o111)
+
+    def test_apply_target_not_a_file_falls_back(self):
+        archive = self._archive()
+        folder = self.root / "carpeta"
+        folder.mkdir()
+        with mock.patch.dict(updater.os.environ, {"APPIMAGE": str(folder)}):
+            self.assertFalse(updater._apply_appimage(archive))
+        self.assertTrue(archive.stat().st_mode & 0o111)
+
+    def test_apply_success_replaces_and_relaunches(self):
+        archive = self._archive()
+        target = self.root / "instalada.AppImage"
+        target.write_bytes(b"viejo")
+        with mock.patch.dict(updater.os.environ, {"APPIMAGE": str(target)}), \
+                mock.patch.object(updater.subprocess, "Popen") as popen:
+            self.assertTrue(updater._apply_appimage(archive))
+        self.assertEqual(target.read_bytes(), b"contenido")
+        self.assertTrue(target.stat().st_mode & 0o111)
+        popen.assert_called_once()
+
+    def test_apply_replace_failure_keeps_old_and_falls_back(self):
+        archive = self._archive()
+        target = self.root / "instalada.AppImage"
+        target.write_bytes(b"viejo")
+        with mock.patch.dict(updater.os.environ, {"APPIMAGE": str(target)}), \
+                mock.patch.object(updater.os, "replace",
+                                  side_effect=OSError("read-only")):
+            self.assertFalse(updater._apply_appimage(archive))
+        # El binario antiguo sigue intacto: no dejamos al usuario sin app.
+        self.assertEqual(target.read_bytes(), b"viejo")
+        self.assertTrue(archive.stat().st_mode & 0o111)
+
+
 class SourceUpdateTests(unittest.TestCase):
     """Actualizar un checkout en modo fuente (git pull) sin red ni repo real."""
 

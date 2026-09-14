@@ -143,92 +143,88 @@ que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
   (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
   la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
 
-## CI en contenedor Arch (Linux)
+## Build Linux portable (glibc + SDL2)
 
-El job `linux:` de `.github/workflows/build.yml` corre dentro de un
-contenedor `archlinux:latest` (con `runs-on: ubuntu-22.04` como host)
-porque Kivy 2.3.1 trae en `Kivy.libs/` una SDL2 2.30.0.7 incompatible
-con Mesa 26 + Wayland: pide
-`GLX_RGBA+DB+DRAWABLE_TYPE=WINDOW+DEPTH=16+STENCIL=8` y Xwayland devuelve
-0 configs (`No matching FB config`).
+El job `linux:` compila en **Ubuntu 22.04 sin contenedor**. Hay dos
+restricciones que se pelean entre sí y esta es la única combinación que
+las satisface a la vez:
 
-En Arch, `pacman -S python-kivy` trae el módulo Cython `_window_sdl2`
-compilado contra el SDL2 2.32+ del sistema, que sí sabe caer a EGL. Por
-eso el binario final es funcional tanto en Wayland como en X11.
+### 1. glibc vieja para máxima compatibilidad
+
+El binario embebe el intérprete de Python y las libs de C. Ese intérprete
+exige una versión mínima de glibc del sistema anfitrión. Ubuntu 22.04 da
+**glibc 2.35**, que cubre Ubuntu 22.04+, Debian 12+, **Linux Mint 21/22**,
+Fedora 36+ y Arch.
+
+**NO compilar en un contenedor Arch** (lo intentamos y lo revertimos): el
+Python 3.14 de Arch exige **glibc 2.44**, y en Linux Mint 22 / Ubuntu
+24.04 (glibc 2.39) el binario crashea al arrancar con:
+
+```
+ImportError: libm.so.6: version `GLIBC_2.44' not found
+```
+
+### 2. SDL2 2.32 para que funcione en Mesa 26 + Wayland
+
+El Kivy 2.3.1 que instala pip trae en `Kivy.libs/` una SDL2 **2.30.0.7**
+con un bug en Mesa 26 + Wayland: pide GLX y Xwayland devuelve 0 configs
+→ `No matching FB config found` al abrir.
+
+Solución: el CI compila **SDL2 2.32.10** en el mismo Ubuntu 22.04 y
+**sustituye** el `libSDL2-2-*.so*` que dejó PyInstaller
+(`dist/BlenderManager/_internal/Kivy.libs/`). Como SDL2 mantiene ABI
+dentro de la serie 2.x, el módulo Cython `_window_sdl2` (compilado contra
+2.30) carga la 2.32 sin recompilar. **Verificado con podman**: swap +
+ventana real funciona en Ubuntu 22.04 y el binario arranca en Ubuntu 24.04.
 
 Detalles:
-- El contenedor usa `--privileged` porque `pacman` lo necesita.
-- `appimagetool` no está en pacman, lo descarga `packaging/build_appimage.sh`
-  si no está presente en `${DIST}/`.
-- El binario pesa ~170 MB (frente a los ~50 MB anteriores) porque
-  PyInstaller arrastra las libs gráficas del sistema para que SDL2 pueda
-  `dlopen()` `libEGL`/`libGL`/`libwayland-*` en cualquier distro moderna.
-- Hay un paso de **smoke test** (`./binario --smoke`) tras el build que
-  falla el job si el binario no arranca — atrapa regresiones futuras.
-- Cuando salga Kivy 3.0 (SDL3, sin este bug, ver
-  [milestones](https://github.com/kivy/kivy/milestones)), se puede volver
-  a `runs-on: ubuntu-22.04` sin contenedor y `pip install kivy==3.0`.
-  Mientras tanto, **no cambiar a `pip install kivy` en este job** sin
-  haber validado antes con el bugcheck de arriba.
+- La compilación de SDL2 se cachea con `actions/cache` (clave
+  `sdl2-2.32.10-ubuntu2204`) para no recompilar en cada push.
+- El swap usa `find dist/BlenderManager -name "libSDL2-2-*" -exec cp ...`.
+  Ojo con el patrón: `libSDL2-2-*` solo pilla el core; `libSDL2_image-*`,
+  `libSDL2_mixer-*` y `libSDL2_ttf-*` NO se tocan.
+- Hay un **smoke test** (`./binario --smoke`) tras el build con
+  `APPIMAGE_EXTRACT_AND_RUN=1` (el runner no tiene libfuse2) que falla el
+  job si el binario no arranca.
+- **NO volver a `pip install kivy` sin más**, ni meter el job en un
+  contenedor con glibc más nueva: cualquiera de las dos cosas reintroduce
+  un bug ya sufrido por usuarios reales.
+- Cuando salga Kivy 3.0 (SDL3, sin el bug de SDL2, ver
+  [milestones](https://github.com/kivy/kivy/milestones), previsto ~2027)
+  se puede quitar el paso de compilar/sustituir SDL2.
 
-### Gotchas específicos del contenedor Arch en GitHub Actions
+### Verificación antes de tocar este job
 
-Hay varias cosas que NO son obvias y que ya nos han mordido. Si tocas
-este job, lee esto primero:
+```bash
+# En un contenedor Ubuntu 22.04 (persistente, para no chocar con timeouts):
+podman run -d --name bmtest docker.io/ubuntu:22.04 sleep infinity
+podman exec -it bmtest bash
+# dentro: apt-get install python3-pip python3-venv cmake build-essential \
+#   libx11-dev libwayland-dev libegl1-mesa-dev ... ; pip install kivy pyinstaller
+# compilar SDL2 2.32, hacer el swap, y comprobar:
+#   - ventana real: xvfb-run ... --screenshot -> "OpenGL version <b'...'>"
+#   - máxima glibc requerida por _internal/*.so*: <= 2.35
+#     (objdump -T <lib> | grep -oE 'GLIBC_[0-9.]+' | sort -V | tail -1)
+```
 
-1. **Keyring de pacman**: `archlinux:latest` viene sin claves de
-   pacman inicializadas. Sin `pacman-key --init && pacman-key
-   --populate archlinux` antes de `pacman -Syu`, el primer
-   install falla con `There is no secret key available to sign with`.
+El binario resultante pesa ~34 MB (vs ~170 MB del intento en Arch, que
+arrastraba más libs).
 
-2. **python-gobject obligatorio**: `gtk3` en Arch es solo la
-   librería C; `python-gobject` es optdep. PyInstaller tiene
-   `hook-gi.py` que llama a `compat.importlib_metadata.version("pygobject")`
-   en la fase de COLLECT. Si pygobject no está instalado, el COLLECT
-   no produce bundle (warning de "Failed to import module
-   __PyInstaller_hooks_0_gi" + exit code 1 silencioso). Hay que
-   añadir `python-gobject` explícitamente al `pacman -S`.
+### Gotchas de GitHub Actions (aplican a cualquier job)
 
-3. **Comentarios en comandos multilínea**: El runner usa
-   `shell: sh -e {0}`, que pasa el bloque entero como UN SOLO string
-   a `/bin/sh`. Los `# comentarios` que pongas en medio de un
-   comando partido con `\\` se concatenan como ARGUMENTOS al
-   comando (no son comentarios después de `\\`). Ejemplo:
-   ```yaml
-   run: |
-     pacman -S --noconfirm \
-       pkg1 pkg2 \
-       # esto NO es uncomment, se vuelve argumento de pacman
-       pkg3
-   ```
-   El resultado real es `pacman -S pkg1 pkg2 # esto... pkg3` →
-   pacman intenta instalar `#`, `esto...` y `pkg3`. Lo correcto:
-   poner el `pacman -S` en una sola línea y los comentarios en sus
-   propias líneas fuera del comando.
+1. **Comentarios en comandos multilínea**: El runner puede usar
+   `shell: sh -e {0}`, que pasa el bloque entero como UN SOLO string al
+   shell. Los `# comentarios` en medio de un comando partido con `\` se
+   concatenan como ARGUMENTOS. Los comentarios van en sus propias líneas,
+   nunca dentro del comando.
 
-4. **libfuse no viene en `archlinux:latest`**: el AppImage generado
-   no puede montarse para el smoke test (`dlopen(): error loading
-   libfuse.so.2`). Hay que usar `APPIMAGE_EXTRACT_AND_RUN=1` en el
-   step de smoke test, igual que ya hace `build_appimage.sh` con
-   `appimagetool`.
+2. **`APPIMAGE_EXTRACT_AND_RUN=1`** para cualquier test que ejecute un
+   AppImage en el runner (no tiene libfuse2). Lo mismo que hace
+   `build_appimage.sh` con `appimagetool`.
 
-5. **Python no está en `archlinux:latest`** (es base pelada). Si
-   tocas el orden de steps, asegúrate de que `python` se instala
-   vía `pacman -S python` antes de cualquier step que use
-   `python ...`. El `inject_version.py` actual corre dentro del
-   step de instalación, después de `pip install` (que fuerza
-   `python` como dep).
-
-6. **Verificación antes de mergear cambios al job `linux:`**:
-   - Build local con `podman run --rm -v "$PWD":/src -w /src
-     --privileged archlinux:latest bash -c '...'` debe producir
-     un AppImage de 60-180 MB que pasa `--smoke`.
-   - El binario descomprimido (squashfs-root) debe contener
-     `libSDL2-2.0.so.0` en `_internal/` (vienen de pacman, NO el
-     Kivy.libs roto).
-   - El error "No matching FB config found" al abrir el binario
-     es exactamente el bug que justifica este workaround. Si vuelve
-     a aparecer, Kivy 3.0 probablemente ya salió.
+3. **`inject_version.py` va ANTES de PyInstaller** y con la misma versión
+   que el tag de la release (ver "Cuidado con la numeración" arriba);
+   si no, el auto-update entra en bucle.
 
 ## Auto-update
 
