@@ -32,10 +32,16 @@ jobs:
             exit 1
           fi
           echo "Promoviendo ${TAG} a release final"
+          # El pre-release se llama "vX.Y.Z (build N)"; a final se le quita el
+          # numero de build y se le ponen las notas generadas desde la release
+          # final anterior. Si generate-notes falla, se promueve igual.
+          NOTES="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+                     -f tag_name="${TAG}" --jq .body 2>/dev/null || true)"
+          ARGS=(--prerelease=false --latest --title "${TAG}")
+          [[ -n "${NOTES}" ]] && ARGS+=(--notes "${NOTES}")
           # -R es obligatorio: este job no hace checkout, y sin el, gh intenta
           # sacar el repo del git local y falla con "not a git repository".
-          gh release edit "${TAG}" -R "${GITHUB_REPOSITORY}" \
-            --prerelease=false --latest
+          gh release edit "${TAG}" -R "${GITHUB_REPOSITORY}" "${ARGS[@]}"
           # Comprobacion: /releases/latest (que ignora los pre-releases) tiene
           # que ser ya este tag. Ojo: `gh release view --json isLatest` NO
           # existe en todas las versiones de gh, asi que se mira por la API.
