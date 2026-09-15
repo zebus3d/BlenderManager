@@ -244,6 +244,28 @@ Son estas (el job `linux:` las instala): `libxcb-icccm4`, `libxcb-image0`,
 ldd dist/BlenderManager/_internal/PySide6/Qt/plugins/platforms/libqxcb.so | grep "not found"
 ```
 
+### El otro gotcha: el OpenSSL del binario no encuentra las CAs
+
+El OpenSSL que va dentro del binario viene de Ubuntu 22.04 y busca las
+autoridades en las rutas de Debian (`/usr/lib/ssl/cert.pem`, `/usr/lib/ssl/certs`).
+En **Arch, Fedora y otras distros esas rutas no existen**, así que *todas* las
+peticiones HTTPS fallaban con:
+
+```
+CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate
+```
+
+Y el fallo quedaba medio tapado, que es lo peor: el listado de compilaciones caía
+al caché de disco (parecía que había red) y el aviso de actualización decía "ya
+tienes la última versión" en lugar de avisar de que no había podido preguntar.
+Se descubrió en Arch (EndeavourOS) al no ofrecer la actualización a la 1.4.0.
+
+Por eso **todas** las llamadas pasan un contexto explícito:
+`services/tls.ssl_context()`, que localiza un almacén de CAs que exista de verdad
+(`/etc/ssl/certs/ca-certificates.crt` y compañía). Si añades una petición HTTP
+nueva, pásale el contexto; no uses `urlopen` a pelo. En el CI (Ubuntu) el fallo
+no se reproduce, así que los tests solo cubren la función, no el síntoma.
+
 ### El spec (`packaging/blendermanager.spec`)
 
 - `datas` solo lleva `src/assets` (ya no hay `views/`).

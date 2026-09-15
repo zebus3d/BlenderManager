@@ -1096,9 +1096,20 @@ class MainWindow(QWidget):
                     tr("A new version is available: {version}", version=tag), 8)
                 updater.open_releases()
             return
+        if not tag:
+            # La comprobación falló (sin red, TLS, cuota de la API...). Decir
+            # aquí "ya tienes la última versión" confunde: es justo lo que hizo
+            # pensar que no había actualización cuando sí la había.
+            if manual:
+                self._show_message(tr("Update check failed"), 5)
+            return
         asset_name = updater.asset_for(self.system)
         asset = next((a for a in assets if a["name"] == asset_name), None)
-        if tag and asset and updater.is_newer(self.current_version, tag):
+        if asset is None:
+            if manual:
+                self._show_message(tr("No update for this platform"), 5)
+            return
+        if updater.is_newer(self.current_version, tag):
             self._update_assets = assets
             self._show_update_available(tag, asset)
         elif manual:
