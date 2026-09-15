@@ -249,22 +249,35 @@ El AppImage resultante pesa ~70 MB.
 
 ## Auto-update
 
-- Lógica en `src/services/updater.py`; UI en `src/ui/widgets/root.py`
+- Lógica en `src/services/updater.py`; UI en `src/ui/widgets/main_window.py`
   (`check_updates`, `_show_update_available`, `_show_source_update`) y controles
-  en el panel de ajustes de `src/views/main.kv`.
+  en el panel de ajustes (dentro de `_build_settings_view`).
 - Preferencia `auto_update` en `src/services/settings.py` (por defecto activada).
 - Aplicación por plataforma: Linux AppImage reemplaza `$APPIMAGE`; Windows
   extrae a staging y relanza el binario nuevo con `--apply-update`; macOS y no
   soportados solo avisan.
 - **Modo fuente**: al correr con `python3 src/main.py` no hay binario que
   reemplazar, así que la actualización es `git pull --ff-only` + reinicio
-  (`updater.source_update` / `relaunch_source`). Solo aplica si hay `.git` en
-  `APP_DIR`; sin él no se ofrece actualización automática. Compara contra el
-  último tag del checkout (`source_tag`) para no ofrecer la misma versión en
-  cada arranque. Si hay cambios locales sin confirmar no toca nada y lo avisa
-  en el diálogo.
-- Los diálogos usan `AppPopup`/`AppProgressBar` (reglas en `views/dialogs.kv`),
-  no los widgets por defecto de Kivy.
+  (`updater.source_update` / `relaunch_source`, con `AppDialog` propio). Solo
+  aplica si hay `.git` en `APP_DIR`.
+  - **No se avisa al arrancar**: un checkout de desarrollo va por delante del
+    último tag, así que compararlo con la última release publicada ofrecería
+    "actualizar" a un binario que puede ser más viejo que el código que corre.
+    La comprobación automática se salta y el `git pull` solo se ofrece cuando el
+    usuario pulsa "Check for updates now".
+  - La versión que se muestra (título y Ajustes) es el **describe** del
+    checkout, no el tag: `app_version()` usa `source_describe()`, así que en
+    master limpio sale `1.2.0` y en una rama por delante,
+    `1.2.0-19-g24a0b43`. El tag a secas (`source_tag`) engañaba: decía "1.2.0"
+    con 19 commits de cambios aplicados.
+  - `source_update` distingue `"ok"`, `"up-to-date"` (el pull no movió HEAD),
+    `"dirty"` (cambios locales sin confirmar: no toca nada y lo avisa) y
+    `"failed"`.
+  - El diálogo es **modal**, así que para reiniciar hay que cerrarlo
+    (`dialog.accept()`) antes de cerrar la ventana; si no, `exec()` no devuelve
+    y el bucle de eventos no termina.
+- Los diálogos son propios (`AppDialog` en `ui/widgets/dialogs.py`), no
+  `QMessageBox`: el estilo nativo claro desentona con el tema oscuro.
 - **Bit de ejecución**: `downloader.py` hace `chmod +x` al fichero descargado
   (`mode | 0o111`) tras renombrar el `.part`. Sin esto, si el self-replace falla,
   el fallback "Downloaded to … Open it to install" apunta a un `.AppImage` a

@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSlider,
     QStackedWidget,
     QVBoxLayout,
@@ -60,7 +61,7 @@ from ui.widgets.cards import (
     GridInstalledCard,
     InstalledCard,
 )
-from ui.widgets.dialogs import confirm, show_error, update_available
+from ui.widgets.dialogs import AppDialog, confirm, show_error, update_available
 
 PLATFORMS = {"GNU/Linux": "linux", "Windows": "windows", "macOS": "darwin"}
 PLATFORM_LABELS = {value: key for key, value in PLATFORMS.items()}
@@ -88,6 +89,7 @@ class MainWindow(QWidget):
     extract_done = Signal(str)
     update_result = Signal(str, object, bool)
     update_applied = Signal(str)
+    source_update_done = Signal(bool, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -117,7 +119,7 @@ class MainWindow(QWidget):
         try:
             self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(self.settings.zoom)))
         except (TypeError, ValueError):
-            self.zoom = 1.0
+            self.zoom = 0.8
 
         self.view = "store"
         self.channel = "all"
@@ -139,8 +141,15 @@ class MainWindow(QWidget):
         self._search_timer.setSingleShot(True)
         self._search_timer.timeout.connect(self._apply_search)
         self._pending_search = ""
+        # Reconstruir la rejilla en CADA tick del slider la hace parpadear (se
+        # destruyen y recrean todas las tarjetas decenas de veces por segundo).
+        # Actualizamos la etiqueta al instante, pero la rejilla solo al parar.
+        self._zoom_timer = QTimer(self)
+        self._zoom_timer.setSingleShot(True)
+        self._zoom_timer.timeout.connect(self._apply_zoom)
         self._update_checking = False
         self._auto_checked = False
+        self._source_dialog = None
 
         # Conectamos las señales de los hilos ANTES de montar la UI.
         self.builds_loaded.connect(self._on_builds_loaded)
@@ -149,6 +158,7 @@ class MainWindow(QWidget):
         self.extract_done.connect(self._on_extract_done)
         self.update_result.connect(self._on_update_result)
         self.update_applied.connect(self._on_update_applied)
+        self.source_update_done.connect(self._on_source_update_done)
 
         self._build_ui()
         QTimer.singleShot(100, lambda: self.refresh(force=False))
@@ -423,27 +433,40 @@ class MainWindow(QWidget):
         self.status_label = QLabel(tr("Ready"))
         self.status_label.setObjectName("Muted")
         lay.addWidget(self.status_label)
+
+        # Progreso + porcentaje + cancelar van en su PROPIO contenedor con
+        # stretch, y no sueltos en el pie: un widget OCULTO no aporta su stretch
+        # al layout, así que si el progreso iba suelto, al ocultarse el zoom se
+        # quedaba a la izquierda y el pie se descolocaba. Con el contenedor
+        # (siempre visible) el zoom queda pegado a la derecha en los dos casos.
+        self.progress_box = QWidget()
+        self.progress_box.setObjectName("HeaderTools")  # fondo transparente
+        progress_lay = QHBoxLayout(self.progress_box)
+        progress_lay.setContentsMargins(0, 0, 0, 0)
+        progress_lay.setSpacing(12)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setFixedHeight(12)
         self.progress.setValue(0)
         # Solo se muestra mientras hay una descarga en curso.
         self.progress.setVisible(False)
-        lay.addWidget(self.progress, 1)
+        progress_lay.addWidget(self.progress, 1)
         self.percent = QLabel("")
         self.percent.setVisible(False)
-        lay.addWidget(self.percent)
+        progress_lay.addWidget(self.percent)
         self.cancel_btn = CardButton(tr("Cancel"))
         self.cancel_btn.clicked.connect(self.cancel_download)
         self.cancel_btn.setVisible(False)
-        lay.addWidget(self.cancel_btn)
-        # Slider + su porcentaje, en un contenedor para ocultarlos juntos (solo
-        # aplican en modo rejilla y fuera de los ajustes).
+        progress_lay.addWidget(self.cancel_btn)
+        lay.addWidget(self.progress_box, 1)
+
+        # Zoom: slider + porcentaje, juntos y pegados al borde derecho.
         self.zoom_box = QWidget()
         self.zoom_box.setObjectName("HeaderTools")  # fondo transparente (QSS)
+        self.zoom_box.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         zoom_lay = QHBoxLayout(self.zoom_box)
         zoom_lay.setContentsMargins(0, 0, 0, 0)
-        zoom_lay.setSpacing(8)
+        zoom_lay.setSpacing(6)
         self.zoom_slider = QSlider(Qt.Horizontal)
         self.zoom_slider.setRange(int(MIN_ZOOM * 100), int(MAX_ZOOM * 100))
         self.zoom_slider.setValue(int(self.zoom * 100))
@@ -457,7 +480,7 @@ class MainWindow(QWidget):
         self.zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._update_zoom_label()
         zoom_lay.addWidget(self.zoom_label)
-        lay.addWidget(self.zoom_box)
+        lay.addWidget(self.zoom_box, 0, Qt.AlignRight)
         return footer
 
     def _update_zoom_label(self) -> None:
@@ -538,6 +561,11 @@ class MainWindow(QWidget):
     def set_zoom(self, value: float) -> None:
         self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(value)))
         self._update_zoom_label()
+        # Guardar y reconstruir solo cuando el usuario suelta el slider: hacerlo
+        # en cada tick provoca parpadeo (y escribe el JSON sin necesidad).
+        self._zoom_timer.start(120)
+
+    def _apply_zoom(self) -> None:
         self.settings.zoom = self.zoom
         self.settings.save()
         self._rebuild_store()
@@ -586,6 +614,15 @@ class MainWindow(QWidget):
             self._resize_timer.timeout.connect(self._reflow)
         self._resize_timer.start(200)
 
+    def closeEvent(self, event):
+        """Vuelca el zoom pendiente: con el amortiguado, cerrar justo después de
+        mover el slider podía perder el valor (aún no había saltado el timer)."""
+        if self._zoom_timer.isActive():
+            self._zoom_timer.stop()
+            self.settings.zoom = self.zoom
+            self.settings.save()
+        super().closeEvent(event)
+
     def _reflow(self) -> None:
         if self.layout_mode == "grid":
             self._rebuild_store()
@@ -596,6 +633,11 @@ class MainWindow(QWidget):
             item = grid.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                # Sacarla del layout NO la oculta: sigue dibujándose en su
+                # posición vieja hasta que el bucle procese el deleteLater, así
+                # que durante un frame se veían las tarjetas viejas encima de
+                # las nuevas. setParent(None) la desliga y desaparece ya.
+                widget.setParent(None)
                 widget.deleteLater()
 
     def _columns_for(self, scroll: QScrollArea, card_width: int) -> int:
@@ -863,6 +905,13 @@ class MainWindow(QWidget):
 
     # ------------------------------------------------------------- updates
     def check_updates(self, manual: bool = False) -> None:
+        # Modo fuente: lo que corre es el checkout y compararlo con una release
+        # no dice nada (una rama de desarrollo va por delante del último tag).
+        # Al arrancar no avisamos; si el usuario lo pide a mano, ofrecemos
+        # ``git pull``, que es la actualización de verdad. Sin ``.git`` no hay
+        # nada que actualizar: tampoco avisamos.
+        if not getattr(sys, "frozen", False) and not manual:
+            return
         if self._update_checking:
             return
         self._update_checking = True
@@ -875,6 +924,16 @@ class MainWindow(QWidget):
 
     def _on_update_result(self, tag: str, assets, manual: bool) -> None:
         self._update_checking = False
+        if not getattr(sys, "frozen", False):
+            if updater.source_root() is not None:
+                # Checkout git: sin binario que reemplazar, git pull + reinicio.
+                self._show_source_update(tag)
+            elif manual and tag:
+                # Sin git no hay nada que aplicar: al menos, la release abierta.
+                self._show_message(
+                    tr("A new version is available: {version}", version=tag), 8)
+                updater.open_releases()
+            return
         asset_name = updater.asset_for(self.system)
         asset = next((a for a in assets if a["name"] == asset_name), None)
         if tag and asset and updater.is_newer(self.current_version, tag):
@@ -882,6 +941,68 @@ class MainWindow(QWidget):
             self._show_update_available(tag, asset)
         elif manual:
             self._show_message(tr("You already have the latest version."), 5)
+
+    def _show_source_update(self, tag: str) -> None:
+        """Actualización de un checkout en modo fuente: ``git pull`` + reinicio."""
+        if not tag:
+            self._show_message(tr("Update check failed"), 5)
+            return
+        if not updater.is_newer(self.current_version, tag):
+            self._show_message(tr("You already have the latest version."), 5)
+            return
+        message = (tr("A new version is available: {version}", version=tag)
+                   + "\n\n"
+                   + tr("Running from source: the app will run git pull and restart."))
+        dialog = AppDialog(self, tr("Update available"), message)
+        later = dialog.add_button(tr("Later"), on_click=dialog.reject)
+        update = dialog.add_button(tr("Update"), variant="accent")
+        update.clicked.connect(lambda: self._do_source_update(dialog, update, later))
+        dialog.exec()
+
+    def _do_source_update(self, dialog, update_btn, later_btn) -> None:
+        self._source_dialog = dialog
+        update_btn.setEnabled(False)
+        later_btn.setEnabled(False)
+        dialog.body_label.setText(tr("Updating..."))
+
+        def worker():
+            ok, reason = updater.source_update()
+            self.source_update_done.emit(ok, reason)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_source_update_done(self, ok: bool, reason: str) -> None:
+        dialog = getattr(self, "_source_dialog", None)
+        if not ok or reason == "up-to-date":
+            if not ok and reason == "dirty":
+                text = tr("You have local changes. Commit or stash them and try again.")
+            elif not ok:
+                text = tr("Could not update. Run git pull manually.")
+            else:
+                text = tr("You already have the latest version.")
+            if dialog is not None:
+                dialog.body_label.setText(text)
+                for button in dialog.findChildren(QPushButton):
+                    button.setEnabled(True)
+            return
+        if dialog is not None:
+            dialog.body_label.setText(tr("Restarting..."))
+        self._set_status(tr("Restarting..."))
+        # El diálogo es modal: hay que cerrarlo para que ``exec()`` devuelva y
+        # el cierre de la ventana llegue a terminar el bucle de eventos.
+        QTimer.singleShot(800, self._restart_from_source)
+
+    def _restart_from_source(self) -> None:
+        dialog = getattr(self, "_source_dialog", None)
+        if not updater.relaunch_source():
+            if dialog is not None:
+                dialog.body_label.setText(tr("Update downloaded. Restart the app."))
+                for button in dialog.findChildren(QPushButton):
+                    button.setEnabled(True)
+            return
+        if dialog is not None:
+            dialog.accept()
+        self.close()
 
     def _show_update_available(self, tag: str, asset) -> None:
         update_available(self, tag, lambda: self._do_update(asset))
