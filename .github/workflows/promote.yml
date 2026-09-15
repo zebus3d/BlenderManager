@@ -33,5 +33,10 @@ jobs:
           fi
           echo "Promoviendo ${TAG} a release final"
           gh release edit "${TAG}" --prerelease=false --latest
-          gh release view "${TAG}" --json tagName,isPrerelease,isLatest \
-            --jq '"listo: " + .tagName + "  prerelease=" + (.isPrerelease|tostring) + "  latest=" + (.isLatest|tostring)'
+          # Comprobacion: /releases/latest (que ignora los pre-releases) tiene
+          # que ser ya este tag. Ojo: `gh release view --json isLatest` NO
+          # existe en todas las versiones de gh, asi que se mira por la API.
+          LATEST="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" \
+                     --jq .tag_name)"
+          echo "latest ahora: ${LATEST}"
+          [[ "${LATEST}" == "${TAG}" ]]
