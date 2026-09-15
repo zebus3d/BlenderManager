@@ -31,7 +31,27 @@ block_cipher = None
 
 datas = [
     (str(SRC / "assets"), "assets"),
-    (str(SRC / "views"), "views"),
+]
+
+# Módulos de Qt que NO usamos. PySide6-Essentials trae muchos; excluirlos evita
+# que PyInstaller arrastre ~100 MB de más (WebEngine, QML, Multimedia...).
+# Solo usamos QtCore, QtGui y QtWidgets.
+QT_EXCLUDES = [
+    "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets",
+    "PySide6.QtWebEngineQuick", "PySide6.QtWebChannel", "PySide6.QtWebSockets",
+    "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtQuickWidgets",
+    "PySide6.QtQuick3D", "PySide6.QtQuickControls2",
+    "PySide6.Qt3DCore", "PySide6.Qt3DRender", "PySide6.Qt3DInput",
+    "PySide6.Qt3DLogic", "PySide6.Qt3DAnimation", "PySide6.Qt3DExtras",
+    "PySide6.QtMultimedia", "PySide6.QtMultimediaWidgets",
+    "PySide6.QtCharts", "PySide6.QtDataVisualization", "PySide6.QtGraphs",
+    "PySide6.QtPdf", "PySide6.QtPdfWidgets", "PySide6.QtSql",
+    "PySide6.QtTest", "PySide6.QtBluetooth", "PySide6.QtNfc",
+    "PySide6.QtPositioning", "PySide6.QtSerialPort", "PySide6.QtSensors",
+    "PySide6.QtDesigner", "PySide6.QtHelp", "PySide6.QtUiTools",
+    "PySide6.QtRemoteObjects", "PySide6.QtScxml", "PySide6.QtStateMachine",
+    "PySide6.QtSpatialAudio", "PySide6.QtTextToSpeech", "PySide6.QtHttpServer",
+    "shiboken6.Shiboken",
 ]
 
 a = Analysis(
@@ -42,7 +62,7 @@ a = Analysis(
     hiddenimports=[],
     hookspath=[],
     runtime_hooks=[],
-    excludes=[],
+    excludes=QT_EXCLUDES,
     cipher=block_cipher,
     noarchive=False,
 )
@@ -58,7 +78,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    # UPX puede romper algunas librerías de Kivy/SDL, así que lo desactivamos.
+    # UPX puede romper librerías nativas (Qt sobre todo), así que lo desactivamos.
     upx=False,
     console=False,
     disable_windowed_traceback=False,
