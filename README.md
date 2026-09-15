@@ -1,19 +1,20 @@
 # Blender Downloads Manager
 
-A desktop app (built with **Python + Kivy**) to **discover, download, organize
-and launch** [Blender](https://www.blender.org/) builds: stable, LTS, daily and
-the official experimental branches. It is cross-platform (Linux, Windows and
-macOS) and designed to be **portable**: once packaged, users don't need to
-install anything.
+A desktop app (built with **Python + PySide6/Qt**) to **discover, download,
+organize and launch** [Blender](https://www.blender.org/) builds: stable, LTS,
+daily and the official experimental branches. It is cross-platform (Linux,
+Windows and macOS) and designed to be **portable**: once packaged, users don't
+need to install anything.
 
 ![Grid view](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/store_grid.png)
 
 ## Features
 
-- **Build store** with cards and icons, channel filters (LTS, Stable, LTS + Stable,
-  Daily, Experimental) and search by version or branch.
+- **Build store** with cards and icons, channel filters (LTS, Stable, Daily,
+  Experimental) and search by version or branch.
 - **Grid or list view**, with a **zoom slider** to choose the icon size
-  (Dolphin-style).
+  (Dolphin-style). `Ctrl +` / `Ctrl -` change it from the keyboard and `Ctrl 0`
+  (or `Ctrl` + click on the slider) goes back to the default size.
 - **Automatic detection** of your operating system and architecture.
 - **Download for another platform or architecture**: pick Windows, macOS or ARM64
   in the filter bar to grab a build for a friend or a USB stick, not just for the
@@ -23,7 +24,8 @@ install anything.
   published as `.dmg`, which is not extracted: the app downloads it, reveals it
   in Finder and tells you to open it.
 - **Installed versions**: launch or uninstall them from the app. The filters and
-  search apply to them too, and they are highlighted in the store.
+  search apply to them too, and they are highlighted in the store so you can tell
+  at a glance what you already have.
 - **Blender runs detached**: closing the manager does **not** close the Blender
   instances you launched from it.
 - **Release notes one click away**: every build card has a small blue **i** that
@@ -42,18 +44,18 @@ install anything.
 ## A small, readable codebase
 
 Beyond being a useful tool, this project is meant to be **read and learned
-from**. It is a complete desktop application in about 4,000 lines of Python and
-Kivy, split into clear layers:
+from**. It is a complete desktop application in about 4,000 lines of Python,
+split into clear layers:
 
 - **`model/`** — plain data classes (`Build`, `InstalledBuild`).
 - **`services/`** — the real work (API, downloads, extraction, settings...).
-  They know nothing about Kivy, so they can be tested without a window.
-- **`ui/` + `views/`** — the interface. `.kv` files describe how things *look*;
-  Python describes what they *do*.
+  They know nothing about Qt, so they can be tested without a window.
+- **`ui/`** — the interface. `ui/qss.py` is a single Qt stylesheet that holds the
+  whole look; `ui/widgets/` holds the behaviour.
 
-If you are learning Python or Kivy, start with the guides in
-[`doc/`](doc/README.md) (in Spanish): they walk through the architecture, the
-Kivy concepts used, the design system and a full worked example of adding a new
+If you are learning Python or Qt, start with the guides in
+[`doc/`](doc/README.md) (in Spanish): they walk through the architecture, the Qt
+concepts used, the design system and a full worked example of adding a new
 feature. The code comments are in Spanish (Spain) and explain not just *what*
 each part does, but *why* the decisions were made.
 
@@ -72,12 +74,12 @@ to have as little friction as possible, particularly on Linux.
 
 | | **Blender Manager** | **Blender Launcher V2** |
 |---|---|---|
-| UI toolkit | Kivy (no Qt) | Qt-based |
+| UI toolkit | Qt Widgets (PySide6) | Qt-based |
 | Focus | Official builds only | Official builds, forks and experimental branches |
 | Views | Grid **and** list, with a zoom slider | Library / downloads pages |
 | Languages | English and Spanish | English |
-| Linux download | One AppImage (~50 MB) | Two Linux zips (~95-107 MB), pick the right one |
-| Running from source | System Python + Kivy | Python + PySide/Qt dependencies |
+| Linux download | One AppImage (~70 MB) | Two Linux zips (~95-107 MB), pick the right one |
+| Running from source | Python + PySide6 | Python + PySide/Qt dependencies |
 
 > A note on **experimental branches**: both apps use the same endpoint
 > (`builder.blender.org/download/experimental/`). Blender has barely published
@@ -86,16 +88,16 @@ to have as little friction as possible, particularly on Linux.
 
 ### Why it may suit you better on Linux
 
-- **One file, no install.** `BlenderManager-x86_64.AppImage` (~50 MB) is the
+- **One file, no install.** `BlenderManager-x86_64.AppImage` (~70 MB) is the
   whole app. Blender Launcher V2 ships two different Linux zips (`Linux_x64` and
   `Ubuntu_x64`, ~95-107 MB) and you have to know which one matches your system.
-- **No Qt to fight with.** Kivy renders with OpenGL and carries its own widgets,
-  so there is no Qt platform plugin to install, no `qt.qpa.plugin` error and no
-  mismatch between the bundled Qt and the system one — the classic reason a Qt
-  app refuses to open on Arch or on an older Ubuntu.
-- **Runs from source with the system Python.** `python3 src/main.py` needs only
-  Kivy (`sudo pacman -S python-kivy`); everything else is the standard library.
-  No virtualenv, no compiled dependencies, no lockfile.
+- **Nothing to fight with on the graphics side.** Qt Widgets paints with its
+  **raster engine (CPU)**, so the app does not touch OpenGL: no Mesa version to
+  match, no `No matching FB config found` on a modern Wayland session, and the
+  same AppImage works on Arch and on an older Ubuntu.
+- **Runs from source with a virtualenv.** `./run.sh` creates it and launches the
+  app; the only dependency is PySide6. Downloads, extraction and the Blender API
+  use the standard library.
 - **Updates the way you installed it.** The AppImage replaces itself and
   restarts; a git checkout runs `git pull --ff-only` and restarts. Either way you
   never go back to the browser to update.
@@ -103,36 +105,23 @@ to have as little friction as possible, particularly on Linux.
 
 ## Running from source
 
-Requirements: **Python 3.12 or newer** and **Kivy**. Nothing else is needed:
-downloads, extraction and the Blender API use the standard library.
-
-### 1. Get the code
+Requirements: **Python 3.12 or newer**. The only dependency is **PySide6**, which
+is installed for you by the launcher script:
 
 ```bash
 git clone https://github.com/zebus3d/BlenderManager.git
 cd BlenderManager
+./run.sh
 ```
 
-### 2. Install Kivy
-
-**Arch Linux** (recommended: Kivy compiled for the system Python):
-
-```bash
-sudo pacman -S python-kivy
-```
-
-**Other Linux distros, Windows or macOS** (virtual environment):
+`run.sh` creates `.venv` on first run and installs `requirements.txt`
+(PySide6-Essentials) into it. To do it by hand:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-### 3. Launch the app
-
-```bash
-python3 src/main.py
+python src/main.py
 ```
 
 The build store opens on start. The **first time**, if you already have installed
@@ -140,21 +129,14 @@ builds in the destination folder, it opens on the **Installed** tab; otherwise i
 opens the **Store**. The default destination is `~/Descargas/Blenders` (change it
 in **Settings**).
 
-> If you use a virtual environment, activate it first
-> (`source .venv/bin/activate`) and use `python` instead of `python3`.
-
 ### Command-line options
 
 ```bash
-python3 src/main.py                     # open the UI
-python3 src/main.py --debug             # UI with verbose logging
-python3 src/main.py --smoke             # list builds in the console (no window)
-python3 src/main.py --watch             # hot-reload .kv/theme on save (development)
-python3 src/main.py --screenshot r.png  # start, save a screenshot and quit
+python src/main.py                     # open the UI
+python src/main.py --debug             # UI with verbose logging
+python src/main.py --smoke             # list builds in the console (no window)
+python src/main.py --screenshot r.png  # start, save a screenshot and quit
 ```
-
-`--watch` is very handy while tweaking the interface: save a `.kv` file and the
-window updates itself, without restarting.
 
 ## Portable mode
 
@@ -165,11 +147,13 @@ in that same folder instead of the user's config directory.
 ## Tests
 
 ```bash
-python3 -m unittest discover -t . -s tests -v
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest discover -t . -s tests
 ```
 
-The tests run without a window and cover the data model and the services (API
-filtering, safe extraction, settings, updates...).
+The UI tests run with Qt's **offscreen** plugin, so they need no display (that is
+what CI uses too). They cover the data model, the services (API filtering, safe
+extraction, settings, updates) and the window logic that can be checked without a
+screen: filters, grid columns, zoom and the dialogs.
 
 ## Packaging
 
@@ -188,72 +172,80 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 `.github/workflows/build.yml` runs the tests and produces artifacts for **Linux**
 (`.AppImage`), **Windows** (`.zip`) and **macOS** (compressed `.app`).
 
-- On every push to `master` it publishes a **pre-release** with a per-build
-  version (e.g. `v1.1.42`), so every compilation is downloadable from Releases.
-- `.github/workflows/promote.yml` turns a pre-release into the **stable Release**
-  with one click (Actions → *promote* → *Run workflow*). It reuses the binaries
-  that were already built and verified, so the version baked into them keeps
-  matching the tag.
-- Pushing a `vX.Y.Z` tag also publishes a **stable Release**, rebuilding the
-  binaries with that version.
-- Only stable releases trigger the in-app auto-update, because the app checks
-  `.../releases/latest`, which ignores pre-releases.
-- When running from source, the in-app update runs `git pull --ff-only` on a
-  clean checkout and restarts the app instead of downloading a binary.
+- **Every push to `master` publishes a final release** with a per-build version
+  (e.g. `v1.2.34`), marked as *latest*. There is no pre-release channel and no
+  promotion step: each commit is a release.
+- The in-app auto-update only looks at the *latest* release, so it fires on the
+  next launch after every push. That is intentional.
+- Pushing a `vX.Y.Z` tag publishes a release with that exact version. Never
+  re-tag binaries that were built for another version: the version is baked into
+  the executable, so the app would update itself in a loop.
+- **Running from source never prompts for an update**: a checkout is ahead of the
+  last tag by definition, so comparing it with the latest release would offer to
+  "update" to a binary that may be older than the code you are running. The title
+  shows the real state of the checkout (`1.2.0-19-g24a0b43`), and
+  **Settings → Check for updates now** runs `git pull --ff-only` and restarts.
 
 The binaries are **not** committed to the repository; they are downloadable from
 the Release (or from the workflow run).
 
-#### Why the Linux build runs in an Arch container
+#### Why the Linux build is a plain Ubuntu 22.04 job
 
-The `linux:` job runs on `runs-on: ubuntu-22.04` but inside a container
-`archlinux:latest` (with `--privileged`). This is **intentional and not a typo**:
-
-Kivy 2.3.1's pip wheel bundles `Kivy.libs/libSDL2-2-d9872e50.0.so.0.3000.7`
-(SDL2 2.30.0.7). That SDL2 has a known incompatibility with Mesa 26 + Wayland:
-on a Wayland session running through Xwayland, it asks GLX for a config with
-`DRAWABLE_TYPE=WINDOW` and `STENCIL=8`, and gets 0 results, producing this
-error on launch:
+Earlier versions of this app used **Kivy**, which renders through OpenGL via
+SDL2. Its bundled SDL2 asked Xwayland for a framebuffer config with `STENCIL=8`
+and got zero results on **Mesa 25/26** (Linux Mint 22, Arch/CachyOS), so the
+window never opened:
 
 ```
 Window: Provider: sdl2
-Window: Provider: x11(['window_sdl2'] ignored)
 No matching FB config found
 ```
 
-Arch Linux's `python-kivy` package is built against the **system SDL2 2.32+**,
-which knows how to fall back to EGL on Wayland and works in both X11 and
-Wayland. So we install Kivy via `pacman -S python-kivy` (system package, ABI
-matches the system SDL2) and only pull `pyinstaller` from pip. The trade-off is
-that PyInstaller bundles the system graphics libs (`libGL`, `libEGL`,
-`libwayland-*`, glslang, gstgl, glycin...) alongside SDL2, so the resulting
-AppImage is **~170 MB** instead of the ~50 MB it would be on Ubuntu.
+Building against Arch's system SDL2 2.32 worked around it, but PyInstaller then
+bundled the whole graphics stack and the AppImage grew to ~170 MB.
 
-This workaround is necessary until [Kivy 3.0 ships with SDL3](https://github.com/kivy/kivy/milestones)
-(milestone due January 2027). When that happens, revert to plain Ubuntu +
-`pip install kivy==3.0` and remove the `container:` block. The full reasoning,
-including a reproducible validation recipe with `podman`, is documented in
-`AGENTS.md` under "CI en contenedor Arch".
+The UI now runs on **Qt Widgets**, which paints with the **raster engine (CPU)**
+by default: no OpenGL, no Mesa version to match, nothing to bundle. So the job is
+a plain `ubuntu-22.04` runner, with no container and no SDL2 step.
+
+The one thing that still has to be right is the Qt `xcb` platform plugin: Qt
+loads it even when it renders on the CPU, and its dependencies must be installed
+**on the runner** so PyInstaller bundles them. If they are missing, the AppImage
+dies on the user's machine with:
+
+```
+qt.qpa.plugin: Could not load the Qt platform plugin "xcb"
+```
+
+The job installs `libxcb-icccm4`, `libxcb-image0`, `libxcb-keysyms1`,
+`libxcb-randr0`, `libxcb-render-util0`, `libxcb-shape0`, `libxcb-xinerama0`,
+`libxcb-xkb1`, `libxkbcommon-x11-0` and `libxcb-cursor0` (the last one is
+required since Qt 6.5).
 
 If you change the CI Linux job:
 
-1. Build the AppImage locally with `podman` (or the actual container image the
-   CI uses) and verify it opens on a recent KDE Plasma / GNOME Wayland session
-   before pushing.
-2. Check that the resulting `dist/BlenderManager-x86_64.AppImage` is between
-   150 MB and 200 MB (lower means a graphics lib wasn't bundled; higher means
-   you bundled too much).
-3. Make sure `packaging/inject_version.py` was called **before** PyInstaller
-   with the same version the release tag carries — otherwise auto-update will
-   detect a mismatch and loop. The CI workflow does this in step "Inyectar
-   version".
+1. Build the AppImage locally and verify it runs on a recent KDE Plasma / GNOME
+   Wayland session before pushing.
+2. Check that `ldd dist/BlenderManager/_internal/PySide6/Qt/plugins/platforms/libqxcb.so
+   | grep "not found"` prints nothing.
+3. Check the AppImage is around 70 MB (much smaller means a plugin dependency was
+   left out; much bigger means something unnecessary got bundled).
+4. Make sure `packaging/inject_version.py` was called **before** PyInstaller with
+   the same version the release tag carries — otherwise auto-update will detect a
+   mismatch and loop. The CI workflow does this in the "Inyectar version" step.
+
+The full reasoning, with the reproducible `podman` validation recipe, is in
+`AGENTS.md`.
 
 ## Linux requirements
 
 Building on `ubuntu-22.04` means the portable binary needs **glibc 2.35 or
-higher**. The **AppImage** needs nothing installed, although on systems without
-`libfuse2` you have to run it with `--appimage-extract-and-run` (on Arch:
-`sudo pacman -S fuse2`).
+higher** (Ubuntu 22.04+, Debian 12+, Mint 21/22, Fedora 36+, Arch). PySide6
+itself only asks for glibc 2.34, so the floor is set by the embedded Python.
+
+The **AppImage** needs nothing installed, although on systems without `libfuse2`
+you have to run it with `--appimage-extract-and-run` (on Arch: `sudo pacman -S
+fuse2`).
 
 ## Project structure
 
@@ -261,9 +253,10 @@ higher**. The **AppImage** needs nothing installed, although on systems without
 src/
   main.py            # entry point and arguments
   paths.py           # paths (source vs. packaged)
+  version.py         # __version__ (the CI rewrites it from the tag)
   i18n.py            # English/Spanish translations
   model/build.py     # data model (Build, InstalledBuild)
-  services/
+  services/          # UI-independent (imports no Qt):
     api.py           # queries and caches Blender's JSON API
     detector.py      # operating system and architecture
     settings.py      # persistent settings and portable mode
@@ -271,29 +264,32 @@ src/
     extractor.py     # safe tar/zip extraction
     installed.py     # scans installed versions
     launcher.py      # launches Blender (detached process)
-    updater.py       # checks and applies updates
+    updater.py       # checks and applies updates (binary or git pull)
   ui/
-    theme.py         # palette, colors and icon font
+    qss.py           # the whole look: one Qt stylesheet
+    theme.py         # colour tokens (measured WCAG contrast)
     icons.py         # Font Awesome glyphs
-    tooltip.py       # tooltip / hover system
-    widgets/         # Python widgets, split by topic:
-                     #   basic, spinners, dialogs, cards, root (controller)
-  views/             # declarative UI (Kivy Language), one .kv per group:
-                     #   widgets.kv, dialogs.kv, cards.kv, main.kv
+    fonts.py         # icon font loading / glyph_icon()
+    widgets/         # buttons, cards, dialogs and the main window
   assets/            # Blender logo, app icon and icon font
 doc/                 # architecture guide in Spanish (start at doc/README.md)
-tests/               # unit tests (unittest)
+tests/               # unit tests (unittest, UI with Qt's offscreen plugin)
 packaging/           # PyInstaller spec, AppImage script and .desktop
+run.sh               # development launcher (creates .venv if missing)
 dist/                # build output (binaries ignored by git)
 ```
 
 ## Credits
 
-This project finishes two earlier attempts of mine (`BlenderDownloader` in Qt and
+This project finishes earlier attempts of mine (`BlenderDownloader` in Qt and
 `BlenderManager` in Kivy) and is inspired by
 [Blender Launcher V2](https://github.com/Victor-IX/Blender-Launcher-V2): the idea
 of using Blender's JSON API and the LTS version map comes from it, which avoids
 the fragile scraping of the first versions.
+
+The Kivy version worked, but its OpenGL/SDL2 requirement meant a different
+combination of Mesa and SDL2 for every distro; the UI was ported to Qt Widgets
+for that reason alone (see "Why the Linux build is a plain Ubuntu 22.04 job").
 
 The Blender logo is a trademark of the [Blender Foundation](https://www.blender.org/).
 Icons are from [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
