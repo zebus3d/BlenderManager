@@ -7,6 +7,7 @@ controlador, el cálculo de columnas de la rejilla y los diálogos.
 
 import os
 import unittest
+from pathlib import Path
 
 # El plugin offscreen tiene que estar fijado ANTES de crear QApplication.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -142,6 +143,35 @@ class LayoutTests(unittest.TestCase):
         window.set_zoom(0.01)
         self.assertEqual(window.zoom, MIN_ZOOM)
 
+    def test_zoom_por_defecto_es_80(self):
+        from services.settings import Settings
+
+        self.assertEqual(Settings().zoom, 0.8)
+
+    def test_zoom_amortiguado(self):
+        from PySide6.QtTest import QTest
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.builds = [_build("5.1.2", "v51", "stable")]
+        window.resize(900, 600)
+        window.layout_mode = "grid"
+        window.zoom = 0.8
+        window._rebuild_store()
+        before = window.store_grid.itemAt(0).widget().minimumHeight()
+        window.set_zoom(1.4)
+        # El valor va al instante, pero la rejilla NO se reconstruye todavía:
+        # hacerlo en cada tick del slider es lo que la hacía parpadear.
+        self.assertEqual(window.zoom, 1.4)
+        self.assertTrue(window._zoom_timer.isActive())
+        self.assertEqual(window.store_grid.itemAt(0).widget().minimumHeight(),
+                         before)
+        QTest.qWait(300)
+        self.assertFalse(window._zoom_timer.isActive())
+        self.assertNotEqual(window.store_grid.itemAt(0).widget().minimumHeight(),
+                            before)
+
     def test_columnas_grid_crecen_con_el_ancho(self):
         from ui.widgets.main_window import MainWindow
 
@@ -153,6 +183,81 @@ class LayoutTests(unittest.TestCase):
         wide = window._columns_for(window.store_scroll, 300)
         self.assertGreaterEqual(wide, narrow)
         self.assertGreaterEqual(narrow, 1)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class SourceUpdateUiTests(unittest.TestCase):
+    """Modo fuente: la actualización es ``git pull``, no un binario."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def test_no_avisa_al_arrancar_en_modo_fuente(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window._update_checking = False
+        # En tests no hay binario (sys.frozen es False): modo fuente.
+        window.check_updates(manual=False)
+        # Ni hilo ni comprobación: en un checkout no se avisa al arrancar.
+        self.assertFalse(window._update_checking)
+
+    def test_modo_fuente_no_descarga_binario(self):
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with mock.patch.object(main_window.updater, "source_root",
+                               return_value=Path("/tmp/repo")), \
+                mock.patch.object(window, "_show_update_available") as binario, \
+                mock.patch.object(window, "_show_source_update") as fuente:
+            window._on_update_result("v9.9.9", [], True)
+        fuente.assert_called_once()
+        binario.assert_not_called()
+
+    def test_fuente_sin_git_abre_la_release(self):
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with mock.patch.object(main_window.updater, "source_root",
+                               return_value=None), \
+                mock.patch.object(main_window.updater, "open_releases") as abrir, \
+                mock.patch.object(window, "_show_update_available") as binario, \
+                mock.patch.object(window, "_show_message"):
+            window._on_update_result("v9.9.9", [], True)
+        # Sin git no hay nada que aplicar: nada de descargar un binario.
+        abrir.assert_called_once()
+        binario.assert_not_called()
+
+    def test_dialogo_fuente_rehabilita_al_fallar(self):
+        from i18n import tr
+        from ui.widgets.dialogs import AppDialog
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        dialog = AppDialog(window, tr("Update available"), tr("Updating..."))
+        update_btn = dialog.add_button(tr("Update"), variant="accent")
+        later_btn = dialog.add_button(tr("Later"))
+        window._source_dialog = dialog
+        window._on_source_update_done(False, "dirty")
+        # Tras un pull fallido el diálogo explica el motivo y deja reintentar.
+        self.assertEqual(
+            dialog.body_label.text(),
+            tr("You have local changes. Commit or stash them and try again."))
+        self.assertTrue(update_btn.isEnabled())
+        self.assertTrue(later_btn.isEnabled())
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
