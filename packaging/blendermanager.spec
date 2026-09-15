@@ -51,7 +51,8 @@ QT_EXCLUDES = [
     "PySide6.QtDesigner", "PySide6.QtHelp", "PySide6.QtUiTools",
     "PySide6.QtRemoteObjects", "PySide6.QtScxml", "PySide6.QtStateMachine",
     "PySide6.QtSpatialAudio", "PySide6.QtTextToSpeech", "PySide6.QtHttpServer",
-    "shiboken6.Shiboken",
+    # OJO: NO excluir shiboken6 ni shiboken6.Shiboken. PySide6 los necesita
+    # para arrancar ("No module named 'shiboken6.Shiboken'").
 ]
 
 a = Analysis(
