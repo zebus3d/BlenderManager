@@ -135,6 +135,26 @@ class CleanupTests(unittest.TestCase):
         updater.cleanup_partials("/nonexistent/path/xyz")
 
 
+class StartupCleanupTests(unittest.TestCase):
+    """El arranque tiene que limpiar los restos de la sesión anterior.
+
+    Las dos funciones estaban bien y con tests, pero al portar la interfaz se
+    perdió quien las llamaba (vivían en ``root.py``): el AppImage que se
+    descarga en cada actualización, ~73 MB, se quedaba en el caché para siempre.
+    """
+
+    def test_el_arranque_llama_a_las_dos_limpiezas(self):
+        from unittest import mock
+
+        import main
+
+        with mock.patch.object(main.updater, "cleanup_staging") as restos, \
+                mock.patch.object(main.updater, "cleanup_partials") as partes:
+            main._clean_previous_session(mock.Mock(dest_folder="/tmp/blenders"))
+        self.assertTrue(restos.called)
+        partes.assert_called_once_with("/tmp/blenders")
+
+
 class AppImageApplyTests(unittest.TestCase):
     """Self-replace de la AppImage en Linux.
 
