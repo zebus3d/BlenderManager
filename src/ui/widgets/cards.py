@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 from i18n import tr
 from paths import ASSETS_DIR
 from ui import icons
-from ui.widgets.buttons import CardButton, IconLinkButton
+from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
 
 _LOGO = ASSETS_DIR / "images" / "blender_logo.png"
 
@@ -71,6 +71,15 @@ def logo_shadow(widget, size: int):
     effect.setColor(QColor(0, 0, 0, 180))
     widget.setGraphicsEffect(effect)
     return effect
+
+
+def _favorite_star(marked: bool, on_toggle) -> StarButton:
+    """Estrella de favorito de una tarjeta (misma diana que la "i": 24x24)."""
+    star = StarButton(marked, tooltip_on=tr("Remove from favorites"),
+                      tooltip_off=tr("Mark as favorite"))
+    star.setFont(_icon_font())
+    star.toggled.connect(on_toggle)
+    return star
 
 
 def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
@@ -132,9 +141,10 @@ class BaseBuildCard(_HoverCard, QFrame):
 
     action_clicked = Signal(object)   # build
     notes_clicked = Signal(str)       # version
+    favorite_toggled = Signal(object, bool)   # build, marcada
 
     def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
-                 parent=None):
+                 marked: bool = False, parent=None):
         super().__init__(parent)
         self.build = build
         self.installed = installed
@@ -175,12 +185,17 @@ class BaseBuildCard(_HoverCard, QFrame):
         btn.clicked.connect(lambda: self.notes_clicked.emit(self.version))
         return btn
 
+    def _star(self, marked: bool) -> StarButton:
+        return _favorite_star(
+            marked, lambda on: self.favorite_toggled.emit(self.build, on))
+
 
 class BuildCard(BaseBuildCard):
     """Tarjeta en modo lista (una fila por compilación)."""
 
-    def __init__(self, build, installed: bool, zebra: bool, parent=None):
-        super().__init__(build, installed, zebra, parent=parent)
+    def __init__(self, build, installed: bool, zebra: bool,
+                 marked: bool = False, parent=None):
+        super().__init__(build, installed, zebra, marked=marked, parent=parent)
         self.setFixedHeight(78)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(16, 11, 12, 11)
@@ -207,6 +222,7 @@ class BuildCard(BaseBuildCard):
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
+        lay.addWidget(self._star(marked))
         lay.addWidget(self._info())
 
         action = CardButton(
@@ -239,8 +255,9 @@ class GridBuildCard(BaseBuildCard):
     """Tarjeta en modo rejilla (icono grande y botón debajo)."""
 
     def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
-                 parent=None):
-        super().__init__(build, installed, zebra, zoom, parent=parent)
+                 marked: bool = False, parent=None):
+        super().__init__(build, installed, zebra, zoom, marked=marked,
+                         parent=parent)
         self.setFixedHeight(_grid_height(zoom, with_badge=installed))
         lay = QVBoxLayout(self)
         m = int(14 * zoom)
@@ -274,6 +291,7 @@ class GridBuildCard(BaseBuildCard):
         row = QHBoxLayout()
         row.setSpacing(int(6 * zoom))
         row.addStretch()
+        row.addWidget(self._star(marked))
         row.addWidget(self._info())
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
@@ -295,8 +313,9 @@ class InstalledCard(_HoverCard, QFrame):
     launch_clicked = Signal(object)   # entry
     delete_clicked = Signal(object)   # entry
     notes_clicked = Signal(str)       # version
+    favorite_toggled = Signal(object, bool)   # entry, marcada
 
-    def __init__(self, entry, zebra: bool, parent=None):
+    def __init__(self, entry, zebra: bool, marked: bool = False, parent=None):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -320,6 +339,8 @@ class InstalledCard(_HoverCard, QFrame):
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
+        lay.addWidget(_favorite_star(
+            marked, lambda on: self.favorite_toggled.emit(entry, on)))
         info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
         info.setFont(_icon_font())
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
@@ -346,8 +367,10 @@ class GridInstalledCard(_HoverCard, QFrame):
     launch_clicked = Signal(object)
     delete_clicked = Signal(object)
     notes_clicked = Signal(str)
+    favorite_toggled = Signal(object, bool)   # entry, marcada
 
-    def __init__(self, entry, zebra: bool, zoom: float = 1.0, parent=None):
+    def __init__(self, entry, zebra: bool, zoom: float = 1.0,
+                 marked: bool = False, parent=None):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -379,6 +402,8 @@ class GridInstalledCard(_HoverCard, QFrame):
 
         row = QHBoxLayout()
         row.setSpacing(int(6 * zoom))
+        row.addWidget(_favorite_star(
+            marked, lambda on: self.favorite_toggled.emit(entry, on)))
         info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
         info.setFont(_icon_font())
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))

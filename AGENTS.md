@@ -57,6 +57,20 @@ excluye para no confundir. En `fetch_builds` va en su propio `try` (un fallo ah�
 no debe tumbar el listado normal). `Build.experimental` se cachea con `asdict` y
 los cachés viejos caen a su valor por defecto.
 
+### Favoritos
+
+No son un canal de Blender: son un filtro **transversal** que el usuario marca
+con la estrella de cada tarjeta. Se guardan en `settings.favorites` como claves
+de `model.build.favorite_key` (**rama|versión**, sin plataforma ni arquitectura
+a propósito: `InstalledBuild` no las guarda, y así marcar 4.5.5 en la tienda
+marca también la instalada). Se guarda la *serie* y no la build exacta para que
+un favorito sobre una diaria no se pierda cuando Blender publica la siguiente.
+
+El canal `"favorites"` lo resuelven las mismas funciones puras que el resto
+(`api.filter_builds`, `installed.filter_installed`) con el argumento
+`favorites`; ahí no se excluyen las experimentales, porque manda lo que el
+usuario haya marcado. **No lo filtres en la UI.**
+
 ## Comandos
 
 ```bash
@@ -369,3 +383,12 @@ Dos cosas a tener en cuenta:
 Para una captura: `w.grab().save("/tmp/x.png")` (no depende de GL, a diferencia
 del `Window.screenshot` de Kivy). Y `tests/test_ui.py` trae ejemplos de montar la
 ventana e inyectar builds sin tocar la red.
+
+**Ojo al fijar el zoom en memoria** (lo hace `packaging/capture_docs.py` para que
+las capturas salgan siempre iguales): `closeEvent` vuelca el zoom pendiente en
+`settings.json`, así que un script que haga `window.zoom = 1.0` y no aísle la
+config **deja el zoom cambiado al usuario**. En la app es lo correcto (si cierras
+justo tras mover el slider, se guarda), pero en tests y scripts hay que
+redirigir `settings.config_dir` a un directorio temporal (lo hace el mixin
+`SettingsIsolated` de `tests/test_ui.py` y el `with tempfile` del script de
+capturas).

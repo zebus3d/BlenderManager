@@ -158,15 +158,22 @@ def is_experimental(entry) -> bool:
     return branch != "main" and not branch.startswith("v")
 
 
-def filter_installed(entries, channel: str, search: str = ""):
+def filter_installed(entries, channel: str, search: str = "", favorites=()):
     """Aplica el filtro de canal y la búsqueda a las versiones instaladas.
 
     Es el equivalente de ``api.filter_builds`` para la pestaña de instaladas:
     las experimentales solo salen en su canal y el resto de canales las
     excluyen. Como las instaladas no guardan el "riesgo" de la compilación, lo
     deducimos de su nombre (las diarias llevan 'alpha', 'beta' o 'main').
+
+    Los favoritos comparten clave con la tienda
+    (``model.build.favorite_key``), así que marcar una versión en la tienda la
+    marca también aquí.
     """
-    if channel == "experimental":
+    if channel == "favorites":
+        marked = set(favorites or ())
+        selected = [entry for entry in entries if entry.favorite_key in marked]
+    elif channel == "experimental":
         selected = [entry for entry in entries if is_experimental(entry)]
     else:
         selected = [entry for entry in entries if not is_experimental(entry)]
