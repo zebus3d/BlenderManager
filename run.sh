@@ -17,4 +17,12 @@ if [ ! -x .venv/bin/python ]; then
     .venv/bin/pip install -q -r requirements.txt
 fi
 
+# Silencia el aviso del portal de escritorio: Qt intenta registrarse con el
+# xdg-desktop-portal usando el App ID ("blendermanager") y, al correr desde el
+# código fuente, no hay un blendermanager.desktop instalado en el sistema. Es
+# inofensivo (la app funciona igual), pero ensucia el arranque. En el AppImage
+# el .desktop va dentro (packaging/blendermanager.desktop).
+QT_LOGGING_RULES="qt.qpa.services=false${QT_LOGGING_RULES:+;$QT_LOGGING_RULES}"
+export QT_LOGGING_RULES
+
 exec .venv/bin/python src/main.py "$@"
