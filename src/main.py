@@ -51,6 +51,44 @@ def smoke() -> int:
     return 0
 
 
+def _install_exception_hook() -> None:
+    """Deja constancia (y avisa) cuando un fallo no controlado revienta la UI.
+
+    PySide6 se traga las excepciones que saltan **dentro de un slot**: las
+    imprime por stderr y sigue, así que desde el menú el usuario solo ve que "no
+    pasa nada". Nos pasó con la papelera: reventaba al construir el mensaje del
+    diálogo (concatenar un ``Path`` a un ``str``) y no se borraba nada ni se
+    decía nada. El ``sys.excepthook`` de Python **sí** se llama en ese caso, así
+    que desde aquí lo mandamos al log de la aplicación y lo enseñamos.
+    """
+    import traceback
+
+    from i18n import tr
+    from services.downloader import log
+    from ui.widgets.dialogs import show_error
+
+    def hook(tipo, valor, tb):
+        if issubclass(tipo, KeyboardInterrupt):
+            sys.__excepthook__(tipo, valor, tb)
+            return
+        detalle = "".join(traceback.format_exception(tipo, valor, tb))
+        log(f"unhandled error:\n{detalle}")
+        # Un diálogo como mucho: si algo falla en bucle, el log ya lo tiene todo
+        # y no queremos llenar la pantalla de ventanas.
+        if getattr(hook, "avisando", False):
+            return
+        hook.avisando = True
+        try:
+            show_error(None, tr("Unexpected error"),
+                       f"{tipo.__name__}: {valor}")
+        except Exception:
+            pass
+        finally:
+            hook.avisando = False
+
+    sys.excepthook = hook
+
+
 def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     """Arranca la aplicación Qt."""
     from PySide6.QtCore import QTimer
@@ -59,6 +97,8 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     from services import settings as settings_service
     from ui import fonts, qss
     from ui.widgets.main_window import MainWindow
+
+    _install_exception_hook()
 
     app = QApplication(sys.argv)
     app.setApplicationName("BlenderManager")
