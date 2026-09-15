@@ -70,38 +70,55 @@ counter and `.blend` association.
 
 Blender Manager deliberately does **less**: find a build, download it, launch it.
 The bet is that most people only need the official builds and want that one flow
-to have as little friction as possible, particularly on Linux.
+to have as little friction as possible — so the whole app is built around one
+screen you can read at a glance, and a single file you can drop anywhere on Linux
+and run.
 
 | | **Blender Manager** | **Blender Launcher V2** |
 |---|---|---|
 | UI toolkit | Qt Widgets (PySide6) | Qt-based |
 | Focus | Official builds only | Official builds, forks and experimental branches |
-| Views | Grid **and** list, with a zoom slider | Library / downloads pages |
+| Finding a build | One filter bar, grid **or** list with a zoom slider, installed builds highlighted | Library / downloads pages |
 | Languages | English and Spanish | English |
-| Linux download | One AppImage (~70 MB) | Two Linux zips (~95-107 MB), pick the right one |
+| Linux install | One AppImage (~73 MB): download and run | Two zips (~99 and ~112 MB), pick the right one ([AUR](https://aur.archlinux.org/packages/blender-launcher-v2-bin) on Arch) |
 | Running from source | Python + PySide6 | Python + PySide/Qt dependencies |
 
-> A note on **experimental branches**: both apps use the same endpoint
-> (`builder.blender.org/download/experimental/`). Blender has barely published
-> branch builds since ~2021, so that tab is usually empty. The app keeps it
-> implemented and lights it up automatically if a branch appears.
+> A note on **experimental branches**: both apps read the same endpoint
+> (`builder.blender.org/download/experimental/`). It returns an **empty list**
+> since ~2021 — Blender stopped publishing branch builds — so that tab is
+> normally empty in both. Here it stays implemented and lights itself up if a
+> branch ever appears.
 
 ### Why it may suit you better on Linux
 
-- **One file, no install.** `BlenderManager-x86_64.AppImage` (~70 MB) is the
-  whole app. Blender Launcher V2 ships two different Linux zips (`Linux_x64` and
-  `Ubuntu_x64`, ~95-107 MB) and you have to know which one matches your system.
+- **One file, no install.** `BlenderManager-x86_64.AppImage` (~73 MB) is the whole
+  app: download it, mark it executable, double click. Nothing to unpack and
+  nothing to pick. Blender Launcher V2 ships **two** different Linux zips
+  (`Linux_x64` and `Ubuntu_x64`, ~99 and ~112 MB) and you have to know which one
+  matches your system before you can even start.
 - **Nothing to fight with on the graphics side.** Qt Widgets paints with its
   **raster engine (CPU)**, so the app does not touch OpenGL: no Mesa version to
   match, no `No matching FB config found` on a modern Wayland session, and the
   same AppImage works on Arch and on an older Ubuntu.
+- **Made to be read at a glance.** Big Blender logos, **grid or list view** with
+  a zoom slider (`Ctrl +/-`, `Ctrl 0` for the default size), channel pills and
+  search in one bar, and the builds you already have highlighted with an
+  **"Installed" badge** and a lighter card, so you can tell what you own without
+  reading a thing. Every card has a small **i** that opens that series' release
+  notes, and the app is **bilingual (English/Spanish)**, detected from your
+  locale.
 - **Runs from source with a virtualenv.** `./run.sh` creates it and launches the
   app; the only dependency is PySide6. Downloads, extraction and the Blender API
   use the standard library.
 - **Updates the way you installed it.** The AppImage replaces itself and
   restarts; a git checkout runs `git pull --ff-only` and restarts. Either way you
   never go back to the browser to update.
-- **It speaks Spanish**, detected automatically from your locale.
+- **No dead weight.** Blender's *experimental branches* endpoint has been
+  returning an empty list since ~2021 (checked: `[]`), so that channel is
+  implemented but normally empty — it lights up by itself if a branch ever
+  appears. Third-party forks (Bforartists, UPBGE) are deliberately out of scope:
+  this app manages **official Blender builds only**, and that is exactly why it
+  is this small and this simple.
 
 ## Running from source
 
@@ -232,7 +249,7 @@ If you change the CI Linux job:
    Wayland session before pushing.
 2. Check that `ldd dist/BlenderManager/_internal/PySide6/Qt/plugins/platforms/libqxcb.so
    | grep "not found"` prints nothing.
-3. Check the AppImage is around 70 MB (much smaller means a plugin dependency was
+3. Check the AppImage is around 73 MB (much smaller means a plugin dependency was
    left out; much bigger means something unnecessary got bundled).
 4. Make sure `packaging/inject_version.py` was called **before** PyInstaller with
    the same version the release tag carries — otherwise auto-update will detect a
