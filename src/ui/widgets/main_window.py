@@ -548,15 +548,15 @@ class MainWindow(QWidget):
         return api.filter_builds(builds, self.channel, self.search)
 
     def _filtered_installed(self):
-        result = []
-        for entry in self.installed:
-            if not self.search:
-                result.append(entry)
-                continue
-            haystack = f"{entry.name} {entry.version}".lower()
-            if self.search in haystack:
-                result.append(entry)
-        return result
+        """Aplica canal y búsqueda a las versiones instaladas.
+
+        Igual que en la tienda, usamos la función pura y testeada
+        (``installed_service.filter_installed``) en vez de reimplementarla: la
+        primera versión del port solo miraba la búsqueda y las pastillas de
+        canal no filtraban nada en esta pestaña.
+        """
+        return installed_service.filter_installed(self.installed, self.channel,
+                                                 self.search)
 
     def resizeEvent(self, event):
         """Refluye la rejilla al cambiar el ancho (recalcula columnas)."""
