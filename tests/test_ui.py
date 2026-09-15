@@ -6,6 +6,7 @@ controlador, el cálculo de columnas de la rejilla y los diálogos.
 """
 
 import os
+import sys
 import unittest
 from pathlib import Path
 
@@ -536,6 +537,37 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
         # Sin git no hay nada que aplicar: nada de descargar un binario.
         abrir.assert_called_once()
         binario.assert_not_called()
+
+    def test_si_falla_la_comprobacion_lo_dice(self):
+        from unittest import mock
+
+        from i18n import tr
+        from services import updater
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.current_version = "1.3.0"
+        mensajes = []
+
+        def falso_mensaje(text, timeout=4):
+            mensajes.append(text)
+
+        with mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(window, "_show_message", falso_mensaje), \
+                mock.patch.object(window, "_show_update_available") as disponible:
+            # Sin tag: la comprobacion no llego a hacerse (red, TLS, cuota...).
+            # Antes esto decia "ya tienes la ultima version", que es mentira y
+            # fue lo que hizo pensar que no habia actualizacion cuando si la
+            # habia (paso en Arch: el OpenSSL del binario no encontraba las CAs).
+            window._on_update_result("", [], True)
+            self.assertEqual(mensajes, [tr("Update check failed")])
+            disponible.assert_not_called()
+
+            # Con tag y asset, si ofrece la actualizacion.
+            mensajes.clear()
+            asset = {"name": updater.asset_for(window.system), "url": "http://x"}
+            window._on_update_result("v1.4.0", [asset], True)
+            disponible.assert_called_once()
 
     def test_dialogo_fuente_rehabilita_al_fallar(self):
         from i18n import tr

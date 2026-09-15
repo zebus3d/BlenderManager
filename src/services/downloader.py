@@ -10,6 +10,7 @@ import threading
 import urllib.request
 from pathlib import Path
 
+from services import tls
 from services.settings import cache_dir
 
 USER_AGENT = "BlenderManager/0.2 (+https://github.com/zebus3d/BlenderManager)"
@@ -70,7 +71,10 @@ class Downloader:
             dest.mkdir(parents=True, exist_ok=True)
             final_path = dest / filename
             request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(request, timeout=30) as response:
+            # Con contexto explicito: si no, en Arch no encuentra las CAs y no
+            # se puede descargar nada (ver services/tls.py).
+            with urllib.request.urlopen(request, timeout=30,
+                                        context=tls.ssl_context()) as response:
                 total = int(response.headers.get("Content-Length") or 0)
                 digest = hashlib.sha256()
                 downloaded = 0

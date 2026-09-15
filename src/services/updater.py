@@ -32,6 +32,7 @@ from pathlib import Path
 
 import version
 from paths import APP_DIR
+from services import tls
 from services.downloader import log
 from services.extractor import extract
 from services.settings import cache_dir, write_json_atomic
@@ -259,7 +260,8 @@ def latest_release(force: bool = False, timeout: int = 15):
     request = urllib.request.Request(API_URL, headers=headers)
     new_etag = etag
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout,
+                                     context=tls.ssl_context()) as response:
             payload = json.loads(response.read().decode("utf-8"))
             new_etag = response.headers.get("ETag") or etag
     except urllib.error.HTTPError as error:
@@ -292,7 +294,8 @@ def checksum_for(assets, filename: str, timeout: int = 15):
         return None
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout,
+                                     context=tls.ssl_context()) as response:
             text = response.read().decode("utf-8", "replace")
     except Exception as error:
         log(f"checksum fetch failed: {error}")

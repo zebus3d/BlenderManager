@@ -18,6 +18,7 @@ from dataclasses import asdict, fields
 
 from model.build import Build
 from services.downloader import log
+from services import tls
 from services.settings import cache_dir, write_json_atomic
 
 API_URL = "https://builder.blender.org/download/daily/?format=json&v=2"
@@ -46,7 +47,10 @@ def cache_path():
 
 def _fetch_json(url: str, timeout: int = 20):
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    # El contexto va explicito: el OpenSSL del binario no encuentra las CAs en
+    # distros que no son Debian (ver services/tls.py).
+    with urllib.request.urlopen(request, timeout=timeout,
+                                context=tls.ssl_context()) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
