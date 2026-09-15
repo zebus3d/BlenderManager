@@ -251,6 +251,35 @@ The **AppImage** needs nothing installed, although on systems without `libfuse2`
 you have to run it with `--appimage-extract-and-run` (on Arch: `sudo pacman -S
 fuse2`).
 
+### Tip: the AppImage icon in your file manager
+
+The AppImage carries its own icon (the `.DirIcon` inside it), but whether the
+file manager *shows* it depends on the system, not on the app:
+
+- **KDE / Dolphin**: `kio-extras` already ships the AppImage thumbnailer, but it
+  needs `libappimage`. Check whether it is missing with:
+
+  ```bash
+  ldd /usr/lib/qt6/plugins/kf6/thumbcreator/appimagethumbnail.so | grep appimage
+  # libappimage.so.1.0 => not found   <- this is why you see a generic icon
+  sudo pacman -S libappimage
+  ```
+
+  Then enable it in **Dolphin → Configure Dolphin… → Interface → Previews** and
+  clear the cached failures (`rm -rf ~/.cache/thumbnails/*`).
+
+- **Cinnamon / Nemo** (Linux Mint) and most GTK desktops: works out of the box,
+  courtesy of `xapp-thumbnailers`.
+
+- **Anything else**: you need a thumbnailer that reads `.DirIcon` (e.g. the
+  `appimage-thumbnailer` package).
+
+You can always check what the AppImage has inside with:
+
+```bash
+./BlenderManager-x86_64.AppImage --appimage-extract && ls squashfs-root/
+```
+
 ## Project structure
 
 ```
