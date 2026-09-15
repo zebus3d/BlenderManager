@@ -349,16 +349,17 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         bajas y las filas quedaban desniveladas. En el Kivy original esa fila
         siempre existía (vacía si no estaba instalada).
         """
-        from types import SimpleNamespace
+        from pathlib import Path
 
+        from model.build import InstalledBuild
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
         window.builds = [_build("5.2.1", "v52", "stable"),
                          _build("5.1.2", "v51", "stable")]
-        window.installed = [SimpleNamespace(name="blender-5.2.1", version="5.2.1",
-                                            branch="v52",
-                                            path="/tmp/blender-5.2.1")]
+        window.installed = [InstalledBuild(
+            name="blender-5.2.1", path=Path("/tmp/blender-5.2.1"),
+            version="5.2.1", branch="v52")]
         window.channel = "all"
         window.resize(900, 600)
         window.layout_mode = "grid"
@@ -368,6 +369,29 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         alturas = {window.store_grid.itemAt(i).widget().height()
                    for i in range(window.store_grid.count())}
         self.assertEqual(len(alturas), 1, alturas)
+
+    def test_todas_las_tarjetas_llevan_sombra(self):
+        from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+        from model.build import InstalledBuild
+        from ui.widgets.cards import (BuildCard, GridBuildCard,
+                                      GridInstalledCard, InstalledCard)
+
+        build = _build("5.2.1", "v52", "stable")
+        entry = InstalledBuild(name="blender-5.2.1",
+                               path=Path("/tmp/blender-5.2.1"),
+                               version="5.2.1", branch="v52")
+        tarjetas = [BuildCard(build, False, False),
+                    GridBuildCard(build, False, False, 1.0),
+                    InstalledCard(entry, False),
+                    GridInstalledCard(entry, False, 1.0)]
+        for card in tarjetas:
+            efecto = card.graphicsEffect()
+            self.assertIsInstance(efecto, QGraphicsDropShadowEffect, type(card))
+            # Desplazada abajo a la derecha y con poco contraste.
+            self.assertGreater(efecto.offset().x(), 0, type(card))
+            self.assertGreater(efecto.offset().y(), 0, type(card))
+            self.assertLessEqual(efecto.color().alpha(), 130, type(card))
 
     def test_la_papelera_no_se_queda_sin_icono(self):
         from types import SimpleNamespace

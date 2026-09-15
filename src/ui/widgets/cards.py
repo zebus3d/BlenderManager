@@ -75,17 +75,45 @@ def logo_shadow(widget, size: int):
     rejilla completa sube ~1 ms, nada al lado de lo que cuesta reconstruirla.
 
     El radio y el desplazamiento escalan con el tamaño para que la sombra no se
-    coma el icono cuando el zoom es bajo ni quede ridicula cuando es alto.
+    coma el icono cuando el zoom es bajo ni quede ridicula cuando es alto. Va
+    desplazada abajo a la derecha y con poco contraste: solo busca despegar el
+    logo del fondo, no dibujar un contorno marcado.
     """
     from PySide6.QtGui import QColor
     from PySide6.QtWidgets import QGraphicsDropShadowEffect
 
     effect = QGraphicsDropShadowEffect(widget)
-    effect.setBlurRadius(max(6.0, size * 0.28))
-    effect.setOffset(0, max(1.0, size * 0.07))
-    effect.setColor(QColor(0, 0, 0, 180))
+    effect.setBlurRadius(max(3.0, size * 0.14))
+    offset = max(1.0, size * 0.04)
+    effect.setOffset(offset, offset)
+    effect.setColor(QColor(0, 0, 0, 120))
     widget.setGraphicsEffect(effect)
     return effect
+
+
+def card_shadow(widget) -> None:
+    """Sombra sutil de la tarjeta entera, para despegarla del fondo.
+
+    Misma dirección y contraste que la del logo (abajo a la derecha y leve),
+    pero con desplazamiento fijo y no proporcional al zoom: la tarjeta es mucho
+    más grande que el icono, así que unos pocos píxeles ya se leen como relieve
+    aunque la ampliación suba y no acaban manchando el borde.
+
+    OJO: instalar un ``QGraphicsDropShadowEffect`` obliga a pintar la tarjeta a
+    un pixmap y difuminarlo en cada repintado (incluido el hover), así que se
+    paga. Medido al pintar 60 tarjetas de rejilla de golpe: ~36 ms sin sombra
+    frente a ~63 ms con ella. En uso normal solo se repinta la tarjeta que está
+    bajo el ratón, así que es medio milisegundo, pero conviene saberlo antes de
+    añadir más efectos.
+    """
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+    effect = QGraphicsDropShadowEffect(widget)
+    effect.setBlurRadius(10.0)
+    effect.setOffset(2.0, 2.0)
+    effect.setColor(QColor(0, 0, 0, 110))
+    widget.setGraphicsEffect(effect)
 
 
 def _favorite_star(marked: bool, on_toggle) -> StarButton:
@@ -167,6 +195,7 @@ class BaseBuildCard(_HoverCard, QFrame):
         self.setProperty("zebra", "true" if zebra else "false")
         self.setProperty("installed", "true" if installed else "false")
         self.setAttribute(Qt.WA_Hover, True)
+        card_shadow(self)
 
         self.title_text = build.version
         self.version = build.version
@@ -340,6 +369,7 @@ class InstalledCard(_HoverCard, QFrame):
         self.setProperty("zebra", "true" if zebra else "false")
         self.setProperty("installed", "true")
         self.setAttribute(Qt.WA_Hover, True)
+        card_shadow(self)
         self.setFixedHeight(66)
 
         lay = QHBoxLayout(self)
@@ -396,6 +426,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         self.setProperty("zebra", "true" if zebra else "false")
         self.setProperty("installed", "true")
         self.setAttribute(Qt.WA_Hover, True)
+        card_shadow(self)
         self.setFixedHeight(_grid_height(zoom, with_badge=False))
 
         lay = QVBoxLayout(self)
