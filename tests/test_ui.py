@@ -334,6 +334,27 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
                     count += 1
         return total / count if count else 0
 
+    def test_la_flecha_de_lanzar_esta_en_las_cuatro_tarjetas(self):
+        from ui.widgets.buttons import CardButton
+        from ui.widgets.cards import BuildCard, GridBuildCard
+
+        def action_button(card):
+            for button in card.findChildren(CardButton):
+                if button.property("variant") in ("neutral", "accent"):
+                    return button
+            return None
+
+        build = _build("5.2.1", "v52", "stable")
+        # En la tienda, la flecha verde solo sale si ya tienes esa version.
+        # En Kivy se pinta junto al texto; al portar a Qt se perdio en la
+        # tienda (list y rejilla) y solo quedo en la pestana Instaladas.
+        for card in (BuildCard(build, True, False),
+                     GridBuildCard(build, True, False, 1.0)):
+            self.assertFalse(action_button(card).icon().isNull(), type(card))
+        for card in (BuildCard(build, False, False),
+                     GridBuildCard(build, False, False, 1.0)):
+            self.assertTrue(action_button(card).icon().isNull(), type(card))
+
     def test_columnas_grid_crecen_con_el_ancho(self):
         from ui.widgets.main_window import MainWindow
 
