@@ -22,6 +22,7 @@ from ui.widgets.cards import (
     GridInstalledCard,
     InstalledCard,
 )
+from ui.widgets.labels import ElidedLabel
 from ui.widgets.dialogs import (
     AppDialog,
     ProgressDialog,
@@ -37,6 +38,7 @@ __all__ = [
     "BuildCard",
     "CardButton",
     "GridBuildCard",
+    "ElidedLabel",
     "GridInstalledCard",
     "IconFlatButton",
     "IconLinkButton",

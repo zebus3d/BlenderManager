@@ -160,6 +160,14 @@ minor** (`v1.3.0`).
 
 ### Reglas que no hay que romper
 
+- **Una etiqueta con texto que puede ser largo se hace con `ElidedLabel`**
+  (`ui/widgets/labels.py`), nunca con un `QLabel` pelado. Un `QLabel` pide como
+  ancho mínimo el texto **completo**, así que deforma el layout: el nombre de una
+  carpeta instalada medía 483 px y arrastraba su tarjeta a 507 px en la rejilla
+  mientras las de al lado se quedaban en 249 (columnas desiguales), y en lista el
+  meta con la ruta la llevaba a 974 px en una ventana de 900. `ElidedLabel`
+  recorta con `…` al pintar, deja el texto entero en `text()` y en el tooltip
+  (solo cuando no cabe) y no pide ancho. Para nombres de fichero, `ElideMiddle`.
 - **El "look" va en `ui/qss.py`, no en el código.** Un widget nuevo se estiliza
   dándole un `objectName` (o una propiedad dinámica, p. ej. `variant` en
   `CardButton`) y añadiendo la regla al QSS. Ojo con la especificidad: en QSS
