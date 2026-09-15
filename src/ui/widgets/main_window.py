@@ -437,13 +437,31 @@ class MainWindow(QWidget):
         self.cancel_btn.clicked.connect(self.cancel_download)
         self.cancel_btn.setVisible(False)
         lay.addWidget(self.cancel_btn)
+        # Slider + su porcentaje, en un contenedor para ocultarlos juntos (solo
+        # aplican en modo rejilla y fuera de los ajustes).
+        self.zoom_box = QWidget()
+        self.zoom_box.setObjectName("HeaderTools")  # fondo transparente (QSS)
+        zoom_lay = QHBoxLayout(self.zoom_box)
+        zoom_lay.setContentsMargins(0, 0, 0, 0)
+        zoom_lay.setSpacing(8)
         self.zoom_slider = QSlider(Qt.Horizontal)
         self.zoom_slider.setRange(int(MIN_ZOOM * 100), int(MAX_ZOOM * 100))
         self.zoom_slider.setValue(int(self.zoom * 100))
         self.zoom_slider.setFixedWidth(130)
         self.zoom_slider.valueChanged.connect(lambda v: self.set_zoom(v / 100.0))
-        lay.addWidget(self.zoom_slider)
+        zoom_lay.addWidget(self.zoom_slider)
+        self.zoom_label = QLabel()
+        self.zoom_label.setObjectName("Muted")
+        # Ancho fijo para que el pie no "baile" al pasar de 100 % a 180 %.
+        self.zoom_label.setFixedWidth(40)
+        self.zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self._update_zoom_label()
+        zoom_lay.addWidget(self.zoom_label)
+        lay.addWidget(self.zoom_box)
         return footer
+
+    def _update_zoom_label(self) -> None:
+        self.zoom_label.setText(f"{round(self.zoom * 100)} %")
 
     # -------------------------------------------------------------- estado
     def _set_status(self, text: str, timeout: int = 0) -> None:
@@ -506,11 +524,11 @@ class MainWindow(QWidget):
         show_filters = view != "settings"
         self.filters.setVisible(show_filters)
         self.header_tools.setVisible(show_filters)
-        self.zoom_slider.setVisible(view != "settings" and self.layout_mode == "grid")
+        self.zoom_box.setVisible(view != "settings" and self.layout_mode == "grid")
 
     def set_layout_mode(self, mode: str) -> None:
         self.layout_mode = mode
-        self.zoom_slider.setVisible(self.view != "settings" and mode == "grid")
+        self.zoom_box.setVisible(self.view != "settings" and mode == "grid")
         (self.grid_btn if mode == "grid" else self.list_btn).setChecked(True)
         self.settings.layout_mode = mode
         self.settings.save()
@@ -519,6 +537,7 @@ class MainWindow(QWidget):
 
     def set_zoom(self, value: float) -> None:
         self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(value)))
+        self._update_zoom_label()
         self.settings.zoom = self.zoom
         self.settings.save()
         self._rebuild_store()
