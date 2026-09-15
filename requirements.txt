@@ -1,4 +1,5 @@
 # Dependencias en tiempo de ejecución.
-# La aplicación solo necesita Kivy: para todo lo demás usamos la librería
-# estándar de Python (urllib, tarfile, zipfile...).
-kivy==2.3.1
+# La aplicación usa PySide6 (Qt Widgets). Frente a Kivy, Qt renderiza con el
+# motor *raster* (CPU) en vez de exigir OpenGL, así que un mismo AppImage
+# funciona en todas las distros (no depende del Mesa del sistema).
+PySide6-Essentials>=6.7

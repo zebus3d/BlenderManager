@@ -1,42 +1,30 @@
-"""Punto de entrada de Blender Manager.
+"""Punto de entrada de Blender Manager (versión PySide6).
 
 Modos de uso:
 
 * ``python3 src/main.py``               -> abre la interfaz.
-* ``python3 src/main.py --debug``       -> interfaz con registro detallado.
 * ``python3 src/main.py --smoke``       -> lista compilaciones por consola (sin ventana).
 * ``python3 src/main.py --screenshot RUTA.png`` -> arranca, captura y sale.
-* ``python3 src/main.py --watch``       -> recarga los .kv/tema al guardarlos.
+* ``python3 src/main.py --apply-update APP_DIR PID`` -> uso interno del auto-update.
 
-¿Primera vez en el proyecto? Lee ``doc/00-empieza-aqui.md`` y
-``doc/01-arquitectura.md``: explican cómo está montado todo, capa por capa.
+La versión Kivy está en la rama ``master``; esta rama (``port/pyside6``) usa Qt
+Widgets, que renderiza con el motor *raster* (CPU) en vez de exigir OpenGL.
+Eso es lo que permite que un mismo AppImage funcione en todas las distros.
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
-# Hay que fijarlo ANTES de importar Kivy, o Kivy intentará procesar
-# nuestros argumentos de línea de comandos y se hará un lío.
-os.environ.setdefault("KIVY_NO_ARGS", "1")
-
-# Aseguramos que 'src' esté en el path para poder importar services/ui/model.
 SRC_DIR = Path(__file__).resolve().parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 import i18n
-from paths import ASSETS_DIR, VIEWS_DIR
-from services import api, detector, settings as settings_service, updater
-
-# Archivos de vista (.kv), en el orden en que se cargan. Están separados por
-# temas para que sean más fáciles de leer: estilos de widgets, diálogos,
-# tarjetas y la pantalla principal.
-KV_FILES = ("widgets.kv", "dialogs.kv", "cards.kv", "main.kv")
+from services import api, detector, updater
 
 
-def smoke():
+def smoke() -> None:
     """Comprobación rápida sin interfaz: descarga el listado y lo imprime."""
     info = detector.detect()
     builds = api.get_builds(force=True)
@@ -44,258 +32,65 @@ def smoke():
     print("total builds:", len(builds))
     for build in api.available_for(builds, info.os_name, info.arch)[:12]:
         tag = "LTS" if build.is_lts else build.risk
-        print(f"  {build.version:<8} {tag:<7} {build.branch:<5} {build.human_size:>10}  {build.filename}")
+        print(f"  {build.version:<8} {tag:<7} {build.branch:<5} "
+              f"{build.human_size:>10}  {build.filename}")
 
 
-class DevReloader:
-    """Recarga en caliente los .kv y el tema cuando se guardan los archivos.
+def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
+    """Arranca la aplicación Qt."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
 
-    Es una ayuda de desarrollo: los cambios de estilo (los .kv de views/,
-    theme.py, icons.py, i18n.py) se aplican sin reiniciar. Los cambios de
-    lógica en Python siguen necesitando reiniciar la aplicación.
-    """
+    from services import settings as settings_service
+    from ui import fonts, qss
+    from ui.widgets.main_window import MainWindow
 
-    def __init__(self, app, kv_paths, files):
-        from kivy.clock import Clock
+    app = QApplication(sys.argv)
+    app.setApplicationName("BlenderManager")
+    app.setApplicationVersion(updater.app_version())
 
-        self.app = app
-        self.kv_paths = kv_paths
-        self.files = files
-        self.mtimes = {}
-        for path in files:
-            try:
-                self.mtimes[path] = os.path.getmtime(path)
-            except OSError:
-                pass
-        Clock.schedule_interval(self._check, 1.0)
+    settings = settings_service.Settings.load()
+    i18n.set_language(settings.language)
 
-    def _check(self, dt):
-        changed = False
-        for path in self.files:
-            try:
-                mtime = os.path.getmtime(path)
-            except OSError:
-                continue
-            if mtime != self.mtimes.get(path):
-                self.mtimes[path] = mtime
-                changed = True
-        if changed:
-            self._reload()
+    fonts.load()
+    app.setStyleSheet(qss.build_qss())
 
-    def _reload(self):
-        import importlib
+    window = MainWindow()
+    window.resize(max(880, settings.window_width or 1060),
+                  max(540, settings.window_height or 680))
+    window.show()
 
-        import i18n
-        from kivy.lang import Builder
-        from kivy.logger import Logger
-        from ui import icons, theme
-
-        try:
-            importlib.reload(i18n)
-            importlib.reload(theme)
-            importlib.reload(icons)
-            theme.init()
-            for kv_path in self.kv_paths:
-                Builder.unload_file(str(kv_path))
-            for kv_path in self.kv_paths:
-                Builder.load_file(str(kv_path))
-            self.app.root._reload_ui()
-            Logger.info("Watch: interfaz recargada")
-        except Exception:
-            import traceback
-
-            traceback.print_exc()
-
-
-def run_ui(debug: bool = False, screenshot: str = None, watch: bool = False) -> None:
-    """Arranca la aplicación Kivy."""
-    from kivy.app import App
-    from kivy.clock import Clock
-    from kivy.core.window import Window
-    from kivy.factory import Factory
-    from kivy.lang import Builder
-    from kivy.logger import Logger, LOG_LEVELS
-    from kivy.resources import resource_add_path
-
-    from ui import theme
-    from ui.widgets import (
-        AppModalView,
-        AppPopup,
-        AppDropDown,
-        AppProgressBar,
-        BuildCard,
-        CardButton,
-        DarkSpinnerOption,
-        FolderRow,
-        GridBuildCard,
-        GridInstalledCard,
-        HeaderLogo,
-        HoverButton,
-        HoverSpinner,
-        IconLinkButton,
-        InstalledCard,
-        Pill,
-        RootWidget,
-        SettingsCard,
-        SettingsHeader,
-        SettingsInput,
-        SideButton,
-        SwitchPill,
-        ZoomSlider,
-    )
-
-    if debug:
-        Logger.setLevel(LOG_LEVELS["debug"])
-
-    # Las clases propias que aparecen dentro del .kv deben estar registradas
-    # en la Factory para que el parser de Kivy sepa construirlas.
-    widgets = (
-        AppDropDown,
-        AppModalView,
-        AppPopup,
-        AppProgressBar,
-        Pill,
-        SideButton,
-        CardButton,
-        DarkSpinnerOption,
-        FolderRow,
-        HoverButton,
-        HoverSpinner,
-        IconLinkButton,
-        HeaderLogo,
-        BuildCard,
-        GridBuildCard,
-        GridInstalledCard,
-        InstalledCard,
-        RootWidget,
-        SettingsCard,
-        SettingsHeader,
-        SettingsInput,
-        SwitchPill,
-        ZoomSlider,
-    )
-    for widget in widgets:
-        Factory.register(widget.__name__, cls=widget)
-
-    # Registramos la fuente de iconos y cargamos las vistas (.kv). El orden
-    # importa poco (las reglas se aplican al construir cada widget), pero
-    # cargamos primero los estilos y luego la pantalla principal.
-    theme.init()
-    kv_paths = [VIEWS_DIR / name for name in KV_FILES]
-    for kv_path in kv_paths:
-        Builder.load_file(str(kv_path))
-
-    class MainApp(App):
-        def build(self):
-            app_settings = settings_service.Settings.load()
-            i18n.set_language(app_settings.language)
-            # La versión también en el título. En modo fuente sale del último
-            # tag del repo (updater.app_version), no del 0.0.0 de version.py.
-            self.title = f"{i18n.tr('Blender Downloads Manager')} {updater.app_version()}"
-            Window.clearcolor = theme.BG
-            # Restauramos el tamaño que dejó el usuario en la sesión anterior.
-            width = max(880, app_settings.window_width or 1060)
-            height = max(540, app_settings.window_height or 680)
-            Window.minimum_width = 880
-            Window.minimum_height = 540
-            # Nos suscribimos ANTES de fijar el tamaño para no perder eventos.
-            self._resize_event = None
-            Window.bind(on_resize=self._on_resize)
-            Window.size = (width, height)
-            # Permite que el .kv encuentre "images/blender_logo.png".
-            resource_add_path(str(ASSETS_DIR))
-            # Icono de la ventana / barra de tareas (en vez del de Kivy).
-            try:
-                Window.set_icon(str(ASSETS_DIR / "images" / "app_icon.png"))
-            except Exception:
-                pass
-            return RootWidget()
-
-        def on_start(self):
-            # Traemos la ventana al frente y pedimos el foco: si el gestor de
-            # ventanas no la enfoca al abrir, el primer clic se lo come él
-            # (click-to-focus) y parece que los botones no responden.
-            try:
-                Window.raise_window()
-                Window.focus = True
-            except Exception:
-                pass
-            if watch:
-                # Guardamos el recargador en un atributo de la app: Kivy guarda
-                # una referencia *débil* a los métodos que programa en el Clock,
-                # así que si no lo retenemos, se recolecta y la recarga en
-                # caliente deja de funcionar sin avisar.
-                self._reloader = DevReloader(self, kv_paths, [
-                    *kv_paths,
-                    SRC_DIR / "ui" / "theme.py",
-                    SRC_DIR / "ui" / "icons.py",
-                    SRC_DIR / "i18n.py",
-                ])
-
-        def _on_resize(self, window, width, height):
-            # Guardamos con un pequeño retardo para no escribir en cada píxel.
-            if self._resize_event is not None:
-                self._resize_event.cancel()
-            self._resize_event = Clock.schedule_once(
-                lambda dt: self._save_window_size(width, height), 0.6
-            )
-
-        def _save_window_size(self, width, height):
-            # Importante: reutilizamos el MISMO objeto Settings que tiene la
-            # pantalla principal. Si cargásemos uno nuevo del disco, el de la
-            # pantalla (con el tamaño viejo) lo sobrescribiría en cuanto el
-            # usuario tocase el zoom o el modo de vista, y el tamaño se perdería.
-            settings = getattr(self.root, "settings", None)
-            if settings is None:
-                settings = settings_service.Settings.load()
-            try:
-                settings.window_width = int(width)
-                settings.window_height = int(height)
-                settings.save()
-            except OSError:
-                pass
-
-    # Modo de captura automática (útil para generar imágenes de documentación).
     if screenshot:
-        def capture(dt):
-            Window.screenshot(name=str(screenshot))
+        def grab():
+            window.grab().save(screenshot)
+            app.quit()
 
-        def stop(dt):
-            App.get_running_app().stop()
-
-        Clock.schedule_once(capture, 6)
-        Clock.schedule_once(stop, 8)
-
-    MainApp().run()
+        QTimer.singleShot(6000, grab)
+    return app.exec()
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Blender Manager")
-    parser.add_argument("--smoke", action="store_true", help="List builds without opening the UI")
+    parser.add_argument("--smoke", action="store_true",
+                        help="List builds without opening the UI")
     parser.add_argument("--debug", action="store_true", help="Enable verbose logging")
-    parser.add_argument("--screenshot", metavar="PATH", help="Save a screenshot after startup and quit")
-    parser.add_argument("--watch", action="store_true", help="Recargar .kv/tema al guardar (desarrollo)")
-    parser.add_argument(
-        "--apply-update",
-        nargs=2,
-        metavar=("APP_DIR", "PID"),
-        help="Uso interno: aplica una actualizacion ya descargada y relanza la app",
-    )
+    parser.add_argument("--screenshot", metavar="PATH",
+                        help="Save a screenshot after startup and quit")
+    parser.add_argument("--apply-update", nargs=2, metavar=("APP_DIR", "PID"),
+                        help="Uso interno: aplica una actualizacion ya descargada")
     args = parser.parse_args()
 
     if args.apply_update:
-        # Modo ayudante del auto-update: espera a que salga la app antigua,
-        # copia los ficheros nuevos y relanza. No abrimos ninguna ventana.
-        from services import updater
+        from services import updater as updater_service
 
-        updater.apply_update(args.apply_update[0], args.apply_update[1])
+        updater_service.apply_update(args.apply_update[0], args.apply_update[1])
         return
 
     if args.smoke:
         smoke()
         return
 
-    run_ui(debug=args.debug, screenshot=args.screenshot, watch=args.watch)
+    sys.exit(run_ui(screenshot=args.screenshot, debug=args.debug))
 
 
 if __name__ == "__main__":
