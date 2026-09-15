@@ -118,15 +118,40 @@ def source_tag() -> str:
     return output.decode("utf-8", "ignore").strip()
 
 
+def source_describe() -> str:
+    """Describe del checkout (p. ej. ``v1.2.0-19-g24a0b43``), o ``''``.
+
+    A diferencia de ``source_tag``, esto incluye los commits que el checkout va
+    por delante del último tag. Es la versión que de verdad se está ejecutando:
+    en una rama de desarrollo el tag se queda atrás y decir "1.2.0" engaña.
+    """
+    root = source_root()
+    if root is None:
+        return ""
+    try:
+        output = subprocess.check_output(
+            ["git", "-C", str(root), "describe", "--tags", "--always",
+             "--abbrev=7"],
+            stderr=subprocess.DEVNULL, timeout=10)
+    except Exception as error:
+        log(f"git describe failed: {error}")
+        return ""
+    return output.decode("utf-8", "ignore").strip()
+
+
 def app_version() -> str:
     """Versión que se muestra en la app.
 
     Si el CI inyectó una versión, esa. En modo fuente ``version.py`` vale
-    ``0.0.0``, así que usamos el último tag del checkout para no enseñar
-    siempre "0.0.0".
+    ``0.0.0``, así que usamos el describe del checkout: en master limpio sale el
+    tag (``1.2.0``) y en una rama por delante, los commits de más
+    (``1.2.0-19-g24a0b43``).
     """
     if version.__version__ != "0.0.0":
         return version.__version__
+    described = source_describe()
+    if described:
+        return described.lstrip("vV")
     tag = source_tag()
     return tag.lstrip("vV") if tag else version.__version__
 
@@ -135,7 +160,9 @@ def source_update(timeout: int = 120):
     """Actualiza el checkout con ``git pull --ff-only``.
 
     Devuelve ``(ok, motivo)``. Si hay cambios locales sin confirmar no toca
-    nada: preferimos no pisar el trabajo del usuario.
+    nada: preferimos no pisar el trabajo del usuario. ``motivo`` es ``"ok"`` si
+    llegó algo nuevo, ``"up-to-date"`` si el pull no movió HEAD, ``"dirty"`` o
+    ``"failed"``.
     """
     root = source_root()
     if root is None:
@@ -149,6 +176,7 @@ def source_update(timeout: int = 120):
         return False, "failed"
     if status:
         return False, "dirty"
+    before = _git_head(root)
     try:
         result = subprocess.run(
             ["git", "-C", str(root), "pull", "--ff-only"],
@@ -159,7 +187,22 @@ def source_update(timeout: int = 120):
     if result.returncode != 0:
         log(f"git pull failed: {result.stderr.strip()}")
         return False, "failed"
+    after = _git_head(root)
+    if before and after and before == after:
+        return True, "up-to-date"
     return True, "ok"
+
+
+def _git_head(root: Path) -> str:
+    """SHA de HEAD del checkout (o ``''`` si no se puede leer)."""
+    try:
+        output = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL, timeout=20)
+    except Exception as error:
+        log(f"git rev-parse failed: {error}")
+        return ""
+    return output.decode("utf-8", "ignore").strip()
 
 
 def relaunch_source() -> bool:
