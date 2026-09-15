@@ -40,7 +40,13 @@ def main() -> None:
     window.resize(WIDTH, HEIGHT)
     # El zoom se fija en memoria (sin tocar ajustes) para que la captura sea
     # siempre igual, independientemente de lo que tenga el usuario guardado.
+    # Hay que reflejarlo también en el slider y la etiqueta, o la captura sale
+    # con las tarjetas a un tamaño y el "NN %" de otro.
     window.zoom = 1.0
+    window.zoom_slider.blockSignals(True)
+    window.zoom_slider.setValue(100)
+    window.zoom_slider.blockSignals(False)
+    window._update_zoom_label()
     window.show()
 
     steps = []
@@ -68,7 +74,7 @@ def main() -> None:
     def capture_update():
         dialog = AppDialog(
             window, tr("Update available"),
-            tr("A new version is available: {version}", version="v1.2.32")
+            tr("A new version is available: {version}", version="v1.2.34")
             + "\n\n"
             + tr("It will be installed and the app will restart automatically."))
         dialog.add_button(tr("Later"), on_click=dialog.reject)
