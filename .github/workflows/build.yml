@@ -1,7 +1,13 @@
 name: build
 
-# Se ejecuta en cada push a master (release automatica como pre-release), al
-# empujar una etiqueta de version (release estable) o a mano desde Actions.
+# Se ejecuta en cada push a master (publica una release final), al empujar una
+# etiqueta de version, o a mano desde Actions.
+#
+# OJO: cada push a master publica una RELEASE FINAL (no pre-release), asi que
+# dispara el auto-update de todos los usuarios. Es intencionado: este proyecto
+# no mantiene un canal de pruebas aparte. Si en algun momento hace falta probar
+# algo sin que llegue a la gente, usa un workflow_dispatch en una rama (no
+# master) o desmarca temporalmente el auto-update.
 on:
   push:
     branches:
@@ -12,16 +18,14 @@ on:
 
 jobs:
   # Calcula la version que se inyecta en los binarios y el tag de la release.
-  # Con un tag vX.Y.Z usa esa version y publica release estable; en cualquier
-  # otro caso usa el ultimo tag como base y el numero de build como parche
-  # (p. ej. v1.1.42), marcado como pre-release para no disparar el auto-update
-  # de los usuarios (que solo mira /releases/latest, sin pre-releases).
+  # Con un tag vX.Y.Z usa esa version; en un push a master usa el ultimo tag
+  # como base y el numero de build como parche (p. ej. v1.1.42). En los dos
+  # casos la release sale como estable.
   version:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.compute.outputs.version }}
       tag: ${{ steps.compute.outputs.tag }}
-      prerelease: ${{ steps.compute.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,16 +36,13 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
-            PRERELEASE="false"
           else
             BASE="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo 'v0.0')"
             MAJOR_MINOR="$(echo "$BASE" | sed -E 's/^v?([0-9]+)\.([0-9]+).*/\1.\2/')"
             VERSION="${MAJOR_MINOR}.${GITHUB_RUN_NUMBER}"
-            PRERELEASE="true"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
 
   # Pruebas unitarias. Las de UI corren con el plugin offscreen de Qt, asi que
   # no hace falta servidor grafico (pero si PySide6 y sus libs de sistema).
@@ -177,6 +178,7 @@ jobs:
         with:
           tag_name: ${{ needs.version.outputs.tag }}
           name: ${{ needs.version.outputs.tag }}
-          prerelease: ${{ needs.version.outputs.prerelease }}
+          prerelease: false
+          make_latest: true
           generate_release_notes: true
           files: release-assets/**/*
