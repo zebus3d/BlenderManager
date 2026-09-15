@@ -73,6 +73,11 @@ def default_destination() -> Path:
     return Path.home() / "Descargas" / "Blenders"
 
 
+# Zoom con el que arranca la rejilla: es también el valor al que vuelven
+# Ctrl+0 y el clic con Ctrl en el slider (lo lee la UI).
+DEFAULT_ZOOM = 0.8
+
+
 @dataclass
 class Settings:
     dest_folder: str = ""
@@ -80,7 +85,7 @@ class Settings:
     delete_archive: bool = True
     launch_args: str = ""
     layout_mode: str = "grid"
-    zoom: float = 0.8
+    zoom: float = DEFAULT_ZOOM
     auto_update: bool = True
     window_width: int = 0
     window_height: int = 0
@@ -108,7 +113,7 @@ class Settings:
             delete_archive=bool(data.get("delete_archive", True)),
             launch_args=str(data.get("launch_args") or ""),
             layout_mode=str(data.get("layout_mode") or "grid"),
-            zoom=float(data.get("zoom") or 0.8),
+            zoom=float(data.get("zoom") or DEFAULT_ZOOM),
             auto_update=bool(data.get("auto_update", True)),
             window_width=int(data.get("window_width") or 0),
             window_height=int(data.get("window_height") or 0),

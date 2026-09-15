@@ -19,6 +19,7 @@ import webbrowser
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -68,6 +69,8 @@ PLATFORM_LABELS = {value: key for key, value in PLATFORMS.items()}
 ARCH_LABELS = ["x86_64", "arm64"]
 LANGUAGE_IDS = {"auto": "Automatic", "en": "English", "es": "Spanish"}
 MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
+# Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
+ZOOM_STEP = 0.1
 
 
 class _Bridge(QObject):
@@ -76,6 +79,23 @@ class _Bridge(QObject):
     progress = Signal(int, int)
     done = Signal(str)
     error = Signal(str)
+
+
+class _ZoomSlider(QSlider):
+    """Slider del zoom que vuelve al valor por defecto con ``Ctrl`` + clic.
+
+    ``QSlider`` no distingue el clic normal del clic con modificadores, así que
+    hay que mirarlo en ``mousePressEvent``.
+    """
+
+    reset_requested = Signal()
+
+    def mousePressEvent(self, event):
+        if event.modifiers() & Qt.ControlModifier:
+            self.reset_requested.emit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
 
 class MainWindow(QWidget):
@@ -119,7 +139,7 @@ class MainWindow(QWidget):
         try:
             self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(self.settings.zoom)))
         except (TypeError, ValueError):
-            self.zoom = 0.8
+            self.zoom = settings_service.DEFAULT_ZOOM
 
         self.view = "store"
         self.channel = "all"
@@ -188,6 +208,20 @@ class MainWindow(QWidget):
         # La vista de instaladas no se rellena sola: hay que poblarla al arrancar
         # (si no, al abrir en esa pestaña se vería vacía hasta el primer refresco).
         self._rebuild_installed()
+        self._install_shortcuts()
+
+    def _install_shortcuts(self) -> None:
+        """Atajos del zoom. Ctrl+= es el mismo '+' sin pulsar Shift, y muchos
+        teclados no mandan 'Ctrl++' al soltar; registramos los dos."""
+        bindings = {
+            "Ctrl++": self.zoom_in,
+            "Ctrl+=": self.zoom_in,
+            "Ctrl+-": self.zoom_out,
+            "Ctrl+0": self.reset_zoom,
+        }
+        for keys, slot in bindings.items():
+            shortcut = QShortcut(QKeySequence(keys), self)
+            shortcut.activated.connect(slot)
 
     def _build_header(self) -> QFrame:
         header = QFrame()
@@ -467,11 +501,13 @@ class MainWindow(QWidget):
         zoom_lay = QHBoxLayout(self.zoom_box)
         zoom_lay.setContentsMargins(0, 0, 0, 0)
         zoom_lay.setSpacing(6)
-        self.zoom_slider = QSlider(Qt.Horizontal)
+        self.zoom_slider = _ZoomSlider(Qt.Horizontal)
         self.zoom_slider.setRange(int(MIN_ZOOM * 100), int(MAX_ZOOM * 100))
         self.zoom_slider.setValue(int(self.zoom * 100))
         self.zoom_slider.setFixedWidth(130)
         self.zoom_slider.valueChanged.connect(lambda v: self.set_zoom(v / 100.0))
+        self.zoom_slider.reset_requested.connect(self.reset_zoom)
+        self.zoom_slider.setToolTip(tr("Zoom the icon size (Ctrl +/- / Ctrl+0)"))
         zoom_lay.addWidget(self.zoom_slider)
         self.zoom_label = QLabel()
         self.zoom_label.setObjectName("Muted")
@@ -570,6 +606,35 @@ class MainWindow(QWidget):
         self.settings.save()
         self._rebuild_store()
         self._rebuild_installed()
+
+    def _zoom_enabled(self) -> bool:
+        """El zoom solo pinta algo en rejilla y fuera de los ajustes."""
+        return self.view != "settings" and self.layout_mode == "grid"
+
+    def _set_zoom_value(self, value: float) -> None:
+        """Fija el zoom pasando por el slider, para que UI y valor no se separen.
+
+        El porcentaje es entero (el slider va de 1 en 1), así que redondeamos y
+        bloqueamos la señal para no llamar dos veces a ``set_zoom``.
+        """
+        percent = int(round(min(MAX_ZOOM, max(MIN_ZOOM, float(value))) * 100))
+        self.zoom_slider.blockSignals(True)
+        self.zoom_slider.setValue(percent)
+        self.zoom_slider.blockSignals(False)
+        self.set_zoom(percent / 100.0)
+
+    def zoom_in(self) -> None:
+        if self._zoom_enabled():
+            self._set_zoom_value(self.zoom + ZOOM_STEP)
+
+    def zoom_out(self) -> None:
+        if self._zoom_enabled():
+            self._set_zoom_value(self.zoom - ZOOM_STEP)
+
+    def reset_zoom(self) -> None:
+        """Vuelve al zoom por defecto (Ctrl+0 o Ctrl+clic en el slider)."""
+        if self._zoom_enabled():
+            self._set_zoom_value(settings_service.DEFAULT_ZOOM)
 
     def set_platform(self, label: str) -> None:
         self.platform_label = label
@@ -709,7 +774,10 @@ class MainWindow(QWidget):
         cards = []
         for index, build in enumerate(builds):
             installed = any(e.version == build.version for e in self.installed)
-            zebra = bool(index % 2)
+            # La cebra es para la lista (filas contiguas); en rejilla las
+            # tarjetas van sueltas sobre el fondo y alternar el gris solo
+            # ensucia el conjunto.
+            zebra = (not grid) and bool(index % 2)
             if grid:
                 card = GridBuildCard(build, installed, zebra, self.zoom)
             else:
@@ -735,7 +803,8 @@ class MainWindow(QWidget):
         grid = self.layout_mode == "grid"
         cards = []
         for index, entry in enumerate(entries):
-            zebra = bool(index % 2)
+            # Igual que en la tienda: cebra solo en modo lista.
+            zebra = (not grid) and bool(index % 2)
             if grid:
                 card = GridInstalledCard(entry, zebra, self.zoom)
             else:

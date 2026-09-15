@@ -112,7 +112,8 @@ _TRANSLATIONS = {
         "Home folder": "Carpeta personal",
         "Use this folder": "Usar esta carpeta",
         "Save settings": "Guarda los ajustes",
-        "Zoom the icon size": "Ajusta el tamaño de los iconos",
+        "Zoom the icon size (Ctrl +/- / Ctrl+0)":
+            "Ajusta el tamaño de los iconos (Ctrl +/- / Ctrl+0)",
         "Updates": "Actualizaciones",
         "Check for updates automatically": "Buscar actualizaciones automáticamente",
         "Check for updates now": "Buscar actualizaciones ahora",
