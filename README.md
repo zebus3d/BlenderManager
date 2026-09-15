@@ -172,18 +172,22 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 `.github/workflows/build.yml` runs the tests and produces artifacts for **Linux**
 (`.AppImage`), **Windows** (`.zip`) and **macOS** (compressed `.app`).
 
-- **Every push to `master` publishes a final release** with a per-build version
-  (e.g. `v1.2.34`), marked as *latest*. There is no pre-release channel and no
-  promotion step: each commit is a release.
-- The in-app auto-update only looks at the *latest* release, so it fires on the
-  next launch after every push. That is intentional.
-- Pushing a `vX.Y.Z` tag publishes a release with that exact version. Never
-  re-tag binaries that were built for another version: the version is baked into
-  the executable, so the app would update itself in a loop.
+- **Every push to `master` updates a single rolling pre-release** (e.g.
+  `v1.3.0`): the workflow rebuilds the three binaries, moves the tag to the new
+  commit and replaces the assets. There is never more than one pre-release.
+- **Promoting** it (Actions → *promote*) turns it into the final release without
+  rebuilding: the pre-release already carries the version of the release it aims
+  to be, so promoting only removes the pre-release flag and marks it *latest*.
+  The next push then starts the following cycle (`v1.4.0`).
+- The in-app auto-update only looks at the *latest* release, which **ignores
+  pre-releases**: while a cycle is being iterated on, nobody is notified.
+- Pushing a `vX.Y.Z` tag publishes a final release with that exact version
+  directly. Never re-tag binaries that were built for another version: the
+  version is baked into the executable, so the app would update itself in a loop.
 - **Running from source never prompts for an update**: a checkout is ahead of the
   last tag by definition, so comparing it with the latest release would offer to
   "update" to a binary that may be older than the code you are running. The title
-  shows the real state of the checkout (`1.2.0-19-g24a0b43`), and
+  shows the real state of the checkout (`1.3.0-19-g24a0b43`), and
   **Settings → Check for updates now** runs `git pull --ff-only` and restarts.
 
 The binaries are **not** committed to the repository; they are downloadable from
