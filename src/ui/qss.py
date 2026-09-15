@@ -12,12 +12,32 @@ las variantes de color), igual que en el PoC.
 from ui import theme as t
 
 
+def _lighten(color: str, amount: float) -> str:
+    """Mezcla ``color`` (#RRGGBB) hacia blanco, para el degradado."""
+    value = color.lstrip("#")
+    channels = [int(value[index:index + 2], 16) for index in (0, 2, 4)]
+    mixed = [round(channel + (255 - channel) * amount) for channel in channels]
+    return "#%02X%02X%02X" % tuple(mixed)
+
+
+def _volume(color: str, amount: float = 0.09) -> str:
+    """Degradado vertical que da volumen a un botón, sobre su color base.
+
+    Es el ``GRADIENT_TOP`` de la versión Kivy: una capa blanca del 9 % arriba
+    que se desvanece hacia abajo. En QSS no se pueden apilar dos fondos, así que
+    el 9 % de blanco se mezcla en el color del extremo superior.
+    """
+    return ("qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+            f"stop:0 {_lighten(color, amount)}, stop:1 {color})")
+
+
+# Tinte del botón "Lanzar" al pasar el ratón: un azul pizarra lo bastante claro
+# para que se note que es pulsable, sin el salto del ACCENT a plena saturación.
+LAUNCH_HOVER = "#2B4A66"
+
+
 def build_qss() -> str:
     """Devuelve el stylesheet completo, con los tokens del tema interpolados."""
-    # Degradado vertical sutil (blanco 9% arriba -> transparente abajo), el
-    # mismo que la textura GRADIENT_TOP de la versión Kivy.
-    grad = ("qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-            "stop:0 rgba(255,255,255,0.09), stop:1 rgba(255,255,255,0.0))")
     return f"""
     QWidget {{
         background-color: {t.BG};
@@ -60,7 +80,10 @@ def build_qss() -> str:
     QPushButton#SideButton:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
     QPushButton#SideButton:checked {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
 
-    /* --- Botón de tarjeta / acción (relleno + degradado + borde) --- */
+    /* --- Botón de tarjeta / acción (relleno + degradado + borde) ---
+       El degradado (blanco 9 % arriba) solo va en los botones de color, como en
+       Kivy: en los grises enturbia el texto. "dark" es el gris oscuro de las
+       pestañas de Blender, que es el que usa Lanzar. */
     QPushButton#CardButton {{
         background-color: {t.BUTTON};
         border: 1px solid rgba(0,0,0,0.35);
@@ -72,11 +95,34 @@ def build_qss() -> str:
     QPushButton#CardButton:hover {{ background-color: #6A6A6A; }}
     QPushButton#CardButton:pressed {{ background-color: {t.ACCENT_DARK}; }}
     QPushButton#CardButton:disabled {{ color: rgba(230,230,230,0.35); }}
-    QPushButton#CardButton[variant="accent"] {{ background-color: {t.ACCENT_BTN}; }}
-    QPushButton#CardButton[variant="accent"]:hover {{ background-color: {t.ACCENT_DARK}; }}
-    QPushButton#CardButton[variant="accent"]:pressed {{ background-color: {t.ACCENT}; }}
-    QPushButton#CardButton[variant="danger"] {{ background-color: {t.DANGER_BTN}; }}
-    QPushButton#CardButton[variant="danger"]:hover {{ background-color: {t.DANGER}; }}
+    QPushButton#CardButton[variant="accent"] {{
+        background: {_volume(t.ACCENT_BTN)};
+    }}
+    QPushButton#CardButton[variant="accent"]:hover {{
+        background: {_volume(t.ACCENT_DARK)};
+    }}
+    QPushButton#CardButton[variant="accent"]:pressed {{
+        background: {_volume(t.ACCENT)};
+    }}
+    QPushButton#CardButton[variant="dark"] {{
+        background: {_volume(t.FILTER)};
+    }}
+    QPushButton#CardButton[variant="dark"]:hover {{
+        background: {_volume(LAUNCH_HOVER)};
+        border: 1px solid {t.ACCENT};
+        color: {t.TEXT_SEL};
+    }}
+    QPushButton#CardButton[variant="dark"]:pressed {{
+        background: {_volume(t.ACCENT)};
+        border: 1px solid {t.ACCENT};
+        color: {t.TEXT_SEL};
+    }}
+    QPushButton#CardButton[variant="danger"] {{
+        background: {_volume(t.DANGER_BTN)};
+    }}
+    QPushButton#CardButton[variant="danger"]:hover {{
+        background: {_volume(t.DANGER)};
+    }}
     /* Botón que solo lleva un icono (papelera): con el padding normal (14 px por
        lado) el glifo no cabe cuando la rejilla va pequeña y queda el recuadro
        rojo vacío. Con 4 px sobra sitio incluso a zoom 0.6. */

@@ -15,10 +15,16 @@ from pathlib import Path
 
 
 class Launcher:
+    """Lanza Blender como proceso aparte.
+
+    Así las instancias que abre siguen vivas cuando se cierra
+    el gestor.
+    """
     def __init__(self):
         self._processes = []
 
     def launch(self, executable, args=None, cwd=None):
+        """Ejecuta esa versión instalada y devuelve el proceso lanzado."""
         executable = Path(executable)
         command = [str(executable)]
         command.extend(args or [])

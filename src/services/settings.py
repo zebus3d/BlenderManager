@@ -52,6 +52,7 @@ def config_dir() -> Path:
 
 
 def is_portable() -> bool:
+    """True si hay un marcador ``portable`` junto al ejecutable."""
     return config_dir() == APP_DIR
 
 
@@ -95,6 +96,9 @@ def _clean_favorites(value) -> list[str]:
 
 @dataclass
 class Settings:
+    """Ajustes persistentes (por usuario, o por carpeta en modo
+    portable).
+    """
     dest_folder: str = ""
     language: str = "auto"
     delete_archive: bool = True
@@ -117,6 +121,11 @@ class Settings:
 
     @classmethod
     def load(cls) -> "Settings":
+        """Lee los ajustes del disco.
+
+        Si el JSON falta o está roto se usan los valores por defecto:
+        preferimos eso a no arrancar.
+        """
         path = config_dir() / "settings.json"
         data = {}
         if path.is_file():
@@ -164,4 +173,7 @@ class Settings:
         return True
 
     def save(self) -> Path:
+        """Guarda los ajustes de forma atómica (un temporal y luego
+        ``os.replace``).
+        """
         return write_json_atomic(config_dir() / "settings.json", asdict(self), indent=2)

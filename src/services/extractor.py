@@ -13,6 +13,7 @@ ARCHIVE_SUFFIXES = (".tar.xz", ".tar.gz", ".tar.bz2", ".tgz", ".tbz2", ".zip")
 
 
 def is_archive(path) -> bool:
+    """True si el fichero parece un comprimido que sabemos abrir."""
     name = str(path).lower()
     return name.endswith(".zip") or any(name.endswith(suffix) for suffix in ARCHIVE_SUFFIXES)
 

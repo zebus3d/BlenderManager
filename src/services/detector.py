@@ -12,6 +12,9 @@ OS_LABELS = {"linux": "GNU/Linux", "windows": "Windows", "darwin": "macOS"}
 
 
 class SystemInfo(NamedTuple):
+    """Sistema y arquitectura detectados, con los identificadores
+    de Blender.
+    """
     os_name: str
     arch: str
     label: str
@@ -31,6 +34,7 @@ def _arch(os_name: str) -> str:
 
 
 def detect() -> SystemInfo:
+    """Detecta el sistema operativo y la arquitectura de este equipo."""
     system_name = platform.system()
     os_name = OS_IDS.get(system_name)
     if os_name is None:

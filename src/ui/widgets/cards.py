@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from i18n import tr
 from paths import ASSETS_DIR
 from ui import icons
+from ui import theme as t
 from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
 
 _LOGO = ASSETS_DIR / "images" / "blender_logo.png"
@@ -46,10 +47,23 @@ def _icon_only(button) -> None:
 
 
 def _launch_icon():
-    """Icono de "play" verde como QIcon (Qt no admite mezclar fuentes en el texto)."""
+    """Icono de "play" verde como QIcon.
+
+    En Kivy el icono se pintaba dentro del texto del botón (mezclando fuentes en
+    el markup); en Qt hay que pasarlo como QIcon.
+    """
+    return _action_icon(icons.LAUNCH, "#22C55E")
+
+
+def _download_icon():
+    """Icono blanco de descarga (flecha hacia abajo), como el original."""
+    return _action_icon(icons.DOWNLOAD, t.TEXT_SEL)
+
+
+def _action_icon(glyph: str, color: str):
     from ui.fonts import glyph_icon
 
-    return glyph_icon(icons.LAUNCH, 12, "#22C55E")
+    return glyph_icon(glyph, 12, color)
 
 
 def logo_shadow(widget, size: int):
@@ -227,14 +241,14 @@ class BuildCard(BaseBuildCard):
 
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
-            variant="neutral" if installed else "accent",
+            variant="dark" if installed else "accent",
             tooltip=tr("Launch this installed version") if installed
             else tr("Download and install this version"),
         )
-        # La flecha verde solo cuando la accion es lanzar (si ya la tienes).
-        # En Kivy se pintaba con el texto; en Qt hace falta un QIcon.
-        if installed:
-            action.setIcon(_launch_icon())
+        # El icono depende de la accion: flecha verde para lanzar (si ya la
+        # tienes) y flecha blanca hacia abajo para descargar. En Kivy se pintaba
+        # dentro del texto; en Qt hace falta un QIcon.
+        action.setIcon(_launch_icon() if installed else _download_icon())
         action.clicked.connect(lambda: self.action_clicked.emit(self.build))
         lay.addWidget(action)
 
@@ -295,12 +309,11 @@ class GridBuildCard(BaseBuildCard):
         row.addWidget(self._info())
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
-            variant="neutral" if installed else "accent",
+            variant="dark" if installed else "accent",
             tooltip=tr("Launch this installed version") if installed
             else tr("Download and install this version"),
         )
-        if installed:
-            action.setIcon(_launch_icon())
+        action.setIcon(_launch_icon() if installed else _download_icon())
         action.clicked.connect(lambda: self.action_clicked.emit(self.build))
         row.addWidget(action)
         row.addStretch()
@@ -346,7 +359,7 @@ class InstalledCard(_HoverCard, QFrame):
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
         lay.addWidget(info)
 
-        launch = CardButton(tr("Launch"), variant="neutral",
+        launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())
         launch.clicked.connect(lambda: self.launch_clicked.emit(entry))
@@ -408,7 +421,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         info.setFont(_icon_font())
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
         row.addWidget(info)
-        launch = CardButton(tr("Launch"), variant="neutral",
+        launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())
         launch.clicked.connect(lambda: self.launch_clicked.emit(entry))
