@@ -48,6 +48,18 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("BlenderManager")
     app.setApplicationVersion(updater.app_version())
+    # En Wayland/KDE el compositor empareja la ventana con el .desktop por este
+    # nombre; sin el, la barra de tareas no encuentra el icono.
+    app.setDesktopFileName("blendermanager")
+
+    # Icono de la ventana y de la barra de tareas. Sin esto, el marco y el dock
+    # ensenan el icono generico de Qt.
+    from paths import ASSETS_DIR
+    from PySide6.QtGui import QIcon
+
+    icon = QIcon(str(ASSETS_DIR / "images" / "app_icon.png"))
+    if not icon.isNull():
+        app.setWindowIcon(icon)
 
     settings = settings_service.Settings.load()
     i18n.set_language(settings.language)

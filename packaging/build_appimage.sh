@@ -23,6 +23,11 @@ cp -r "${DIST}/${APP_NAME}/." "${APPDIR}/usr/bin/"
 
 cp "${PACKAGING_DIR}/blendermanager.desktop" "${APPDIR}/blendermanager.desktop"
 cp "${PACKAGING_DIR}/../src/assets/images/app_icon.png" "${APPDIR}/blendermanager.png"
+# El .DirIcon es lo que ensena el gestor de ficheros para el AppImage suelto.
+# appimagetool ya lo crea (como symlink) a partir del Icon= del .desktop, pero
+# lo dejamos explicito y como fichero de verdad: es la pieza que se mira cuando
+# alguien dice "el AppImage sale sin icono".
+cp "${APPDIR}/blendermanager.png" "${APPDIR}/.DirIcon"
 
 cat > "${APPDIR}/AppRun" <<'EOF'
 #!/bin/sh

@@ -135,6 +135,14 @@ jobs:
           # pasaba). El plugin offscreen monta la ventana sin pantalla.
           APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen ./BlenderManager-x86_64.AppImage --screenshot /tmp/shot.png
           test "$(stat -c%s /tmp/shot.png)" -gt 5000
+      - name: Comprobar que el AppImage lleva el icono dentro
+        run: |
+          ./BlenderManager-x86_64.AppImage --appimage-extract >/dev/null
+          # .DirIcon es lo que ensena el gestor de ficheros para el fichero
+          # suelto, y appimagetool saca el resto del Icon= del .desktop.
+          test -s squashfs-root/.DirIcon
+          grep -q "^Icon=blendermanager$" squashfs-root/blendermanager.desktop
+          rm -rf squashfs-root
       - uses: actions/upload-artifact@v4
         with:
           name: BlenderManager-linux
@@ -199,6 +207,14 @@ jobs:
           ./dist/BlenderManager.app/Contents/MacOS/BlenderManager --screenshot shot.png
           ls -l shot.png
           test "$(stat -f%z shot.png)" -gt 5000
+      # El .app tiene que llevar el .icns y declararlo en el Info.plist, o
+      # Finder ensena el icono generico. PlistBuddy falla si falta la clave.
+      - name: Comprobar que el bundle lleva el icono
+        run: |
+          ICNS="$(find dist/BlenderManager.app -name '*.icns' | head -1)"
+          test -n "${ICNS}"
+          test -s "${ICNS}"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" dist/BlenderManager.app/Contents/Info.plist
       - uses: actions/upload-artifact@v4
         with:
           name: BlenderManager-macos
