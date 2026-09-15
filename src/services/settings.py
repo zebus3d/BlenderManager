@@ -78,6 +78,11 @@ def default_destination() -> Path:
 # Ctrl+0 y el clic con Ctrl en el slider (lo lee la UI).
 DEFAULT_ZOOM = 0.8
 
+# Filtros de canal que ofrece la barra. Son los que entiende
+# ``api.filter_builds``/``installed.filter_installed``; aquí solo se usan para
+# validar el que se guardó la última vez.
+CHANNELS = ("all", "lts", "stable", "daily", "experimental", "favorites")
+
 
 def _clean_favorites(value) -> list[str]:
     """Normaliza la lista de favoritos leída del JSON: solo textos, sin repetir.
@@ -114,6 +119,9 @@ class Settings:
     # ejemplo para copiarlas en un USB.
     platform: str = ""
     arch: str = ""
+    # Filtro de canal que estaba puesto al cerrar: al abrir se vuelve a él
+    # (p. ej. si lo dejaste en Favoritos, sigues en Favoritos).
+    channel: str = "all"
     # Series marcadas como favoritas (claves de ``model.build.favorite_key``:
     # "rama|versión"). En la lista se permiten las que ya no existan: si Blender
     # deja de publicar una rama, el favorito no estorba.
@@ -147,10 +155,14 @@ class Settings:
             window_height=int(data.get("window_height") or 0),
             platform=str(data.get("platform") or ""),
             arch=str(data.get("arch") or ""),
+            channel=str(data.get("channel") or "all"),
             favorites=_clean_favorites(data.get("favorites")),
         )
         if not settings.dest_folder:
             settings.dest_folder = str(default_destination())
+        if settings.channel not in CHANNELS:
+            # Ajustes editados a mano (o de una versión con otros filtros).
+            settings.channel = "all"
         return settings
 
     def set_favorite(self, key: str, marked: bool) -> bool:
