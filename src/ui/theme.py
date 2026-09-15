@@ -48,6 +48,9 @@ DANGER_DARK = "#9C3C3C"     # hover
 DANGER_BTN = "#9C3C3C"      # relleno del botón borrar (TEXT = 5,38:1, AA)
 DANGER_EDGE = "#F0A0A0"     # borde claro del realce de la papelera: sobre el
                             # rojo vivo (#B84A4A) el borde oscuro no se veía
+DANGER_ICON = "#FFC0C0"     # glifo de la papelera al pasar por encima: blanco
+                            # teñido de rojo, para que el realce avise de verdad
+                            # (sobre DANGER = 3,3:1, suficiente para un icono)
 WARNING = "#FFAF23"         # naranja (LTS)
 SUCCESS_TEXT = "#6FCF7A"    # verde claro para texto
 INFO_TEXT = "#7AA7E0"       # azul claro para texto
