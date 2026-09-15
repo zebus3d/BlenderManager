@@ -161,12 +161,17 @@ class MainWindow(QWidget):
         self._search_timer.setSingleShot(True)
         self._search_timer.timeout.connect(self._apply_search)
         self._pending_search = ""
-        # Reconstruir la rejilla en CADA tick del slider la hace parpadear (se
-        # destruyen y recrean todas las tarjetas decenas de veces por segundo).
-        # Actualizamos la etiqueta al instante, pero la rejilla solo al parar.
-        self._zoom_timer = QTimer(self)
-        self._zoom_timer.setSingleShot(True)
-        self._zoom_timer.timeout.connect(self._apply_zoom)
+        # El zoom no reconstruye en cada tick del slider (eso era lo que hacia
+        # parpadear la rejilla), pero tampoco espera a que sueltes: refresca
+        # como mucho cada 80 ms y, cuando el slider lleva 250 ms quieto, para y
+        # guarda. Medido: reconstruir la tienda entera cuesta ~7-25 ms.
+        self._zoom_tick = QTimer(self)
+        self._zoom_tick.setInterval(80)
+        self._zoom_tick.timeout.connect(self._rebuild_zoom_views)
+        self._zoom_settle = QTimer(self)
+        self._zoom_settle.setSingleShot(True)
+        self._zoom_settle.setInterval(250)
+        self._zoom_settle.timeout.connect(self._commit_zoom)
         self._update_checking = False
         self._auto_checked = False
         self._source_dialog = None
@@ -597,15 +602,22 @@ class MainWindow(QWidget):
     def set_zoom(self, value: float) -> None:
         self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(value)))
         self._update_zoom_label()
-        # Guardar y reconstruir solo cuando el usuario suelta el slider: hacerlo
-        # en cada tick provoca parpadeo (y escribe el JSON sin necesidad).
-        self._zoom_timer.start(120)
+        # En vivo, pero con tope: si no, se reconstruye en cada pixel de
+        # arrastre (parpadeo) y el JSON se escribe decenas de veces por segundo.
+        if not self._zoom_tick.isActive():
+            self._zoom_tick.start()
+        self._zoom_settle.start()
 
-    def _apply_zoom(self) -> None:
-        self.settings.zoom = self.zoom
-        self.settings.save()
+    def _rebuild_zoom_views(self) -> None:
         self._rebuild_store()
         self._rebuild_installed()
+
+    def _commit_zoom(self) -> None:
+        """El slider lleva quieto: paramos y guardamos el ajuste una sola vez."""
+        self._zoom_tick.stop()
+        self._rebuild_zoom_views()
+        self.settings.zoom = self.zoom
+        self.settings.save()
 
     def _zoom_enabled(self) -> bool:
         """El zoom solo pinta algo en rejilla y fuera de los ajustes."""
@@ -680,10 +692,11 @@ class MainWindow(QWidget):
         self._resize_timer.start(200)
 
     def closeEvent(self, event):
-        """Vuelca el zoom pendiente: con el amortiguado, cerrar justo después de
-        mover el slider podía perder el valor (aún no había saltado el timer)."""
-        if self._zoom_timer.isActive():
-            self._zoom_timer.stop()
+        """Vuelca el zoom pendiente: si se cierra mientras el slider se mueve,
+        el guardado (que va con retardo) aún no ha corrido."""
+        self._zoom_settle.stop()
+        self._zoom_tick.stop()
+        if self.zoom != self.settings.zoom:
             self.settings.zoom = self.zoom
             self.settings.save()
         super().closeEvent(event)

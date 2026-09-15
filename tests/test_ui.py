@@ -170,7 +170,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
 
         self.assertEqual(Settings().zoom, 0.8)
 
-    def test_zoom_amortiguado(self):
+    def test_zoom_en_vivo_con_tope(self):
         from PySide6.QtTest import QTest
 
         from ui.widgets.main_window import MainWindow
@@ -181,18 +181,26 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.layout_mode = "grid"
         window.zoom = 0.8
         window._rebuild_store()
-        before = window.store_grid.itemAt(0).widget().minimumHeight()
+        card = lambda: window.store_grid.itemAt(0).widget()
+        before = card().minimumHeight()
+
         window.set_zoom(1.4)
-        # El valor va al instante, pero la rejilla NO se reconstruye todavía:
-        # hacerlo en cada tick del slider es lo que la hacía parpadear.
+        # El valor va al instante, pero la rejilla no se toca en el mismo tick
+        # (eso era el parpadeo), aunque tampoco espera a que sueltes: el timer
+        # de refresco queda armado.
         self.assertEqual(window.zoom, 1.4)
-        self.assertTrue(window._zoom_timer.isActive())
-        self.assertEqual(window.store_grid.itemAt(0).widget().minimumHeight(),
-                         before)
+        self.assertTrue(window._zoom_tick.isActive())
+        self.assertEqual(card().minimumHeight(), before)
+
+        # Mientras se arrastra, se refresca sola (esto es lo que faltaba).
+        QTest.qWait(200)
+        self.assertNotEqual(card().minimumHeight(), before)
+
+        # Y al parar el slider, para y guarda una sola vez.
         QTest.qWait(300)
-        self.assertFalse(window._zoom_timer.isActive())
-        self.assertNotEqual(window.store_grid.itemAt(0).widget().minimumHeight(),
-                            before)
+        self.assertFalse(window._zoom_tick.isActive())
+        self.assertFalse(window._zoom_settle.isActive())
+        self.assertEqual(window.settings.zoom, 1.4)
 
     def test_atajos_registrados(self):
         from PySide6.QtGui import QShortcut
