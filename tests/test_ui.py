@@ -589,6 +589,95 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class ElideTests(SettingsIsolated, unittest.TestCase):
+    """Los nombres largos no deben ensanchar su columna ni salirse de la ventana."""
+
+    LARGO = "blender-5.3.0-alpha+main.1fd06ddba680-linux.x86_64-release"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def _entrada(self, nombre):
+        from pathlib import Path
+
+        from services.installed import InstalledBuild
+
+        return InstalledBuild(name=nombre,
+                              path=Path("/home/u/Descargas/Blenders") / nombre,
+                              version="5.3.0", branch="v53")
+
+    def test_rejilla_con_nombre_largo_deja_las_columnas_iguales(self):
+        from PySide6.QtWidgets import QGridLayout, QWidget
+
+        from ui.widgets.cards import GridInstalledCard
+
+        panel = QWidget()
+        panel.resize(1060, 300)
+        grid = QGridLayout(panel)
+        grid.setContentsMargins(14, 14, 14, 14)
+        grid.setSpacing(14)
+        for columna in range(3):
+            grid.setColumnStretch(columna, 1)
+        nombres = [self.LARGO, "blender-5.2.0", "blender-5.1.2-linux-x64"]
+        for indice, nombre in enumerate(nombres):
+            grid.addWidget(GridInstalledCard(self._entrada(nombre), False, 1.0),
+                           0, indice)
+        panel.show()
+        self.app.processEvents()
+
+        # El minimo ya no depende del texto (antes la larga pedia 507 px).
+        minimos = {grid.itemAtPosition(0, i).widget().minimumSizeHint().width()
+                   for i in range(3)}
+        self.assertEqual(len(minimos), 1)
+        # Y en pantalla las tres ocupan lo mismo (1 px arriba o abajo, que es el
+        # redondeo de repartir el ancho entre tres).
+        anchos = [grid.itemAtPosition(0, i).widget().width() for i in range(3)]
+        self.assertLessEqual(max(anchos) - min(anchos), 1)
+
+    def test_lista_con_ruta_larga_cabe_en_la_ventana(self):
+        from PySide6.QtWidgets import QHBoxLayout, QWidget
+
+        from ui.widgets.cards import InstalledCard
+
+        panel = QWidget()
+        panel.resize(900, 200)
+        lay = QHBoxLayout(panel)
+        tarjeta = InstalledCard(self._entrada(self.LARGO), False)
+        lay.addWidget(tarjeta)
+        panel.show()
+        self.app.processEvents()
+        # Antes necesitaba 974 px (el nombre 483 + el meta con la ruta 666).
+        self.assertLess(tarjeta.minimumSizeHint().width(), 500)
+
+    def test_la_etiqueta_recorta_y_solo_avisa_si_no_cabe(self):
+        from PySide6.QtCore import Qt
+
+        from ui.widgets.labels import ElidedLabel
+
+        etiqueta = ElidedLabel(self.LARGO, Qt.ElideMiddle)
+        etiqueta.setFixedWidth(300)
+        etiqueta.show()
+        self.app.processEvents()
+        self.assertTrue(etiqueta.is_elided())
+        self.assertIn("…", etiqueta.displayed_text())
+        # El texto completo sigue en text() y en el tooltip...
+        self.assertEqual(etiqueta.text(), self.LARGO)
+        self.assertEqual(etiqueta.toolTip(), self.LARGO)
+
+        etiqueta.setFixedWidth(900)
+        self.app.processEvents()
+        # ...pero si cabe entero, el tooltip desaparece (no repite lo que ya se ve).
+        self.assertFalse(etiqueta.is_elided())
+        self.assertEqual(etiqueta.displayed_text(), self.LARGO)
+        self.assertEqual(etiqueta.toolTip(), "")
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class UninstallTests(SettingsIsolated, unittest.TestCase):
     """Borrar una version instalada: el boton de la papelera."""
 

@@ -20,6 +20,7 @@ from paths import ASSETS_DIR
 from ui import icons
 from ui import theme as t
 from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
+from ui.widgets.labels import ElidedLabel
 
 _LOGO = ASSETS_DIR / "images" / "blender_logo.png"
 
@@ -220,7 +221,7 @@ class BuildCard(BaseBuildCard):
         text_col.setSpacing(3)
         top = QHBoxLayout()
         top.setSpacing(10)
-        title = QLabel(f"Blender {self.version}")
+        title = ElidedLabel(f"Blender {self.version}", Qt.ElideMiddle)
         title.setObjectName("Title")
         if not installed:
             title.setStyleSheet("color: rgba(230,230,230,0.6);")
@@ -228,9 +229,8 @@ class BuildCard(BaseBuildCard):
         top.addWidget(self._badge())
         top.addStretch()
         text_col.addLayout(top)
-        meta = QLabel(self.meta_text)
+        meta = ElidedLabel(self.meta_text, Qt.ElideRight)
         meta.setObjectName("Muted")
-        meta.setTextInteractionFlags(Qt.NoTextInteraction)
         if not installed:
             meta.setStyleSheet("color: rgba(152,152,152,0.6);")
         text_col.addWidget(meta)
@@ -282,14 +282,15 @@ class GridBuildCard(BaseBuildCard):
         logo.setAlignment(Qt.AlignHCenter)
         lay.addWidget(logo)
 
-        title = QLabel(f"Blender {self.version}")
+        title = ElidedLabel(f"Blender {self.version}", Qt.ElideMiddle)
         title.setObjectName("Title")
         title.setAlignment(Qt.AlignHCenter)
         if not installed:
             title.setStyleSheet("color: rgba(230,230,230,0.6);")
         lay.addWidget(title)
 
-        sub = QLabel(f"{self.channel_text}  ·  {self.meta_text}")
+        sub = ElidedLabel(f"{self.channel_text}  ·  {self.meta_text}",
+                          Qt.ElideRight)
         sub.setObjectName("Warning" if self.is_lts else "Info")
         sub.setAlignment(Qt.AlignHCenter)
         lay.addWidget(sub)
@@ -344,10 +345,11 @@ class InstalledCard(_HoverCard, QFrame):
 
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
-        title = QLabel(entry.name)
+        title = ElidedLabel(entry.name, Qt.ElideMiddle)
         title.setObjectName("Title")
         text_col.addWidget(title)
-        meta = QLabel(f"Blender {entry.version}   ·   {entry.path}")
+        meta = ElidedLabel(f"Blender {entry.version}   ·   {entry.path}",
+                           Qt.ElideRight)
         meta.setObjectName("Muted")
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
@@ -401,12 +403,12 @@ class GridInstalledCard(_HoverCard, QFrame):
         logo.setAlignment(Qt.AlignHCenter)
         lay.addWidget(logo)
 
-        title = QLabel(entry.name)
+        title = ElidedLabel(entry.name, Qt.ElideMiddle)
         title.setObjectName("Title")
         title.setAlignment(Qt.AlignHCenter)
         lay.addWidget(title)
 
-        meta = QLabel(f"Blender {entry.version}")
+        meta = ElidedLabel(f"Blender {entry.version}", Qt.ElideRight)
         meta.setObjectName("Muted")
         meta.setAlignment(Qt.AlignHCenter)
         lay.addWidget(meta)
