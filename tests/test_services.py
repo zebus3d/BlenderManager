@@ -419,6 +419,35 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(loaded.favorites, ["v45|4.5.13"])
 
 
+class SmokeTests(unittest.TestCase):
+    """`--smoke` tiene que decir la verdad: si no hay red, fallar."""
+
+    def _smoke(self, efecto):
+        """Ejecuta smoke() con la descarga simulada, sin ensuciar la salida."""
+        import contextlib
+        import io
+
+        import main
+
+        with contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()), \
+                mock.patch.object(main.api, "fetch_builds", **efecto):
+            return main.smoke()
+
+    def test_con_red_devuelve_cero(self):
+        builds = [make_build("5.2.1", "stable", "v52", "b.tar.xz")]
+        self.assertEqual(self._smoke({"return_value": builds}), 0)
+
+    def test_sin_red_falla(self):
+        # Antes caia al cache de disco y salia con 0: un binario sin HTTPS
+        # "parecia" funcionar. Se descubrio en Arch, con el auto-update roto.
+        self.assertEqual(
+            self._smoke({"side_effect": OSError("sin red")}), 1)
+
+    def test_listado_vacio_falla(self):
+        self.assertEqual(self._smoke({"return_value": []}), 1)
+
+
 class TlsTests(unittest.TestCase):
     """El binario empaquetado no encontraba las CAs fuera de Debian/Ubuntu."""
 

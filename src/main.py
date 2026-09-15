@@ -24,16 +24,31 @@ import i18n
 from services import api, detector, updater
 
 
-def smoke() -> None:
-    """Comprobación rápida sin interfaz: descarga el listado y lo imprime."""
+def smoke() -> int:
+    """Comprobación rápida sin interfaz: descarga el listado y lo imprime.
+
+    Devuelve 0 si ha podido descargar y 1 si no, para que el CI (o quien lo
+    ejecute) note que el binario no tiene red. Antes usaba ``get_builds``, que
+    cae al caché de disco cuando falla: imprimía las compilaciones guardadas y
+    salía con 0, así que un binario incapaz de hacer HTTPS *parecía* funcionar
+    (nos pasó en Arch y lo tapó durante días).
+    """
     info = detector.detect()
-    builds = api.get_builds(force=True)
+    try:
+        builds = api.fetch_builds()
+    except Exception as error:
+        print(f"ERROR: no se pudo descargar el listado: {error}", file=sys.stderr)
+        return 1
+    if not builds:
+        print("ERROR: el listado vino vacío", file=sys.stderr)
+        return 1
     print("system:", info)
     print("total builds:", len(builds))
     for build in api.available_for(builds, info.os_name, info.arch)[:12]:
         tag = "LTS" if build.is_lts else build.risk
         print(f"  {build.version:<8} {tag:<7} {build.branch:<5} "
               f"{build.human_size:>10}  {build.filename}")
+    return 0
 
 
 def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
@@ -100,8 +115,7 @@ def main() -> None:
         return
 
     if args.smoke:
-        smoke()
-        return
+        sys.exit(smoke())
 
     sys.exit(run_ui(screenshot=args.screenshot, debug=args.debug))
 
