@@ -54,6 +54,19 @@ def _fetch_json(url: str, timeout: int = 20):
         return json.loads(response.read().decode("utf-8"))
 
 
+def normalize_arch(value: str) -> str:
+    """Unifica el nombre de la arquitectura.
+
+    Blender publica la misma arquitectura con dos nombres según la plataforma
+    (``amd64`` en Windows, ``x86_64`` en Linux y macOS) y la barra de filtros de
+    la aplicación solo ofrece ``x86_64``/``arm64``. Sin esto, elegir Windows
+    dejaba la tienda **vacía**: había 8 builds, pero ninguna coincidía con el
+    nombre que pedía el filtro.
+    """
+    text = (value or "").strip().lower()
+    return {"amd64": "x86_64", "x64": "x86_64", "aarch64": "arm64"}.get(text, text)
+
+
 def _to_build(entry: dict, experimental: bool = False) -> Build:
     """Convierte una entrada del JSON en un objeto Build."""
     return Build(
@@ -61,7 +74,7 @@ def _to_build(entry: dict, experimental: bool = False) -> Build:
         branch=str(entry.get("branch") or ""),
         risk=str(entry.get("risk_id") or ""),
         platform=str(entry.get("platform") or ""),
-        arch=str(entry.get("architecture") or ""),
+        arch=normalize_arch(entry.get("architecture")),
         url=str(entry.get("url") or ""),
         filename=str(entry.get("file_name") or ""),
         size=int(entry.get("file_size") or 0),
@@ -120,6 +133,9 @@ def load_cache(max_age=CACHE_MAX_AGE):
     known = {field.name for field in fields(Build)}
     builds = []
     for item in payload.get("builds", []):
+        # Un caché de antes del arreglo trae "amd64": se normaliza al leerlo.
+        if "arch" in item:
+            item["arch"] = normalize_arch(item["arch"])
         try:
             builds.append(Build(**{key: value for key, value in item.items() if key in known}))
         except TypeError:

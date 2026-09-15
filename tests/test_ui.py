@@ -30,14 +30,17 @@ def _build(version, branch, risk, lts=False):
 
 
 class SettingsIsolated:
-    """Mixin: la config va a un directorio temporal, no al del usuario.
+    """Mixin: config y carpeta de descargas en un directorio temporal.
 
-    ``MainWindow`` guarda en disco (zoom, modo de vista...) y algunos tests
-    mueven el zoom a proposito, asi que sin aislar la config la suite escribia
-    en el ``settings.json`` real: ya paso, el zoom se quedo en 1.4.
+    ``MainWindow`` guarda en disco (zoom, modo de vista...), asi que sin aislar
+    la config la suite escribia en el ``settings.json`` real: ya paso, el zoom se
+    quedo en 1.4. Y la carpeta de descargas apunta a un temporal vacio porque si
+    no los tests leen las versiones de Blender del usuario (y un test de descarga
+    que se creia "ya instalada" llego a lanzarle dos Blenders de verdad).
     """
 
     def setUp(self):
+        import json
         import tempfile
         from unittest import mock
 
@@ -45,8 +48,13 @@ class SettingsIsolated:
 
         self._config_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self._config_dir.cleanup)
+        config = Path(self._config_dir.name)
+        destino = config / "Blenders"
+        destino.mkdir()
+        (config / "settings.json").write_text(
+            json.dumps({"dest_folder": str(destino)}), encoding="utf-8")
         patch = mock.patch.object(settings_service, "config_dir",
-                                  return_value=Path(self._config_dir.name))
+                                  return_value=config)
         patch.start()
         self.addCleanup(patch.stop)
 
@@ -586,6 +594,43 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
             tr("You have local changes. Commit or stash them and try again."))
         self.assertTrue(update_btn.isEnabled())
         self.assertTrue(later_btn.isEnabled())
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
+    """La descarga usa la fuente que elige la sonda (CDN o release oficial)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_descarga_desde_la_fuente_elegida(self):
+        from unittest import mock
+
+        from PySide6.QtTest import QTest
+
+        from services.sources import Source
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.builds = [_build("9.9.9", "v99", "stable")]
+        window.installed = []
+        elegida = Source("Blender release (Cloudflare)",
+                         "https://download.blender.org/release/Blender5.1/f.tar.xz",
+                         "hash-del-release")
+        with mock.patch.object(main_window.sources, "choose",
+                               return_value=elegida), \
+                mock.patch.object(window.downloader, "start") as arranque:
+            window.install_build(window.builds[0])
+            # La eleccion va en un hilo y vuelve por senal: hay que dejar correr
+            # el bucle de eventos para que llegue.
+            QTest.qWait(300)
+
+        self.assertTrue(arranque.called)
+        url, _destino, _nombre, checksum = arranque.call_args.args
+        self.assertEqual(url, elegida.url)
+        self.assertEqual(checksum, "hash-del-release")
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
