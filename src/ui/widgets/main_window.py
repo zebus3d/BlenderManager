@@ -539,25 +539,14 @@ class MainWindow(QWidget):
         self._rebuild_store()
 
     def _filtered(self):
-        builds = api.available_for(self.builds, self.system.os_name, self.arch)
-        channel = self.channel
-        result = []
-        for build in builds:
-            if channel == "lts" and not build.is_lts:
-                continue
-            if channel == "stable" and not (build.risk == "stable" and not build.is_lts):
-                continue
-            if channel == "daily" and build.risk not in ("daily", "alpha", "beta"):
-                continue
-            if channel == "experimental" and not build.experimental:
-                continue
-            if channel != "experimental" and build.experimental:
-                continue
-            if self.search and self.search not in build.version.lower() \
-                    and self.search not in build.branch.lower():
-                continue
-            result.append(build)
-        return result
+        """Aplica plataforma, arquitectura, canal y búsqueda a las compilaciones.
+
+        Usamos ``api.filter_builds`` (función pura y testeada) en vez de
+        reimplementar el filtrado aquí: la primera versión del port lo repetía a
+        mano y los filtros de canal no filtraban nada.
+        """
+        builds = api.available_for(self.builds, self.platform, self.arch)
+        return api.filter_builds(builds, self.channel, self.search)
 
     def _filtered_installed(self):
         result = []
