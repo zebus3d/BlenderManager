@@ -21,9 +21,18 @@ from ui.widgets.cards import (
     GridInstalledCard,
     InstalledCard,
 )
+from ui.widgets.dialogs import (
+    AppDialog,
+    ProgressDialog,
+    confirm,
+    show_error,
+    show_info,
+    update_available,
+)
 from ui.widgets.main_window import MainWindow
 
 __all__ = [
+    "AppDialog",
     "BuildCard",
     "CardButton",
     "GridBuildCard",
@@ -33,6 +42,11 @@ __all__ = [
     "InstalledCard",
     "MainWindow",
     "Pill",
+    "ProgressDialog",
     "SideButton",
     "SwitchPill",
+    "confirm",
+    "show_error",
+    "show_info",
+    "update_available",
 ]
