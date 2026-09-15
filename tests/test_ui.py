@@ -28,8 +28,30 @@ def _build(version, branch, risk, lts=False):
                  size=1000, mtime=1)
 
 
+class SettingsIsolated:
+    """Mixin: la config va a un directorio temporal, no al del usuario.
+
+    ``MainWindow`` guarda en disco (zoom, modo de vista...) y algunos tests
+    mueven el zoom a proposito, asi que sin aislar la config la suite escribia
+    en el ``settings.json`` real: ya paso, el zoom se quedo en 1.4.
+    """
+
+    def setUp(self):
+        import tempfile
+        from unittest import mock
+
+        from services import settings as settings_service
+
+        self._config_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._config_dir.cleanup)
+        patch = mock.patch.object(settings_service, "config_dir",
+                                  return_value=Path(self._config_dir.name))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
-class MainWindowTests(unittest.TestCase):
+class MainWindowTests(SettingsIsolated, unittest.TestCase):
     app = None
 
     @classmethod
@@ -127,7 +149,7 @@ class MainWindowTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
-class LayoutTests(unittest.TestCase):
+class LayoutTests(SettingsIsolated, unittest.TestCase):
     app = None
 
     @classmethod
@@ -172,6 +194,96 @@ class LayoutTests(unittest.TestCase):
         self.assertNotEqual(window.store_grid.itemAt(0).widget().minimumHeight(),
                             before)
 
+    def test_atajos_registrados(self):
+        from PySide6.QtGui import QShortcut
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        keys = {s.key().toString() for s in window.findChildren(QShortcut)}
+        self.assertIn("Ctrl++", keys)
+        self.assertIn("Ctrl+=", keys)
+        self.assertIn("Ctrl+-", keys)
+        self.assertIn("Ctrl+0", keys)
+
+    def test_atajos_de_zoom(self):
+        from services.settings import DEFAULT_ZOOM
+        from ui.widgets.main_window import MAX_ZOOM, MIN_ZOOM, ZOOM_STEP, MainWindow
+
+        window = MainWindow()
+        window.resize(900, 600)
+        window.layout_mode = "grid"
+        window._set_zoom_value(DEFAULT_ZOOM)
+
+        window.zoom_in()
+        self.assertAlmostEqual(window.zoom, DEFAULT_ZOOM + ZOOM_STEP)
+        # El slider va con el valor: si no, la UI mentiría.
+        self.assertEqual(window.zoom_slider.value(),
+                         round((DEFAULT_ZOOM + ZOOM_STEP) * 100))
+
+        window.zoom_out()
+        window.zoom_out()
+        self.assertAlmostEqual(window.zoom, DEFAULT_ZOOM - ZOOM_STEP)
+
+        for _ in range(50):
+            window.zoom_in()
+        self.assertAlmostEqual(window.zoom, MAX_ZOOM)
+        for _ in range(50):
+            window.zoom_out()
+        self.assertAlmostEqual(window.zoom, MIN_ZOOM)
+
+        window.reset_zoom()
+        self.assertAlmostEqual(window.zoom, DEFAULT_ZOOM)
+        self.assertEqual(window.zoom_slider.value(), round(DEFAULT_ZOOM * 100))
+
+    def test_zoom_no_aplica_en_modo_lista(self):
+        from services.settings import DEFAULT_ZOOM
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.layout_mode = "list"
+        window._set_zoom_value(DEFAULT_ZOOM)
+        window.zoom_in()
+        self.assertAlmostEqual(window.zoom, DEFAULT_ZOOM)
+
+    def test_ctrl_clic_en_el_slider_resetea(self):
+        from PySide6.QtCore import QEvent, QPointF, Qt
+        from PySide6.QtGui import QMouseEvent
+
+        from services.settings import DEFAULT_ZOOM
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(900, 600)
+        window.layout_mode = "grid"
+        window._set_zoom_value(1.4)
+        pos = QPointF(10, 5)
+        event = QMouseEvent(QEvent.MouseButtonPress, pos, pos,
+                            Qt.LeftButton, Qt.LeftButton, Qt.ControlModifier)
+        window.zoom_slider.mousePressEvent(event)
+        self.assertAlmostEqual(window.zoom, DEFAULT_ZOOM)
+
+    def test_zebra_solo_en_modo_lista(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.builds = [_build("5.2.1", "v52", "stable"),
+                         _build("5.1.2", "v51", "stable")]
+        window.channel = "all"
+        window.resize(900, 600)
+
+        def zebras():
+            return [window.store_grid.itemAt(i).widget().property("zebra")
+                    for i in range(window.store_grid.count())]
+
+        window.layout_mode = "grid"
+        window._rebuild_store()
+        self.assertEqual(zebras(), ["false", "false"])
+
+        window.layout_mode = "list"
+        window._rebuild_store()
+        self.assertEqual(zebras(), ["false", "true"])
+
     def test_columnas_grid_crecen_con_el_ancho(self):
         from ui.widgets.main_window import MainWindow
 
@@ -186,7 +298,7 @@ class LayoutTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
-class SourceUpdateUiTests(unittest.TestCase):
+class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
     """Modo fuente: la actualización es ``git pull``, no un binario."""
 
     app = None
