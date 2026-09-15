@@ -3,11 +3,12 @@ import tarfile
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 from pathlib import Path
 
 import services.settings as settings_module
 from model.build import Build, favorite_key
-from services import api, detector, installed
+from services import api, detector, installed, tls
 from services.extractor import extract, is_archive
 
 
@@ -416,6 +417,36 @@ class SettingsTests(unittest.TestCase):
             encoding="utf-8")
         loaded = settings_module.Settings.load()
         self.assertEqual(loaded.favorites, ["v45|4.5.13"])
+
+
+class TlsTests(unittest.TestCase):
+    """El binario empaquetado no encontraba las CAs fuera de Debian/Ubuntu."""
+
+    def setUp(self):
+        self._original = tls._ca_file
+        tls._ca_file = None
+
+    def tearDown(self):
+        tls._ca_file = self._original
+
+    def test_usa_el_primer_candidato_que_existe(self):
+        # En esta maquina (como en la mayoria) hay al menos uno.
+        self.assertTrue(tls.ca_file())
+        self.assertTrue(any(tls.ca_file() == c for c in tls.CA_CANDIDATES))
+
+    def test_el_contexto_trae_autoridades_de_verdad(self):
+        # Lo que fallaba era justo esto: un contexto sin CAs, que rechaza
+        # cualquier certificado con "unable to get local issuer certificate".
+        contexto = tls.ssl_context()
+        self.assertGreater(contexto.cert_store_stats()["x509_ca"], 0)
+
+    def test_sin_candidatos_cae_al_contexto_por_defecto(self):
+        # Si no hay ningun fichero conocido, no se inventa nada: contexto
+        # normal, y como mucho fallara la peticion (no se degrada la seguridad).
+        with mock.patch.object(tls, "CA_CANDIDATES", ("/no/existe/ca.crt",)):
+            tls._ca_file = None
+            self.assertIsNone(tls.ca_file())
+            self.assertIsNotNone(tls.ssl_context())
 
 
 class DetectorTests(unittest.TestCase):
