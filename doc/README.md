@@ -2,7 +2,7 @@
 
 Esta carpeta explica **cómo está montado el programa** para que puedas
 entenderlo y modificarlo a mano con el tiempo. Está escrita pensando en alguien
-que está aprendiendo Python y Kivy, así que empieza por lo básico y va subiendo.
+que está aprendiendo Python y Qt, así que empieza por lo básico y va subiendo.
 
 ## Por dónde empezar
 
@@ -10,7 +10,7 @@ que está aprendiendo Python y Kivy, así que empieza por lo básico y va subien
    ejecuta y dónde está el archivo principal.
 2. **[01 - Arquitectura](01-arquitectura.md)** — cómo se reparte el código por
    capas (modelo, servicios, interfaz) y cómo viaja la información.
-3. **[02 - Kivy](02-kivy.md)** — los conceptos de Kivy que usa el proyecto y
+3. **[02 - Qt](02-qt.md)** — los conceptos de Qt Widgets que usa el proyecto y
    dónde ver cada uno en el código.
 4. **[03 - Diseño de la interfaz](03-diseno-ui-ux.md)** — los colores, los
    espacios y las reglas visuales, para que todo siga teniendo el mismo aspecto.
@@ -21,12 +21,12 @@ que está aprendiendo Python y Kivy, así que empieza por lo básico y va subien
 
 ```
                  ┌──────────────────────────────────────────┐
-   EL USUARIO →  │  main.py  (arranca Kivy y carga las .kv)  │
+   EL USUARIO →  │  main.py  (arranca Qt y carga el QSS)     │
                  └────────────────────┬─────────────────────┘
                                       │
                  ┌────────────────────▼─────────────────────┐
-   LO QUE VES →  │  views/*.kv   +   ui/widgets/root.py      │
-                 │  (aspecto)        (comportamiento)         │
+   LO QUE VES →  │  ui/qss.py   +   ui/widgets/             │
+                 │  (aspecto)       (comportamiento)         │
                  └────────────────────┬─────────────────────┘
                                       │ pide datos / acciones
                  ┌────────────────────▼─────────────────────┐
@@ -39,6 +39,11 @@ que está aprendiendo Python y Kivy, así que empieza por lo básico y va subien
                  └──────────────────────────────────────────┘
 ```
 
-La regla de oro del proyecto: **la vista (`.kv`) describe el aspecto, el
-controlador (`root.py`) decide qué hacer, y los servicios hacen el trabajo
+La regla de oro del proyecto: **el QSS describe el aspecto, el controlador
+(`ui/widgets/main_window.py`) decide qué hacer, y los servicios hacen el trabajo
 pesado**. Si mantienes esa separación, todo seguirá siendo fácil de entender.
+
+> Nota: este proyecto nació con Kivy y se portó a Qt Widgets (PySide6) porque
+> Kivy necesita OpenGL y eso hacía depender el binario del Mesa de cada distro.
+> De aquella época quedan los `ui/widgets/` (misma idea, widgets de Qt) y nada
+> más: los `.kv` se sustituyeron por `ui/qss.py`.
