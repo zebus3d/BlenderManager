@@ -240,9 +240,18 @@ ldd dist/BlenderManager/_internal/PySide6/Qt/plugins/platforms/libqxcb.so | grep
   (que es lo que enseña el gestor de ficheros). Si alguien dice que "el AppImage
   sale sin icono", **el icono va dentro**: comprobarlo con
   `./BlenderManager-x86_64.AppImage --appimage-extract` y mirar la raíz del
-  AppDir. Lo que suele faltar es un *thumbnailer* de AppImage en su sistema
-  (en KDE/Dolphin, sin uno, el fichero suelto sale con el icono genérico). El
-  CI lo verifica en cada build.
+  AppDir. Lo que falta suele ser del sistema, no del paquete (comprobado con un
+  usuario real):
+  - **KDE/Dolphin**: `kio-extras` ya trae el plugin
+    `thumbcreator/appimagethumbnail.so`, pero le falta la librería: `ldd` sobre
+    ese .so dice `libappimage.so.1.0 => not found` hasta que se instala
+    `libappimage` (paquete de `extra` en Arch). Después hay que **activar la
+    vista previa** en Dolphin (Interfaz → Vistas previas) y borrar la caché de
+    intentos fallidos (`~/.cache/thumbnails/*`).
+  - **Cinnamon/Nemo** (Linux Mint): funciona de serie, porque Mint instala
+    `xapp-thumbnailers`, que incluye un generador de miniaturas de AppImage que
+    lee el `.DirIcon`.
+  El CI verifica que el icono va dentro en cada build.
 - **`QT_EXCLUDES`** deja fuera los módulos de Qt que no usamos (WebEngine, QML,
   Multimedia, 3D...) para no arrastrar ~100 MB de más.
 - **No excluir `shiboken6` ni `shiboken6.Shiboken`**: PySide6 los necesita para
