@@ -29,6 +29,13 @@ def _icon_font() -> QFont:
     return icon_font()
 
 
+def _launch_icon():
+    """Icono de "play" verde como QIcon (Qt no admite mezclar fuentes en el texto)."""
+    from ui.fonts import glyph_icon
+
+    return glyph_icon(icons.LAUNCH, 12, "#22C55E")
+
+
 def _logo_label(size: int, dim: bool) -> QLabel:
     label = QLabel()
     pix = QPixmap(str(_LOGO))
@@ -242,8 +249,9 @@ class InstalledCard(_HoverCard, QFrame):
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
         lay.addWidget(info)
 
-        launch = CardButton(f"{icons.LAUNCH}  {tr('Launch')}", variant="neutral",
+        launch = CardButton(tr("Launch"), variant="neutral",
                             tooltip=tr("Launch this installed version"))
+        launch.setIcon(_launch_icon())
         launch.clicked.connect(lambda: self.launch_clicked.emit(entry))
         lay.addWidget(launch)
 
@@ -300,6 +308,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         row.addWidget(info)
         launch = CardButton(tr("Launch"), variant="neutral",
                             tooltip=tr("Launch this installed version"))
+        launch.setIcon(_launch_icon())
         launch.clicked.connect(lambda: self.launch_clicked.emit(entry))
         row.addWidget(launch, 1)
         delete = CardButton(icons.DELETE, variant="danger",
