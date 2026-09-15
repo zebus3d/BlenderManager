@@ -47,6 +47,7 @@ from services import (
     detector,
     installed as installed_service,
     settings as settings_service,
+    sources,
     updater,
 )
 from services.downloader import Downloader, log as download_log
@@ -110,6 +111,7 @@ class MainWindow(QWidget):
     extract_done = Signal(str)
     update_result = Signal(str, object, bool)
     update_applied = Signal(str)
+    source_chosen = Signal(object, object)   # build, Source
     source_update_done = Signal(bool, str)
 
     def __init__(self, parent=None):
@@ -187,6 +189,7 @@ class MainWindow(QWidget):
         self.update_result.connect(self._on_update_result)
         self.update_applied.connect(self._on_update_applied)
         self.source_update_done.connect(self._on_source_update_done)
+        self.source_chosen.connect(self._start_download)
 
         self._build_ui()
         QTimer.singleShot(100, lambda: self.refresh(force=False))
@@ -978,14 +981,27 @@ class MainWindow(QWidget):
             return
         self._set_downloading(True)
         self.progress.setValue(0)
+        # Primero se elige de qué fuente bajar (el CDN o el release oficial). Es
+        # una medición de red, así que va en un hilo y vuelve por señal: en el
+        # hilo de la interfaz congelaría la ventana un par de segundos.
+        self._set_status(tr("Choosing the fastest source..."))
+
+        def worker():
+            self.source_chosen.emit(build, sources.choose(build))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _start_download(self, build, source) -> None:
+        """Arranca la descarga desde la fuente ya elegida."""
         self._set_status(tr("Downloading..."))
+        download_log(f"downloading {build.filename} from {source.label}")
         self._bridge = _Bridge()
         self._bridge.progress.connect(self._set_progress)
         self._bridge.done.connect(lambda path: self._on_download_done(path, build))
         self._bridge.error.connect(self._on_download_error)
         self.downloader.start(
-            build.url, str(Path(self.settings.dest_folder).expanduser()),
-            build.filename, build.checksum,
+            source.url, str(Path(self.settings.dest_folder).expanduser()),
+            build.filename, source.checksum,
             on_progress=lambda done, total: self._bridge.progress.emit(done, total),
             on_done=lambda path: self._bridge.done.emit(str(path)),
             on_error=lambda msg: self._bridge.error.emit(msg),

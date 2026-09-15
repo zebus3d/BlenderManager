@@ -30,6 +30,8 @@ _TRANSLATIONS = {
         "Beta": "Beta",
         "Download": "Descargar",
         "Downloading...": "Descargando...",
+        "Choosing the fastest source...":
+            "Buscando la fuente más rápida...",
         "Extracting...": "Extrayendo...",
         "Launch": "Lanzar",
         "Launching": "Lanzando",
