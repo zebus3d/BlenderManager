@@ -61,6 +61,7 @@ from ui.widgets.cards import (
     GridBuildCard,
     GridInstalledCard,
     InstalledCard,
+    logo_shadow,
 )
 from ui.widgets.dialogs import AppDialog, confirm, show_error, update_available
 
@@ -243,6 +244,7 @@ class MainWindow(QWidget):
         pix = QPixmap(str(ASSETS_DIR / "images" / "app_icon.png"))
         if not pix.isNull():
             logo.setPixmap(pix.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo_shadow(logo, 52)
         self.title_label = QLabel(tr("Blender Downloads Manager"))
         self.title_label.setObjectName("HeaderTitle")
         lay.addWidget(logo)
@@ -779,9 +781,15 @@ class MainWindow(QWidget):
         builds = self._filtered()
         columns = self._grid_columns(self.store_scroll, self.store_grid, 0)
         if not builds:
-            self._fill_grid(self.store_grid, [self._placeholder(
-                tr("No builds found"),
-                tr("Try clearing the search or another channel filter."))], columns)
+            # El canal experimental casi siempre está vacío (Blender dejó de
+            # publicar ramas en 2021): se explica en vez de dejar el genérico.
+            if self.channel == "experimental":
+                text, hint = tr("No experimental builds right now"), ""
+            else:
+                text = tr("No builds found")
+                hint = tr("Try clearing the search or another channel filter.")
+            self._fill_grid(self.store_grid, [self._placeholder(text, hint)],
+                            columns)
             return
         grid = self.layout_mode == "grid"
         cards = []

@@ -7,9 +7,9 @@ Modos de uso:
 * ``python3 src/main.py --screenshot RUTA.png`` -> arranca, captura y sale.
 * ``python3 src/main.py --apply-update APP_DIR PID`` -> uso interno del auto-update.
 
-La versión Kivy está en la rama ``master``; esta rama (``port/pyside6``) usa Qt
-Widgets, que renderiza con el motor *raster* (CPU) en vez de exigir OpenGL.
-Eso es lo que permite que un mismo AppImage funcione en todas las distros.
+La interfaz usa Qt Widgets (PySide6), que renderiza con el motor *raster* (CPU)
+en vez de exigir OpenGL: eso es lo que permite que un mismo AppImage funcione
+en todas las distros, sin depender del Mesa del sistema.
 """
 
 import argparse

@@ -292,6 +292,48 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window._rebuild_store()
         self.assertEqual(zebras(), ["false", "true"])
 
+    def test_la_papelera_no_se_queda_sin_icono(self):
+        from types import SimpleNamespace
+
+        from ui.widgets.buttons import CardButton
+        from ui.widgets.cards import GridInstalledCard
+        from ui.widgets.main_window import MIN_ZOOM
+
+        entry = SimpleNamespace(name="blender-5.2.0", version="5.2.0",
+                                path="/tmp/blender-5.2.0")
+        card = GridInstalledCard(entry, False, MIN_ZOOM)
+        card.show()
+        delete = next(b for b in card.findChildren(CardButton)
+                      if b.property("iconOnly") == "true")
+        # El ancho fijo tiene que dar cabida al glifo (si no, a zoom bajo el
+        # boton sale como un recuadro rojo vacio).
+        self.assertGreaterEqual(delete.minimumWidth(),
+                                delete.sizeHint().width())
+        # Y el QSS le quita el padding lateral de 14 px, o no habria forma.
+        self.assertLess(delete.sizeHint().width(), 30)
+
+    def test_el_logo_no_instalado_va_atenuado(self):
+        from ui.widgets.cards import _logo_label
+
+        claro = _logo_label(40, dim=False).pixmap().toImage()
+        tenue = _logo_label(40, dim=True).pixmap().toImage()
+        self.assertEqual(claro.size(), tenue.size())
+        # El atenuado tiene que pintarse de verdad: en Qt el `opacity` del QSS
+        # NO se aplica sobre un QLabel con pixmap, y eso se perdio en el port
+        # (en la version Kivy las builds que no tienes se veian mas apagadas).
+        self.assertLess(self._alpha_medio(tenue), self._alpha_medio(claro))
+
+    @staticmethod
+    def _alpha_medio(image):
+        total = count = 0
+        for y in range(image.height()):
+            for x in range(image.width()):
+                alpha = image.pixelColor(x, y).alpha()
+                if alpha:
+                    total += alpha
+                    count += 1
+        return total / count if count else 0
+
     def test_columnas_grid_crecen_con_el_ancho(self):
         from ui.widgets.main_window import MainWindow
 

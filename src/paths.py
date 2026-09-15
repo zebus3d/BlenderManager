@@ -4,8 +4,8 @@ Distinguimos dos ubicaciones:
 
 * ``APP_DIR``: carpeta del ejecutable. En modo portable los ajustes se
   guardan aquí (junto al binario).
-* ``RESOURCE_DIR``: carpeta de recursos (assets y vistas .kv). Cuando el
-  programa va empaquetado con PyInstaller, los datos se extraen a ``_MEIPASS``.
+* ``RESOURCE_DIR``: carpeta de recursos (``assets``). Cuando el programa va
+  empaquetado con PyInstaller, los datos se extraen a ``_MEIPASS``.
 """
 
 import sys
@@ -29,4 +29,3 @@ def _resource_dir() -> Path:
 APP_DIR = _app_dir()
 RESOURCE_DIR = _resource_dir()
 ASSETS_DIR = RESOURCE_DIR / "assets"
-VIEWS_DIR = RESOURCE_DIR / "views"
