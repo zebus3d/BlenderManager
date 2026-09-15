@@ -161,13 +161,25 @@ class BuildCard(BaseBuildCard):
         lay.addWidget(action)
 
 
+def _grid_height(zoom: float, with_badge: bool = True) -> int:
+    """Alto de una tarjeta de rejilla para un ``zoom`` dado.
+
+    No es ``196 * zoom``: las etiquetas (título, meta, "Instalada"...) NO
+    escalan con el zoom, así que con poca ampliación se recortaban. Medido:
+    el contenido mide ~120·zoom + 110 px (con insignia), y usamos un poco de
+    holgura para que nunca se corte.
+    """
+    base = 118 if with_badge else 96
+    return int(120 * zoom + base)
+
+
 class GridBuildCard(BaseBuildCard):
     """Tarjeta en modo rejilla (icono grande y botón debajo)."""
 
     def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
                  parent=None):
         super().__init__(build, installed, zebra, zoom, parent=parent)
-        self.setFixedHeight(int(196 * zoom))
+        self.setFixedHeight(_grid_height(zoom, with_badge=installed))
         lay = QVBoxLayout(self)
         m = int(14 * zoom)
         lay.setContentsMargins(m, m, m, m)
@@ -277,7 +289,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         self.setProperty("zebra", "true" if zebra else "false")
         self.setProperty("installed", "true")
         self.setAttribute(Qt.WA_Hover, True)
-        self.setFixedHeight(int(188 * zoom))
+        self.setFixedHeight(_grid_height(zoom, with_badge=False))
 
         lay = QVBoxLayout(self)
         m = int(12 * zoom)
