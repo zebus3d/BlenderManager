@@ -77,16 +77,21 @@ class Build:
 
     @property
     def is_lts(self) -> bool:
-        # Solo las estables pueden ser LTS.
+        """True si es una versión LTS.
+
+        Solo las estables pueden serlo (tabla ``LTS_MINORS``).
+        """
         return self.risk == "stable" and minor_of(self.version) in LTS_MINORS
 
     @property
     def sort_key(self):
         # Orden por versión y, a igualdad, por fecha de compilación.
+        """Clave de orden: por versión y, a igualdad, por fecha."""
         return (version_tuple(self.version), self.mtime)
 
     @property
     def human_size(self) -> str:
+        """Tamaño legible para el usuario (por ejemplo '359.8 MB')."""
         return human_size(self.size)
 
     @property
@@ -114,10 +119,16 @@ class InstalledBuild:
 
     @property
     def is_lts(self) -> bool:
+        """True si la versión es LTS.
+
+        Las instaladas no guardan el 'risk' de Blender,
+        así que aquí se mira solo el número de versión.
+        """
         return minor_of(self.version) in LTS_MINORS
 
     @property
     def can_launch(self) -> bool:
+        """True si encontramos el ejecutable de esta versión."""
         return self.executable is not None
 
     @property

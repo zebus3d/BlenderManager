@@ -40,6 +40,7 @@ USER_AGENT = "BlenderManager/0.2 (+https://github.com/zebus3d/BlenderManager)"
 
 
 def cache_path():
+    """Ruta del caché del listado de compilaciones."""
     return cache_dir() / "builds.json"
 
 
@@ -93,6 +94,7 @@ def fetch_builds(timeout: int = 20):
 
 
 def save_cache(builds) -> None:
+    """Guarda el listado en disco, para poder arrancar sin red."""
     payload = {"saved_at": int(time.time()), "builds": [asdict(build) for build in builds]}
     write_json_atomic(cache_path(), payload)
 

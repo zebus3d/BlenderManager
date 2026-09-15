@@ -168,6 +168,13 @@ minor** (`v1.3.0`).
 - **Nada de importar Qt en `services/`, `model/`, `i18n.py` ni `paths.py`.**
   Esa capa es independiente de la UI (es lo que permitió el port); si necesita
   avisar de algo, expone funciones puras o callbacks.
+- **El código se lee como material de aprendizaje.** El README lo vende como un
+  proyecto de fin de curso y hay que sostenerlo: docstrings en lo público (que
+  expliquen el *por qué*, no repetir el nombre de la función), comentarios en
+  español contando la decisión, y nada de trucos sin explicar. Si algo necesita
+  un comentario para entenderse, **se escribe el comentario**; si no, se
+  simplifica el código. Las claves de i18n van en inglés, pero los comentarios y
+  los docstrings van en español, con acentos (el resto del proyecto los lleva).
 - **Nombres de asset**: deben coincidir con `ASSET_NAMES` de
   `src/services/updater.py` (`BlenderManager-x86_64.AppImage`,
   `BlenderManager-windows-x86_64.zip`, `BlenderManager-macos.zip`). Si cambian

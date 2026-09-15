@@ -82,6 +82,7 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
 
 
 def main() -> None:
+    """Punto de entrada: lee los argumentos y hace lo que toque."""
     parser = argparse.ArgumentParser(description="Blender Manager")
     parser.add_argument("--smoke", action="store_true",
                         help="List builds without opening the UI")

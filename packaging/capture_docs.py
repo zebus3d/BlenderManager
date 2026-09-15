@@ -57,7 +57,7 @@ def main() -> None:
         window._update_zoom_label()
         window.show()
 
-        def capture_store():
+        def capture_store_grid():
             window.set_layout_mode("grid")
             window.set_view("store")
             # Una marcada como favorita, para que la captura enseñe la estrella
@@ -67,19 +67,37 @@ def main() -> None:
             if visible:
                 window.settings.favorites = [visible[0].favorite_key]
                 window._rebuild_store()
-            QTimer.singleShot(600, save_store)
+            QTimer.singleShot(600, save_store_grid)
 
-        def save_store():
+        def save_store_grid():
             window.grab().save(str(OUT / "store_grid.png"))
             print("guardada store_grid.png")
-            QTimer.singleShot(300, capture_installed)
+            QTimer.singleShot(300, capture_store_list)
 
-        def capture_installed():
+        def capture_store_list():
             window.set_layout_mode("list")
-            window.set_view("installed")
-            QTimer.singleShot(600, save_installed)
+            QTimer.singleShot(600, save_store_list)
 
-        def save_installed():
+        def save_store_list():
+            window.grab().save(str(OUT / "store_list.png"))
+            print("guardada store_list.png")
+            QTimer.singleShot(300, capture_installed_grid)
+
+        def capture_installed_grid():
+            window.set_layout_mode("grid")
+            window.set_view("installed")
+            QTimer.singleShot(600, save_installed_grid)
+
+        def save_installed_grid():
+            window.grab().save(str(OUT / "installed_grid.png"))
+            print("guardada installed_grid.png")
+            QTimer.singleShot(300, capture_installed_list)
+
+        def capture_installed_list():
+            window.set_layout_mode("list")
+            QTimer.singleShot(600, save_installed_list)
+
+        def save_installed_list():
             window.grab().save(str(OUT / "installed_list.png"))
             print("guardada installed_list.png")
             QTimer.singleShot(300, capture_update)
@@ -102,7 +120,7 @@ def main() -> None:
 
             QTimer.singleShot(600, save_dialog)
 
-        QTimer.singleShot(8000, capture_store)
+        QTimer.singleShot(8000, capture_store_grid)
         app.exec()
 
 
