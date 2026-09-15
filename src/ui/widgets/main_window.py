@@ -1135,11 +1135,17 @@ class MainWindow(QWidget):
             if manual:
                 self._show_message(tr("No update for this platform"), 5)
             return
-        if updater.is_newer(self.current_version, tag):
+        nueva = updater.is_newer(self.current_version, tag)
+        # Queda en el log qué se comparó: si alguien dice "no me avisa", se ve
+        # en un segundo si es que iba al día o si la comprobación no llegó.
+        download_log(f"update check: instalada={self.current_version} "
+                     f"ultima={tag} hay_nueva={nueva}")
+        if nueva:
             self._update_assets = assets
             self._show_update_available(tag, asset)
         elif manual:
-            self._show_message(tr("You already have the latest version."), 5)
+            self._show_message(tr("You already have the latest version ({version}).",
+                                 version=self.current_version), 6)
 
     def _show_source_update(self, tag: str) -> None:
         """Actualización de un checkout en modo fuente: ``git pull`` + reinicio."""
@@ -1147,7 +1153,8 @@ class MainWindow(QWidget):
             self._show_message(tr("Update check failed"), 5)
             return
         if not updater.is_newer(self.current_version, tag):
-            self._show_message(tr("You already have the latest version."), 5)
+            self._show_message(tr("You already have the latest version ({version}).",
+                                 version=self.current_version), 6)
             return
         message = (tr("A new version is available: {version}", version=tag)
                    + "\n\n"

@@ -16,6 +16,20 @@ class VersionCompareTests(unittest.TestCase):
         self.assertFalse(updater.is_newer("1.0.0", "1.0.0"))
         self.assertFalse(updater.is_newer("1.0.0", ""))
 
+    def test_is_newer_con_las_formas_que_se_ven_de_verdad(self):
+        # El tag de la release lleva "v" delante.
+        self.assertTrue(updater.is_newer("1.6.0", "v1.7.0"))
+        self.assertTrue(updater.is_newer("1.7.0", "v1.8.0"))
+        # En modo fuente la version es el describe del checkout, con sufijo.
+        self.assertFalse(updater.is_newer("1.7.0-19-g24a0b43", "v1.7.0"))
+        self.assertTrue(updater.is_newer("1.7.0-19-g24a0b43", "v1.8.0"))
+        # Instalada MAS nueva que la ultima release (p. ej. la pre-release que
+        # se acaba de promover): no hay nada que ofrecer.
+        self.assertFalse(updater.is_newer("1.8.0", "v1.7.0"))
+        # La numeracion del esquema viejo (parche = nº de build) tambien ordena.
+        self.assertTrue(updater.is_newer("1.1.203", "v1.2.39"))
+        self.assertTrue(updater.is_newer("1.2.39", "v1.7.0"))
+
     def test_asset_for(self):
         self.assertEqual(updater.asset_for("linux"), "BlenderManager-x86_64.AppImage")
         self.assertEqual(updater.asset_for("windows"), "BlenderManager-windows-x86_64.zip")
