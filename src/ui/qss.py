@@ -145,10 +145,14 @@ def build_qss() -> str:
     /* --- Botón de info (círculo azul con la "i"), diana 24x24 (WCAG 2.5.8) --- */
     QPushButton#IconLink {{
         background-color: {t.INFO_DISC};
-        border: none;
+        /* Reborde blanco fino que separa el disco azul del fondo oscuro de la
+           tarjeta. En QSS el borde se suma al ancho, así que el contenido baja
+           a 20 px para que la diana siga midiendo 24x24 (como la estrella); la
+           "i" (13 px) sigue cabiendo de sobra. */
+        border: 2px solid {t.TEXT_SEL};
         border-radius: 12px;
-        min-width: 24px; max-width: 24px;
-        min-height: 24px; max-height: 24px;
+        min-width: 20px; max-width: 20px;
+        min-height: 20px; max-height: 20px;
         color: {t.TEXT_SEL};
     }}
     QPushButton#IconLink:hover {{ background-color: {t.ACCENT}; }}
