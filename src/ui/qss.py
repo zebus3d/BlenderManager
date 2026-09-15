@@ -25,6 +25,9 @@ def build_qss() -> str:
         font-size: {t.FONT_SIZE}px;
     }}
     QLabel {{ background: transparent; }}
+    /* El contenedor de refresco+buscador NO debe pintar su fondo: si no,
+       aparece un recuadro más oscuro dentro de la cabecera. */
+    QWidget#HeaderTools {{ background: transparent; }}
     QToolTip {{
         background-color: {t.BG};
         color: {t.TEXT};
@@ -97,16 +100,29 @@ def build_qss() -> str:
     }}
     QPushButton#IconFlat:hover {{ background-color: {t.SURFACE_ALT}; }}
 
-    /* --- Tarjetas --- */
+    /* --- Tarjetas ---
+       OJO con el orden: en QSS, `#Card[installed="true"]` y `#Card:hover`
+       tienen la MISMA especificidad, así que gana la regla que va más abajo.
+       Por eso el hover va al FINAL y repite todas las combinaciones: si no,
+       las tarjetas instaladas (que llevan [installed="true"]) nunca se
+       resaltaban al pasar el ratón. */
     QFrame#Card {{
         background-color: {t.CARD_DIM};
         border-radius: 12px;
         border: none;
     }}
     QFrame#Card[zebra="true"] {{ background-color: {t.CARD_DIM_ALT}; }}
-    QFrame#Card:hover {{ background-color: {t.SURFACE_ALT}; }}
     QFrame#Card[installed="true"] {{ background-color: {t.SURFACE}; }}
     QFrame#Card[installed="true"][zebra="true"] {{ background-color: {t.ROW_ALT}; }}
+    QFrame#Card:hover,
+    QFrame#Card[zebra="true"]:hover,
+    QFrame#Card[installed="true"]:hover,
+    QFrame#Card[installed="true"][zebra="true"]:hover {{
+        background-color: {t.SURFACE_ALT};
+    }}
+    /* La propiedad la pone ``_HoverCard`` (enter/leave): cubre el caso de que el
+       ratón esté sobre un hijo y el padre no reciba el estado hover. */
+    QFrame#Card[hover="true"] {{ background-color: {t.SURFACE_ALT}; }}
 
     /* --- Paneles / barras --- */
     QFrame#Chrome {{ background-color: {t.CHROME}; border: none; }}
@@ -169,21 +185,27 @@ def build_qss() -> str:
     }}
     QProgressBar::chunk {{ background-color: {t.ACCENT}; border-radius: 4px; }}
 
-    /* --- Slider de zoom --- */
+    /* --- Slider de zoom (sin recuadro: el fondo va transparente) --- */
+    QSlider {{
+        background: transparent;
+        border: none;
+    }}
     QSlider::groove:horizontal {{
         background: {t.FIELD};
-        height: 4px;
-        border-radius: 2px;
+        height: 6px;
+        border-radius: 3px;
     }}
-    QSlider::sub-page:horizontal {{ background: {t.ACCENT}; border-radius: 2px; }}
+    QSlider::sub-page:horizontal {{ background: {t.ACCENT}; border-radius: 3px; }}
+    QSlider::add-page:horizontal {{ background: {t.FIELD}; border-radius: 3px; }}
     QSlider::handle:horizontal {{
         background: {t.BUTTON};
-        border: 1px solid rgba(0,0,0,0.35);
-        width: 14px; height: 14px;
-        margin: -6px 0;
+        border: none;
+        width: 16px; height: 16px;
+        margin: -5px 0;
         border-radius: 8px;
     }}
     QSlider::handle:horizontal:hover {{ background: {t.ACCENT}; }}
+    QSlider::handle:horizontal:pressed {{ background: {t.ACCENT_DARK}; }}
 
     /* --- Etiquetas con color --- */
     QLabel#Muted {{ color: {t.MUTED}; }}
