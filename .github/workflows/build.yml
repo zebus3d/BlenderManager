@@ -130,6 +130,11 @@ jobs:
           chmod +x BlenderManager-x86_64.AppImage
           # APPIMAGE_EXTRACT_AND_RUN=1 evita necesitar libfuse2 para montar.
           APPIMAGE_EXTRACT_AND_RUN=1 ./BlenderManager-x86_64.AppImage --smoke
+          # Y ademas la GUI: --smoke no importa Qt, asi que por si solo no pilla
+          # que falte shiboken6 (ya paso: el binario no arrancaba y el smoke
+          # pasaba). El plugin offscreen monta la ventana sin pantalla.
+          APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen ./BlenderManager-x86_64.AppImage --screenshot /tmp/shot.png
+          test "$(stat -c%s /tmp/shot.png)" -gt 5000
       - uses: actions/upload-artifact@v4
         with:
           name: BlenderManager-linux
@@ -152,6 +157,17 @@ jobs:
           python -m pip install -r requirements-build.txt
           pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
           Compress-Archive -Path dist/BlenderManager -DestinationPath BlenderManager-windows-x86_64.zip
+      # Que el .exe arranque de verdad. Sin esto, un Windows roto se descubre
+      # cuando lo baja un usuario: no tenemos ninguna maquina Windows a mano.
+      - name: Comprobar que el binario arranca (GUI incluida)
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./dist/BlenderManager/BlenderManager.exe --smoke
+          ./dist/BlenderManager/BlenderManager.exe --screenshot shot.png
+          ls -l shot.png
+          test "$(stat -c%s shot.png)" -gt 5000
       - uses: actions/upload-artifact@v4
         with:
           name: BlenderManager-windows
@@ -174,6 +190,15 @@ jobs:
           python -m pip install -r requirements-build.txt
           pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
           cd dist && zip -r ../BlenderManager-macos.zip BlenderManager.app
+      # Que el bundle arranque de verdad, GUI incluida (ver el job windows).
+      - name: Comprobar que el bundle arranca (GUI incluida)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          ./dist/BlenderManager.app/Contents/MacOS/BlenderManager --smoke
+          ./dist/BlenderManager.app/Contents/MacOS/BlenderManager --screenshot shot.png
+          ls -l shot.png
+          test "$(stat -f%z shot.png)" -gt 5000
       - uses: actions/upload-artifact@v4
         with:
           name: BlenderManager-macos
