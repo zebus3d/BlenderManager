@@ -35,6 +35,7 @@ _TRANSLATIONS = {
         "Launching": "Lanzando",
         "Delete": "Borrar",
         "Uninstall": "Desinstalar",
+        "Unexpected error": "Error inesperado",
         "Cancel": "Cancelar",
         "Close": "Cerrar",
         "Save": "Guardar",

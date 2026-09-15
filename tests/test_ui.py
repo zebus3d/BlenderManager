@@ -589,6 +589,123 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class UninstallTests(SettingsIsolated, unittest.TestCase):
+    """Borrar una version instalada: el boton de la papelera."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def _entrada(self, carpeta):
+        from pathlib import Path
+
+        from services.installed import InstalledBuild
+
+        return InstalledBuild(name=carpeta.name, path=carpeta, version="3.5.0",
+                              branch="v35")
+
+    def test_el_mensaje_no_revienta_con_la_ruta(self):
+        # entry.path es un Path y se concatenaba a un str: TypeError al
+        # construir el mensaje, ANTES de crear el dialogo. Por eso la papelera
+        # no hacia nada y no decia nada (PySide se come la excepcion del slot).
+        import tempfile
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+        from i18n import tr
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as temp:
+            entrada = self._entrada(Path(temp) / "blender-3.5.0-linux-x64")
+            with mock.patch.object(main_window, "confirm", return_value=False) as conf:
+                window.delete_installed(entrada)
+            # La ruta tiene que llegar como texto.
+            _, _, mensaje = conf.call_args.args
+            self.assertIn(str(entrada.path), mensaje)
+            self.assertIn(tr("Delete {name}?", name=entrada.name), mensaje)
+
+    def test_borra_de_verdad_la_carpeta(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+        from i18n import tr
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as temp:
+            carpeta = Path(temp) / "blender-3.5.0-linux-x64"
+            carpeta.mkdir()
+            (carpeta / "blender").write_text("binario", encoding="utf-8")
+            with mock.patch.object(main_window, "confirm", return_value=True), \
+                    mock.patch.object(window, "refresh_installed"), \
+                    mock.patch.object(window, "_show_message") as aviso:
+                window.delete_installed(self._entrada(carpeta))
+            self.assertFalse(carpeta.exists())
+            self.assertEqual(aviso.call_args.args[0],
+                             tr("Deleted {name}", name=carpeta.name))
+
+    def test_si_falla_lo_dice_y_lo_registra(self):
+        # Antes era rmtree(..., ignore_errors=True): un fallo no dejaba rastro
+        # ni en pantalla ni en el log.
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as temp:
+            carpeta = Path(temp) / "blender-3.5.0-linux-x64"
+            with mock.patch.object(main_window, "confirm", return_value=True), \
+                    mock.patch.object(main_window.shutil, "rmtree",
+                                      side_effect=OSError("read-only")), \
+                    mock.patch.object(window, "refresh_installed") as refresco, \
+                    mock.patch.object(main_window, "download_log") as registro, \
+                    mock.patch.object(main_window, "show_error") as error:
+                window.delete_installed(self._entrada(carpeta))
+            self.assertTrue(error.called)
+            self.assertIn("read-only", error.call_args.args[2])
+            self.assertTrue(registro.called)
+            self.assertFalse(refresco.called)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class ExceptionHookTests(SettingsIsolated, unittest.TestCase):
+    """Un slot que revienta ya no se pierde en silencio."""
+
+    def test_registra_y_avisa(self):
+        import sys
+        from unittest import mock
+
+        import main
+        from services import downloader
+        from ui.widgets import dialogs
+
+        original = sys.excepthook
+        self.addCleanup(setattr, sys, "excepthook", original)
+        with mock.patch.object(downloader, "log") as registro, \
+                mock.patch.object(dialogs, "show_error") as aviso:
+            main._install_exception_hook()
+            try:
+                raise TypeError("como el de la papelera")
+            except TypeError:
+                sys.excepthook(*sys.exc_info())
+        # El traceback completo al log, y un aviso en pantalla.
+        self.assertTrue(registro.called)
+        self.assertIn("unhandled error", registro.call_args.args[0])
+        self.assertIn("TypeError", registro.call_args.args[0])
+        self.assertTrue(aviso.called)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class DialogTests(unittest.TestCase):
     app = None
 
