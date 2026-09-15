@@ -32,7 +32,10 @@ jobs:
             exit 1
           fi
           echo "Promoviendo ${TAG} a release final"
-          gh release edit "${TAG}" --prerelease=false --latest
+          # -R es obligatorio: este job no hace checkout, y sin el, gh intenta
+          # sacar el repo del git local y falla con "not a git repository".
+          gh release edit "${TAG}" -R "${GITHUB_REPOSITORY}" \
+            --prerelease=false --latest
           # Comprobacion: /releases/latest (que ignora los pre-releases) tiene
           # que ser ya este tag. Ojo: `gh release view --json isLatest` NO
           # existe en todas las versiones de gh, asi que se mira por la API.
