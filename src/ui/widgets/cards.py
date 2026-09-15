@@ -40,7 +40,29 @@ def _logo_label(size: int, dim: bool) -> QLabel:
     return label
 
 
-class BaseBuildCard(QFrame):
+class _HoverCard:
+    """Resalta la tarjeta al pasar el ratón.
+
+    No basta con ``QFrame#Card:hover`` en el QSS: cuando el ratón está encima de
+    un hijo (una etiqueta o un botón), el padre puede no recibir el estado
+    hover. Aquí lo marcamos a mano con una propiedad dinámica que el QSS lee.
+    """
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        self._set_hover(True)
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        self._set_hover(False)
+
+    def _set_hover(self, on: bool) -> None:
+        self.setProperty("hover", "true" if on else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+
+class BaseBuildCard(_HoverCard, QFrame):
     """Base común de las tarjetas de compilaciones."""
 
     action_clicked = Signal(object)   # build
@@ -184,7 +206,7 @@ class GridBuildCard(BaseBuildCard):
         lay.addLayout(row)
 
 
-class InstalledCard(QFrame):
+class InstalledCard(_HoverCard, QFrame):
     """Versión ya instalada (lanzar / desinstalar) en modo lista."""
 
     launch_clicked = Signal(object)   # entry
@@ -233,7 +255,7 @@ class InstalledCard(QFrame):
         lay.addWidget(delete)
 
 
-class GridInstalledCard(QFrame):
+class GridInstalledCard(_HoverCard, QFrame):
     """Versión instalada en cuadrícula (icono grande y botones debajo)."""
 
     launch_clicked = Signal(object)

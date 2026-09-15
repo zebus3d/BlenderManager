@@ -53,6 +53,7 @@ from services.downloader import Downloader, log as download_log
 from services.extractor import extract, is_archive
 from services.launcher import Launcher
 from ui import icons
+from ui import theme as t
 from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, IconFlatButton, Pill, SideButton, SwitchPill
 from ui.widgets.cards import (
@@ -201,6 +202,7 @@ class MainWindow(QWidget):
         lay.addStretch()
 
         self.header_tools = QWidget()
+        self.header_tools.setObjectName("HeaderTools")  # fondo transparente (QSS)
         tools = QHBoxLayout(self.header_tools)
         tools.setContentsMargins(0, 0, 0, 0)
         tools.setSpacing(10)
@@ -209,9 +211,15 @@ class MainWindow(QWidget):
         refresh.clicked.connect(lambda: self.refresh(force=True))
         tools.addWidget(refresh)
         self.search_input = QLineEdit()
+        self.search_input.setObjectName("SearchField")
         self.search_input.setPlaceholderText(tr("Search..."))
         self.search_input.setFixedWidth(240)
         self.search_input.textChanged.connect(self._on_search_text)
+        # Icono de lupa dentro del campo, como en la versión original.
+        from ui.fonts import glyph_icon
+
+        self.search_input.addAction(
+            glyph_icon(icons.SEARCH, 14, t.MUTED), QLineEdit.LeadingPosition)
         tools.addWidget(self.search_input)
         lay.addWidget(self.header_tools)
         return header
@@ -420,8 +428,11 @@ class MainWindow(QWidget):
         self.progress.setRange(0, 100)
         self.progress.setFixedHeight(12)
         self.progress.setValue(0)
+        # Solo se muestra mientras hay una descarga en curso.
+        self.progress.setVisible(False)
         lay.addWidget(self.progress, 1)
         self.percent = QLabel("")
+        self.percent.setVisible(False)
         lay.addWidget(self.percent)
         self.cancel_btn = CardButton(tr("Cancel"))
         self.cancel_btn.clicked.connect(self.cancel_download)
@@ -599,6 +610,20 @@ class MainWindow(QWidget):
         # Ancho aproximado de una tarjeta de rejilla escalada por el zoom.
         return self._columns_for(scroll, int(300 * self.zoom))
 
+    def _fill_grid(self, grid: QGridLayout, cards: list, columns: int) -> None:
+        """Coloca las tarjetas en la rejilla, repartiendo el ancho a partes iguales.
+
+        Al dar a todas las columnas el mismo ``stretch`` y NO fijar un ancho a
+        las tarjetas, cada una se estira para llenar su celda: la rejilla se
+        adapta al ancho de la ventana en vez de dejar huecos a la derecha.
+        """
+        self._clear_grid(grid)
+        # Reseteamos stretches de una rejilla anterior con más columnas.
+        for col in range(24):
+            grid.setColumnStretch(col, 1 if col < columns else 0)
+        for index, card in enumerate(cards):
+            grid.addWidget(card, index // columns, index % columns)
+
     def _placeholder(self, text: str, hint: str = "") -> QFrame:
         frame = QFrame()
         frame.setObjectName("Card")
@@ -618,24 +643,25 @@ class MainWindow(QWidget):
     def _rebuild_store(self) -> None:
         self._clear_grid(self.store_grid)
         builds = self._filtered()
+        columns = self._grid_columns(self.store_scroll, self.store_grid, 0)
         if not builds:
-            self.store_grid.addWidget(self._placeholder(
+            self._fill_grid(self.store_grid, [self._placeholder(
                 tr("No builds found"),
-                tr("Try clearing the search or another channel filter.")), 0, 0)
+                tr("Try clearing the search or another channel filter."))], columns)
             return
         grid = self.layout_mode == "grid"
-        columns = self._grid_columns(self.store_scroll, self.store_grid, 0)
+        cards = []
         for index, build in enumerate(builds):
             installed = any(e.version == build.version for e in self.installed)
             zebra = bool(index % 2)
             if grid:
                 card = GridBuildCard(build, installed, zebra, self.zoom)
-                card.setFixedWidth(int(300 * self.zoom))
             else:
                 card = BuildCard(build, installed, zebra)
             card.action_clicked.connect(self.install_build)
             card.notes_clicked.connect(self.open_release_notes)
-            self.store_grid.addWidget(card, index // columns, index % columns)
+            cards.append(card)
+        self._fill_grid(self.store_grid, cards, columns)
 
     def refresh_installed(self) -> None:
         self.installed = installed_service.scan(self.settings.dest_folder, self.platform)
@@ -644,24 +670,25 @@ class MainWindow(QWidget):
     def _rebuild_installed(self) -> None:
         self._clear_grid(self.installed_grid)
         entries = self._filtered_installed()
+        columns = self._grid_columns(self.installed_scroll, self.installed_grid, 0)
         if not entries:
-            self.installed_grid.addWidget(self._placeholder(
+            self._fill_grid(self.installed_grid, [self._placeholder(
                 tr("No installed versions found"),
-                tr("Download one from the store.")), 0, 0)
+                tr("Download one from the store."))], columns)
             return
         grid = self.layout_mode == "grid"
-        columns = self._grid_columns(self.installed_scroll, self.installed_grid, 0)
+        cards = []
         for index, entry in enumerate(entries):
             zebra = bool(index % 2)
             if grid:
                 card = GridInstalledCard(entry, zebra, self.zoom)
-                card.setFixedWidth(int(300 * self.zoom))
             else:
                 card = InstalledCard(entry, zebra)
             card.launch_clicked.connect(self.launch_installed)
             card.delete_clicked.connect(self.delete_installed)
             card.notes_clicked.connect(self.open_release_notes)
-            self.installed_grid.addWidget(card, index // columns, index % columns)
+            cards.append(card)
+        self._fill_grid(self.installed_grid, cards, columns)
 
     # ------------------------------------------------------------- refresco
     def refresh(self, force: bool = False) -> None:
