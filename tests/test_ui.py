@@ -410,6 +410,20 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             window.width() - (window.header_tools.x() + window.header_tools.width()),
             18)
 
+    def test_recuerda_el_filtro_al_volver_a_abrir(self):
+        from ui.widgets.main_window import MainWindow
+
+        # Primera sesión: el usuario deja el filtro en Favoritos.
+        primera = MainWindow()
+        primera.set_channel("favorites")
+        self.assertEqual(primera.settings.channel, "favorites")
+
+        # Al volver a abrir, sigue en Favoritos y con su pastilla marcada.
+        segunda = MainWindow()
+        self.assertEqual(segunda.channel, "favorites")
+        self.assertTrue(segunda._channel_buttons["favorites"].isChecked())
+        self.assertFalse(segunda._channel_buttons["all"].isChecked())
+
     def test_hay_pastilla_de_favoritos(self):
         from ui.widgets.main_window import MainWindow
 
