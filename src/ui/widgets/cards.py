@@ -272,7 +272,12 @@ class GridBuildCard(BaseBuildCard):
                  marked: bool = False, parent=None):
         super().__init__(build, installed, zebra, zoom, marked=marked,
                          parent=parent)
-        self.setFixedHeight(_grid_height(zoom, with_badge=installed))
+        # La fila de la insignia ("Instalada") se reserva SIEMPRE, aunque la
+        # compilación no esté instalada: en el Kivy original la etiqueta existía
+        # con el texto vacío y así todas las tarjetas de la tienda medían lo
+        # mismo. Al ahorrársela a las descargables, estas salían 22 px más bajas
+        # que las instaladas y la rejilla quedaba desigual.
+        self.setFixedHeight(_grid_height(zoom, with_badge=True))
         lay = QVBoxLayout(self)
         m = int(14 * zoom)
         lay.setContentsMargins(m, m, m, m)
@@ -295,11 +300,10 @@ class GridBuildCard(BaseBuildCard):
         sub.setAlignment(Qt.AlignHCenter)
         lay.addWidget(sub)
 
-        if installed:
-            tag = QLabel(tr("Installed build"))
-            tag.setObjectName("Success")
-            tag.setAlignment(Qt.AlignHCenter)
-            lay.addWidget(tag)
+        tag = QLabel(tr("Installed build") if installed else "")
+        tag.setObjectName("Success")
+        tag.setAlignment(Qt.AlignHCenter)
+        lay.addWidget(tag)
 
         lay.addStretch()
 

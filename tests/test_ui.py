@@ -341,6 +341,34 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window._rebuild_store()
         self.assertEqual(zebras(), ["false", "true"])
 
+    def test_las_tarjetas_de_la_tienda_miden_igual(self):
+        """Instaladas y descargables del mismo canal no pueden bailar de alto.
+
+        La tarjeta instalada llevaba una insignia "Instalada" que las
+        descargables no tenían, así que en la rejilla estas salían 22 px más
+        bajas y las filas quedaban desniveladas. En el Kivy original esa fila
+        siempre existía (vacía si no estaba instalada).
+        """
+        from types import SimpleNamespace
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.builds = [_build("5.2.1", "v52", "stable"),
+                         _build("5.1.2", "v51", "stable")]
+        window.installed = [SimpleNamespace(name="blender-5.2.1", version="5.2.1",
+                                            branch="v52",
+                                            path="/tmp/blender-5.2.1")]
+        window.channel = "all"
+        window.resize(900, 600)
+        window.layout_mode = "grid"
+        window.zoom = 0.8
+        window._rebuild_store()
+
+        alturas = {window.store_grid.itemAt(i).widget().height()
+                   for i in range(window.store_grid.count())}
+        self.assertEqual(len(alturas), 1, alturas)
+
     def test_la_papelera_no_se_queda_sin_icono(self):
         from types import SimpleNamespace
 
