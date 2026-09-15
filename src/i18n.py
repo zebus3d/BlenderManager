@@ -125,6 +125,8 @@ _TRANSLATIONS = {
         "A new version is available: {version}": "Hay una versión nueva disponible: {version}",
         "Download and install it now?": "¿Descargarla e instalarla ahora?",
         "Update available": "Actualización disponible",
+        "You already have the latest version.": "Ya tienes la última versión.",
+        "Accept": "Aceptar",
         "Update": "Actualizar",
         "Later": "Más tarde",
         "Installing the update...": "Instalando la actualización...",
