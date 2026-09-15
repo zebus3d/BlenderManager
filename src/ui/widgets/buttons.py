@@ -8,6 +8,8 @@ puntos de enganche (``objectName`` y propiedades dinámicas) que el QSS usa.
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QPushButton
 
+from ui import icons
+
 
 class Pill(QPushButton):
     """Botón con forma de pastilla para filtros y selector de vista."""
@@ -67,6 +69,30 @@ class IconLinkButton(QPushButton):
         self.setCursor(Qt.PointingHandCursor)
         if tooltip:
             self.setToolTip(tooltip)
+
+
+class StarButton(QPushButton):
+    """Estrella de favorito (marca y desmarca).
+
+    El glifo es el mismo en los dos estados; lo que cambia es el color, que lo
+    pone el QSS según ``:checked`` (no tenemos la variante de contorno de la
+    fuente: solo se empaqueta la sólida).
+    """
+
+    def __init__(self, marked: bool = False, tooltip_on: str = "",
+                 tooltip_off: str = "", parent=None):
+        super().__init__(icons.STAR, parent)
+        self.setObjectName("StarButton")
+        self.setCheckable(True)
+        self.setChecked(bool(marked))
+        self.setCursor(Qt.PointingHandCursor)
+        self._tooltip_on = tooltip_on
+        self._tooltip_off = tooltip_off
+        self._update_tooltip()
+        self.toggled.connect(lambda _: self._update_tooltip())
+
+    def _update_tooltip(self) -> None:
+        self.setToolTip(self._tooltip_on if self.isChecked() else self._tooltip_off)
 
 
 class IconFlatButton(QPushButton):

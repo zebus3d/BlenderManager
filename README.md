@@ -15,6 +15,10 @@ need to install anything.
 - **Grid or list view**, with a **zoom slider** to choose the icon size
   (Dolphin-style). `Ctrl +` / `Ctrl -` change it from the keyboard and `Ctrl 0`
   (or `Ctrl` + click on the slider) goes back to the default size.
+- **Favorites**: star the versions you care about and the **Favorites** pill
+  shows just those. The star is per *series* (branch + version), so marking a
+  daily build keeps it marked when the next daily arrives, and it is shared
+  between the store and the installed tab.
 - **Automatic detection** of your operating system and architecture.
 - **Download for another platform or architecture**: pick Windows, macOS or ARM64
   in the filter bar to grab a build for a friend or a USB stick, not just for the
@@ -78,7 +82,7 @@ and run.
 |---|---|---|
 | UI toolkit | Qt Widgets (PySide6) | Qt-based |
 | Focus | Official builds only | Official builds, forks and experimental branches |
-| Finding a build | One filter bar, grid **or** list with a zoom slider, installed builds highlighted | Library / downloads pages |
+| Finding a build | One filter bar, grid **or** list with a zoom slider, favorites, installed builds highlighted | Library / downloads pages |
 | Languages | English and Spanish | English |
 | Linux install | One AppImage (~73 MB): download and run | Two zips (~99 and ~112 MB), pick the right one ([AUR](https://aur.archlinux.org/packages/blender-launcher-v2-bin) on Arch) |
 | Running from source | Python + PySide6 | Python + PySide/Qt dependencies |
@@ -102,11 +106,11 @@ and run.
   same AppImage works on Arch and on an older Ubuntu.
 - **Made to be read at a glance.** Big Blender logos, **grid or list view** with
   a zoom slider (`Ctrl +/-`, `Ctrl 0` for the default size), channel pills and
-  search in one bar, and the builds you already have highlighted with an
-  **"Installed" badge** and a lighter card, so you can tell what you own without
-  reading a thing. Every card has a small **i** that opens that series' release
-  notes, and the app is **bilingual (English/Spanish)**, detected from your
-  locale.
+  search in one bar, **star the builds you use** to keep them one click away, and
+  the builds you already have highlighted with an **"Installed" badge** and a
+  lighter card, so you can tell what you own without reading a thing. Every card
+  has a small **i** that opens that series' release notes, and the app is
+  **bilingual (English/Spanish)**, detected from your locale.
 - **Runs from source with a virtualenv.** `./run.sh` creates it and launches the
   app; the only dependency is PySide6. Downloads, extraction and the Blender API
   use the standard library.

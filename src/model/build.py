@@ -39,6 +39,19 @@ def human_size(size) -> str:
     return f"{value:.1f} TB"
 
 
+def favorite_key(branch: str, version: str) -> str:
+    """Clave con la que se guarda un favorito: rama + versión.
+
+    Se guarda la **serie**, no la compilación exacta: las diarias cambian de
+    hash cada día y un favorito atado al hash desaparecería al día siguiente.
+
+    Tampoco se incluye plataforma ni arquitectura, a propósito: las versiones
+    instaladas no las guardan, y así marcar 4.5.5 en la tienda marca también la
+    que ya tienes instalada (y al revés).
+    """
+    return f"{branch or ''}|{version or ''}"
+
+
 @dataclass
 class Build:
     """Una compilación concreta publicada en los servidores de Blender."""
@@ -76,6 +89,11 @@ class Build:
     def human_size(self) -> str:
         return human_size(self.size)
 
+    @property
+    def favorite_key(self) -> str:
+        """Serie a la que pertenece, para los favoritos (ver ``favorite_key``)."""
+        return favorite_key(self.branch, self.version)
+
 
 @dataclass
 class InstalledBuild:
@@ -101,3 +119,8 @@ class InstalledBuild:
     @property
     def can_launch(self) -> bool:
         return self.executable is not None
+
+    @property
+    def favorite_key(self) -> str:
+        """La misma clave que la de la tienda, para compartir los favoritos."""
+        return favorite_key(self.branch, self.version)

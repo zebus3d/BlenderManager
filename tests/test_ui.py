@@ -355,6 +355,73 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
                      GridBuildCard(build, False, False, 1.0)):
             self.assertTrue(action_button(card).icon().isNull(), type(card))
 
+    def test_hay_pastilla_de_favoritos(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        self.assertIn("favorites", window._channel_buttons)
+
+    def test_la_estrella_marca_y_desmarca(self):
+        from ui.widgets.buttons import StarButton
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(900, 600)
+        window.layout_mode = "list"
+        window.channel = "all"
+        window.builds = [_build("5.1.2", "v51", "stable")]
+        window._rebuild_store()
+
+        card = window.store_grid.itemAt(0).widget()
+        star = next(b for b in card.findChildren(StarButton))
+        self.assertFalse(star.isChecked())
+
+        star.setChecked(True)          # como si el usuario pulsara la estrella
+        self.assertEqual(window.settings.favorites, ["v51|5.1.2"])
+        self.assertTrue(star.isChecked())
+
+        star.setChecked(False)
+        self.assertEqual(window.settings.favorites, [])
+
+    def test_la_estrella_sale_marcada_si_ya_era_favorita(self):
+        from ui.widgets.buttons import StarButton
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(900, 600)
+        window.layout_mode = "list"
+        window.channel = "all"
+        window.builds = [_build("5.1.2", "v51", "stable")]
+        window.settings.favorites = ["v51|5.1.2"]
+        window._rebuild_store()
+
+        card = window.store_grid.itemAt(0).widget()
+        star = next(b for b in card.findChildren(StarButton))
+        self.assertTrue(star.isChecked())
+
+    def test_canal_favoritos_filtra_y_se_actualiza(self):
+        from ui.widgets.buttons import StarButton
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(900, 600)
+        window.layout_mode = "list"
+        window.builds = [_build("5.1.2", "v51", "stable"),
+                         _build("5.2.1", "v52", "stable")]
+        window.settings.favorites = ["v52|5.2.1"]
+        window.set_channel("favorites")
+
+        self.assertEqual([b.version for b in window._filtered()], ["5.2.1"])
+        self.assertEqual(window.store_grid.count(), 1)
+
+        # Quitar la estrella estando en ese canal deja la lista vacia al momento
+        # (y sale el mensaje propio, no el generico).
+        card = window.store_grid.itemAt(0).widget()
+        star = next(b for b in card.findChildren(StarButton))
+        star.setChecked(False)
+        self.assertEqual(window._filtered(), [])
+        self.assertEqual(window.store_grid.count(), 1)   # el placeholder
+
     def test_columnas_grid_crecen_con_el_ancho(self):
         from ui.widgets.main_window import MainWindow
 

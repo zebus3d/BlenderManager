@@ -94,6 +94,13 @@ _TRANSLATIONS = {
         "Experimental": "Experimentales",
         "Filter: experimental branches": "Filtro: solo ramas experimentales (funciones en desarrollo)",
         "No experimental builds right now": "Ahora mismo no hay ramas experimentales disponibles",
+        "Favorites": "Favoritos",
+        "Filter: favorites": "Filtro: solo las versiones marcadas como favoritas",
+        "Mark as favorite": "Marcar como favorita",
+        "Remove from favorites": "Quitar de favoritos",
+        "No favorites yet": "Todavía no has marcado ninguna favorita",
+        "Tap the star on a card to keep it here.":
+            "Pulsa la estrella de una tarjeta para tenerla aquí.",
         "Feature branches with new features still in development.":
             "Ramas con funciones nuevas todavía en desarrollo. Pueden ser inestables.",
         "LTS + Stable": "LTS + Estable",
