@@ -7,12 +7,12 @@ Windows and macOS) and designed to be **portable**: once packaged, users don't
 need to install anything.
 
 <p align="center">
-  <img width="49%" alt="Store, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/store_grid.png">
-  <img width="49%" alt="Store, list view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/store_list.png">
+  <img width="49%" alt="Store, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/store_grid.png">
+  <img width="49%" alt="Store, list view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/store_list.png">
 </p>
 <p align="center">
-  <img width="49%" alt="Installed builds, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/installed_grid.png">
-  <img width="49%" alt="Installed builds, list view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/installed_list.png">
+  <img width="49%" alt="Installed builds, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/installed_grid.png">
+  <img width="49%" alt="Installed builds, list view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/installed_list.png">
 </p>
 
 <sub>Store and installed builds, in grid and list view (Spanish UI shown; English
@@ -51,7 +51,7 @@ is detected from your locale).</sub>
 - **Interface in English and Spanish** with automatic language detection, plus
   **tooltips** and a **portable mode** (settings live next to the executable).
 
-![Update dialog](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/update_dialog.png)
+![Update dialog](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/update_dialog.png)
 
 ## A small, readable codebase
 
@@ -208,7 +208,7 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 `.github/workflows/build.yml` runs the tests and produces artifacts for **Linux**
 (`.AppImage`), **Windows** (`.zip`) and **macOS** (compressed `.app`).
 
-- **Every push to `master` updates a single rolling pre-release** (e.g.
+- **Every push to `main` updates a single rolling pre-release** (e.g.
   `v1.3.0`): the workflow rebuilds the three binaries, moves the tag to the new
   commit and replaces the assets. There is never more than one pre-release.
 - **Promoting** it (Actions → *promote*) turns it into the final release without

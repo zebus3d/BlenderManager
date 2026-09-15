@@ -143,7 +143,7 @@ def app_version() -> str:
     """Versión que se muestra en la app.
 
     Si el CI inyectó una versión, esa. En modo fuente ``version.py`` vale
-    ``0.0.0``, así que usamos el describe del checkout: en master limpio sale el
+    ``0.0.0``, así que usamos el describe del checkout: en main limpio sale el
     tag (``1.2.0``) y en una rama por delante, los commits de más
     (``1.2.0-19-g24a0b43``).
     """

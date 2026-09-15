@@ -145,6 +145,7 @@ No tienes que preocuparte por esto: usa siempre `APP_DIR`, `RESOURCE_DIR` y
   (comparar un checkout con la última release no dice nada: puede ir por
   delante), y el *check* manual hace `git pull --ff-only` y reinicia.
 
-Cada push a `master` publica una **release final** marcada como *latest*, así
-que el auto-update salta en el siguiente arranque. No hay canal de
-pre-releases.
+Cada push a `main` actualiza un **único pre-release** (siempre el mismo tag,
+reemplazando los binarios). El auto-update mira `releases/latest`, que ignora
+los pre-releases, así que mientras se itera nadie recibe nada; cuando el
+pre-release se da por bueno se promueve a release final sin reconstruir nada.
