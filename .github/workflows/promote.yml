@@ -5,11 +5,11 @@ name: promote
 #
 # NO reconstruye nada: reutiliza los binarios que ya se compilaron y probaron,
 # asi que la version cocida dentro de ellos sigue coincidiendo con el tag. Es
-# justo por eso que las iteraciones de master comparten version con la final a
+# justo por eso que las iteraciones de main comparten version con la final a
 # la que aspiran (v1.3.0): promover solo le quita la marca de pre-release. Si
 # la promocion cambiara la version, la app se actualizaria en bucle.
 #
-# Despues de promover, el siguiente push a master calcula la minor siguiente
+# Despues de promover, el siguiente push a main calcula la minor siguiente
 # (v1.4.0) y empieza un ciclo nuevo.
 on:
   workflow_dispatch:

@@ -98,12 +98,12 @@ abajo).
 Todo lo gestiona `.github/workflows/build.yml` (y `promote.yml` para publicar).
 **No hay que crear tags para tener binarios publicados.**
 
-### Un push a master actualiza el único pre-release
+### Un push a main actualiza el único pre-release
 
-Basta con empujar a `master`:
+Basta con empujar a `main`:
 
 ```bash
-git push origin master
+git push origin main
 ```
 
 El workflow calcula la versión y actualiza **el mismo pre-release** (`v1.3.0`)
@@ -117,7 +117,7 @@ publicaba una release final y disparaba el auto-update de todos; se cambió
 porque acababa en un montón de versiones y pre-releases sueltos.
 
 Para probar algo sin que salga en Releases, lanza el workflow a mano
-(`workflow_dispatch`) sobre una rama que no sea `master`: compila y deja los
+(`workflow_dispatch`) sobre una rama que no sea `main`: compila y deja los
 binarios como artefactos del run, sin publicar.
 
 ### Promover a release final
@@ -130,7 +130,7 @@ eso la versión cocida dentro de ellos sigue coincidiendo con el tag. Es el
 motivo de que todas las iteraciones de un ciclo compartan versión con la final
 (`v1.3.0`): solo cambia la marca.
 
-Tras promover, el siguiente push a master calcula la **minor siguiente**
+Tras promover, el siguiente push a main calcula la **minor siguiente**
 (`v1.4.0`) y empieza un ciclo nuevo: la versión se saca de la última release
 **final** (`/releases/latest`, que ignora pre-releases) + 1 en la minor.
 
@@ -141,7 +141,7 @@ release **final** directamente (sin pasar por el pre-release):
 
 ```bash
 git tag -a v1.3.0 -m "Blender Manager v1.3.0"
-git push origin master   # si aún no está empujado
+git push origin main   # si aún no está empujado
 git push origin v1.3.0
 ```
 
@@ -333,7 +333,7 @@ El AppImage resultante pesa ~70 MB.
     usuario pulsa "Check for updates now".
   - La versión que se muestra (título y Ajustes) es el **describe** del
     checkout, no el tag: `app_version()` usa `source_describe()`, así que en
-    master limpio sale `1.2.0` y en una rama por delante,
+    main limpio sale `1.2.0` y en una rama por delante,
     `1.2.0-19-g24a0b43`. El tag a secas (`source_tag`) engañaba: decía "1.2.0"
     con 19 commits de cambios aplicados.
   - `source_update` distingue `"ok"`, `"up-to-date"` (el pull no movió HEAD),
