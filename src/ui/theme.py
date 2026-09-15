@@ -46,6 +46,8 @@ ACCENT_BTN = "#356089"      # relleno de botón primario (TEXT = 5,28:1, AA)
 DANGER = "#B84A4A"          # rojo para bordes/indicadores
 DANGER_DARK = "#9C3C3C"     # hover
 DANGER_BTN = "#9C3C3C"      # relleno del botón borrar (TEXT = 5,38:1, AA)
+DANGER_EDGE = "#F0A0A0"     # borde claro del realce de la papelera: sobre el
+                            # rojo vivo (#B84A4A) el borde oscuro no se veía
 WARNING = "#FFAF23"         # naranja (LTS)
 SUCCESS_TEXT = "#6FCF7A"    # verde claro para texto
 INFO_TEXT = "#7AA7E0"       # azul claro para texto

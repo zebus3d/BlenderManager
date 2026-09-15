@@ -122,6 +122,13 @@ def build_qss() -> str:
     }}
     QPushButton#CardButton[variant="danger"]:hover {{
         background: {_volume(t.DANGER)};
+        border: 1px solid {t.DANGER_EDGE};
+        color: {t.TEXT_SEL};
+    }}
+    QPushButton#CardButton[variant="danger"]:pressed {{
+        background: {_volume(t.DANGER_DARK)};
+        border: 1px solid {t.DANGER_EDGE};
+        color: {t.TEXT_SEL};
     }}
     /* Botón que solo lleva un icono (papelera): con el padding normal (14 px por
        lado) el glifo no cabe cuando la rejilla va pequeña y queda el recuadro
