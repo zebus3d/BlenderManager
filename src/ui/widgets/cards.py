@@ -215,6 +215,10 @@ class BuildCard(BaseBuildCard):
             tooltip=tr("Launch this installed version") if installed
             else tr("Download and install this version"),
         )
+        # La flecha verde solo cuando la accion es lanzar (si ya la tienes).
+        # En Kivy se pintaba con el texto; en Qt hace falta un QIcon.
+        if installed:
+            action.setIcon(_launch_icon())
         action.clicked.connect(lambda: self.action_clicked.emit(self.build))
         lay.addWidget(action)
 
@@ -277,6 +281,8 @@ class GridBuildCard(BaseBuildCard):
             tooltip=tr("Launch this installed version") if installed
             else tr("Download and install this version"),
         )
+        if installed:
+            action.setIcon(_launch_icon())
         action.clicked.connect(lambda: self.action_clicked.emit(self.build))
         row.addWidget(action)
         row.addStretch()
