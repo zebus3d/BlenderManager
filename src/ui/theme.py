@@ -27,8 +27,9 @@ BUTTON = "#585858"      # botones neutros
 FILTER = "#1D1D1D"      # botones de filtro
 SURFACE = "#303030"     # paneles y tarjetas
 CHROME = "#303030"      # cabecera, barra lateral y de estado
-CARD_DIM = "#1E1E1E"    # por descargar (clara)
-CARD_DIM_ALT = "#161616"  # por descargar (oscura)
+CARD_DIM = "#262626"    # por descargar (clara; se distingue del BG, pero
+                        # queda por debajo de SURFACE, que son las instaladas)
+CARD_DIM_ALT = "#202020"  # por descargar (oscura)
 ROW_ALT = "#2A2A2A"     # instalada (oscura)
 SURFACE_ALT = "#3D3D3D"  # hover / contornos suaves
 BORDER = "#3D3D3D"
