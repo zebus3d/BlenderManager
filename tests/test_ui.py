@@ -850,6 +850,32 @@ class DialogTests(unittest.TestCase):
 
         cls.app.setStyleSheet(qss.build_qss())
 
+    def test_un_mensaje_largo_no_se_corta(self):
+        """El texto del diálogo tiene que caber entero (verticalmente).
+
+        Con el nombre largo de una instalada, el aviso de desinstalar se cortaba:
+        Qt mide el `QLabel` con `wordWrap` antes de que el estilo aplique la
+        fuente y con un ancho que después cambia, así que se quedaba con el alto
+        viejo (90 px cuando necesitaba 108).
+        """
+        from i18n import tr
+        from ui.widgets.dialogs import AppDialog
+
+        nombre = "blender-5.3.0-alpha+main.1fd06ddba680-linux.x86_64-release"
+        mensaje = (tr("Delete {name}?", name=nombre) + "\n\n"
+                   + tr("This will remove the folder permanently.") + "\n\n"
+                   + "/home/alguien/Descargas/Blenders/" + nombre)
+        dialog = AppDialog(None, tr("Uninstall"), mensaje)
+        dialog.add_button(tr("Cancel"), on_click=dialog.reject)
+        dialog.show()
+        for _ in range(3):
+            self.app.processEvents()
+        etiqueta = dialog.body_label
+        self.assertGreaterEqual(etiqueta.height(),
+                                etiqueta.heightForWidth(etiqueta.width()))
+        # Y un nombre enorme no puede sacar la ventana de la pantalla.
+        self.assertLessEqual(dialog.width(), dialog.MAX_WIDTH)
+
     def test_confirm_rechazado(self):
         from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import QDialog
