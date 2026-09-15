@@ -1050,18 +1050,28 @@ class MainWindow(QWidget):
             download_log(f"launch failed: {error}")
 
     def delete_installed(self, entry) -> None:
-        # La confirmación dice QUÉ se borra (con nombre) y el botón usa el verbo
-        # ("Uninstall"), no un "Aceptar" genérico.
-        """Borra una versión instalada, con confirmación."""
+        """Borra una versión instalada, con confirmación.
+
+        La confirmación dice **qué** se borra (con nombre y ruta) y el botón usa
+        el verbo, no un "Aceptar" genérico. Ojo con dos cosas que se rompieron
+        al portar desde Kivy: la ruta va convertida a texto (concatenar un
+        ``Path`` a un ``str`` lanza ``TypeError``, y al saltar antes de crear el
+        diálogo no se veía nada) y **nada de ``ignore_errors``**: si el borrado
+        falla hay que decir por qué, no callarse.
+        """
         if not confirm(self, tr("Uninstall"),
                        tr("Delete {name}?", name=entry.name)
-                       + "\n\n" + entry.path,
+                       + "\n\n" + tr("This will remove the folder permanently.")
+                       + "\n\n" + str(entry.path),
                        accept_text=tr("Uninstall"), danger=True):
             return
         try:
-            shutil.rmtree(entry.path, ignore_errors=True)
+            shutil.rmtree(entry.path)
         except OSError as error:
+            download_log(f"uninstall failed ({entry.path}): {error}")
             show_error(self, tr("Uninstall"), str(error))
+            return
+        self._show_message(tr("Deleted {name}", name=entry.name))
         self.refresh_installed()
 
     # ------------------------------------------------------------- updates
