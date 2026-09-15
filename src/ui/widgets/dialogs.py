@@ -117,7 +117,7 @@ class ProgressDialog(AppDialog):
 def update_available(parent, tag: str, on_update) -> bool:
     """Diálogo de actualización disponible. ``on_update`` se llama si acepta."""
     message = (tr("A new version is available: {version}", version=tag)
-               + "\n\n" + tr("It will be installed and the app will restart."))
+               + "\n\n" + tr("It will be installed and the app will restart automatically."))
     dialog = AppDialog(parent, tr("Update available"), message)
     dialog.add_button(tr("Later"), on_click=dialog.reject)
     dialog.add_button(tr("Update"), variant="accent", on_click=dialog.accept)
