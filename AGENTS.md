@@ -71,7 +71,7 @@ Para verificar la UI sin pantalla se puede arrancar Kivy con
 Todo lo gestiona `.github/workflows/build.yml`. **No hay que crear tags para
 tener binarios publicados.**
 
-### Publicar una pre-release automática (build normal)
+### Un push a master = una release
 
 Basta con empujar a `master`:
 
@@ -80,30 +80,19 @@ git push origin master
 ```
 
 El workflow calcula la versión (`v1.1.<nº de build>`, usando el último tag como
-base) y publica una **pre-release** con los 3 binarios + `checksums.txt`. Las
-pre-releases **no** disparan el auto-update de los usuarios.
+base) y publica una **release final** (no pre-release) con los 3 binarios +
+`checksums.txt`, marcada como `latest`. **No hay paso de promoción** ni canal
+de pre-releases: cada commit es una release.
 
-### Publicar una release estable (la que sí actualiza a los usuarios)
+Consecuencia a tener en cuenta: como la release es `latest`, el auto-update de
+la app (que consulta `.../releases/latest`) **salta en todos los usuarios** en
+el siguiente arranque. Es intencionado. Si necesitas probar algo sin que llegue
+a la gente, lanza el workflow a mano (`workflow_dispatch`) sobre una rama que
+no sea `master`, o desmarca el auto-update temporalmente.
 
-**Forma recomendada: el botón de promoción.** En Actions → **promote** → *Run
-workflow*. Sin argumentos coge la pre-release más reciente; opcionalmente se le
-pasa un tag concreto. El workflow comprueba que la release trae los 3 binarios
-y el `checksums.txt`, y entonces le quita la marca de pre-release y la deja
-como `latest`.
+### Publicar una release con un número concreto
 
-No recompila nada: promociona **los mismos binarios** que ya generó el push a
-master. El auto-update de la app consulta `.../releases/latest`, que **ignora
-pre-releases y drafts**, así que en cuanto se promociona una, a los usuarios
-con `auto_update` les salta el aviso en el siguiente arranque.
-
-**Por qué no hay que reetiquetar a mano unos binarios ya subidos**: la versión
-va *cocida dentro del binario* (`inject_version.py` reescribe `src/version.py`
-antes de compilar). Si creas un tag `v1.2.0` apuntando a los binarios de la
-pre-release `v1.1.87`, la app instalada seguirá diciendo «1.1.87», verá que
-`1.2.0` es más nueva, se actualizará... y volverá a decir «1.1.87»: **bucle
-infinito de actualización**.
-
-**Forma alternativa (recompilando)**: empujar un tag `vX.Y.Z`.
+Empujar un tag `vX.Y.Z` compila los 3 binarios con esa versión:
 
 ```bash
 git tag -a v1.2.0 -m "Blender Manager v1.2.0"
@@ -111,14 +100,18 @@ git push origin master   # si aún no está empujado
 git push origin v1.2.0
 ```
 
-Esto sí compila los 3 binarios con esa versión y publica la release como
-`latest`, así que la versión del binario y la del tag coinciden.
+### Por qué no reetiquetar binarios ya subidos
 
-**Cuidado con la numeración**: el parche de las pre-releases es el número de
-run de GitHub Actions, que solo sube (`v1.1.87`, `v1.1.88`...). Si etiquetas a
-mano una estable con un parche más bajo (`v1.1.2`), será *más antigua* que la
-que ya tienen algunos usuarios y nunca les llegará. Para una estable a mano,
-**sube siempre la minor** (`v1.2.0`).
+La versión va *cocida dentro del binario* (`inject_version.py` reescribe
+`src/version.py` antes de compilar). Si creas un tag `v1.2.0` apuntando a los
+binarios de `v1.1.87`, la app instalada seguirá diciendo «1.1.87», verá que
+`1.2.0` es más nueva, se actualizará... y volverá a decir «1.1.87»: **bucle
+infinito de actualización**. Reetiqueta siempre recompilando.
+
+**Cuidado con la numeración**: el parche es el número de run de GitHub Actions,
+que solo sube (`v1.1.87`, `v1.1.88`...). Si etiquetas a mano con un parche más
+bajo (`v1.1.2`), será *más antigua* que la que ya tienen algunos usuarios y
+nunca les llegará. Para etiquetar a mano, **sube siempre la minor** (`v1.2.0`).
 
 ### Reglas que no hay que romper
 
