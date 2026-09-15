@@ -1,9 +1,7 @@
-"""Paleta de colores, tipografías y registro de la fuente de iconos.
+"""Paleta de colores y tipografías (versión PySide6).
 
-Los colores imitan el *tema oscuro por defecto* de Blender (definido en el
-archivo ``userdef_default_theme.c`` de su código fuente).
-
-La idea de profundidad es la de Blender:
+Los colores imitan el *tema oscuro por defecto* de Blender. La idea de
+profundidad es la de Blender:
 
 * el **fondo** de la ventana es el gris más oscuro;
 * las **barras** (cabecera, barra lateral y de estado) y los **paneles/tarjetas**
@@ -11,80 +9,77 @@ La idea de profundidad es la de Blender:
 * los **botones** neutros son gris oscuro, como las pestañas de Blender;
 * los **campos de texto** quedan hundidos (más oscuros que su panel).
 
-Todos los valores van en RGBA entre 0 y 1, como espera Kivy.
+Los valores van como cadenas ``#RRGGBB`` (para QSS) y se exponen helpers para
+obtener ``QColor`` cuando hace falta pintar a mano.
+
+Cambio respecto a la era Kivy (medido con la fórmula de contraste WCAG):
+las constantes ``ACCENT``/``DANGER`` se usan para **bordes e indicadores**
+(solo necesitan 3:1), y los **rellenos de botón** usan ``ACCENT_BTN`` /
+``DANGER_BTN``, que dejan el texto claro por encima de 4,5:1 (AA).
 """
 
-from array import array
-
-from kivy.core.text import LabelBase
-from kivy.graphics.texture import Texture
-
-from paths import ASSETS_DIR
+from PySide6.QtGui import QColor
 
 # --- Jerarquía de grises (de más profundo a más elevado) ---
-BG = (0x1D / 255, 0x1D / 255, 0x1D / 255, 1)        # fondo de la ventana (el más oscuro)
-FIELD = (0x17 / 255, 0x17 / 255, 0x17 / 255, 1)     # campos de texto (hundidos)
-BUTTON = (0x58 / 255, 0x58 / 255, 0x58 / 255, 1)    # botones neutros (gris del theme antiguo)
-FILTER = (0x1D / 255, 0x1D / 255, 0x1D / 255, 1)    # botones de filtro (gris oscuro)
-SURFACE = (0x30 / 255, 0x30 / 255, 0x30 / 255, 1)   # paneles y tarjetas
-CHROME = (0x30 / 255, 0x30 / 255, 0x30 / 255, 1)    # cabecera, barra lateral y de estado
-# Filas alternas (cebra) para la vista en lista. Los rangos de las tarjetas
-# instaladas (SURFACE/ROW_ALT) y de las que faltan por descargar
-# (CARD_DIM/CARD_DIM_ALT) NO se solapan, para que no se confundan entre sí.
-CARD_DIM = (0x1E / 255, 0x1E / 255, 0x1E / 255, 1)  # por descargar (clara)
-CARD_DIM_ALT = (0x16 / 255, 0x16 / 255, 0x16 / 255, 1)  # por descargar (oscura)
-ROW_ALT = (0x2A / 255, 0x2A / 255, 0x2A / 255, 1)   # instalada (oscura)
-SURFACE_ALT = (0x3D / 255, 0x3D / 255, 0x3D / 255, 1)  # hover / contornos suaves
-BORDER = (0x3D / 255, 0x3D / 255, 0x3D / 255, 1)
+BG = "#1D1D1D"          # fondo de la ventana (el más oscuro)
+FIELD = "#171717"       # campos de texto (hundidos)
+BUTTON = "#585858"      # botones neutros
+FILTER = "#1D1D1D"      # botones de filtro
+SURFACE = "#303030"     # paneles y tarjetas
+CHROME = "#303030"      # cabecera, barra lateral y de estado
+CARD_DIM = "#1E1E1E"    # por descargar (clara)
+CARD_DIM_ALT = "#161616"  # por descargar (oscura)
+ROW_ALT = "#2A2A2A"     # instalada (oscura)
+SURFACE_ALT = "#3D3D3D"  # hover / contornos suaves
+BORDER = "#3D3D3D"
 
 # --- Texto ---
-TEXT = (0xE6 / 255, 0xE6 / 255, 0xE6 / 255, 1)
-MUTED = (0x98 / 255, 0x98 / 255, 0x98 / 255, 1)
-TEXT_SEL = (1.0, 1.0, 1.0, 1)
+TEXT = "#E6E6E6"
+MUTED = "#989898"
+TEXT_SEL = "#FFFFFF"
 
 # --- Acentos y estados ---
-ACCENT = (0x50 / 255, 0x85 / 255, 0xB1 / 255, 1)      # azul de selección/resaltado
-ACCENT_DARK = (0x3F / 255, 0x6F / 255, 0x96 / 255, 1)
-DANGER = (0xB8 / 255, 0x4A / 255, 0x4A / 255, 1)      # rojo pastel algo más saturado (desinstalar)
-DANGER_DARK = (0x9C / 255, 0x3C / 255, 0x3C / 255, 1)
-WARNING = (0xFF / 255, 0xAF / 255, 0x23 / 255, 1)     # naranja (LTS)
+ACCENT = "#5085B1"          # azul de selección/resaltado (bordes e indicadores)
+ACCENT_DARK = "#3F6F96"     # hover
+ACCENT_BTN = "#356089"      # relleno de botón primario (TEXT = 5,28:1, AA)
+DANGER = "#B84A4A"          # rojo para bordes/indicadores
+DANGER_DARK = "#9C3C3C"     # hover
+DANGER_BTN = "#9C3C3C"      # relleno del botón borrar (TEXT = 5,38:1, AA)
+WARNING = "#FFAF23"         # naranja (LTS)
+SUCCESS_TEXT = "#6FCF7A"    # verde claro para texto
+INFO_TEXT = "#7AA7E0"       # azul claro para texto
+INFO_DISC = "#45729B"       # disco del icono de información
 
-# Variantes claras de verde/azul para usar como TEXTO sobre fondo oscuro
-# (los acentos de arriba son demasiado oscuros para leerlos en una tarjeta).
-SUCCESS_TEXT = (0x6F / 255, 0xCF / 255, 0x7A / 255, 1)
-INFO_TEXT = (0x7A / 255, 0xA7 / 255, 0xE0 / 255, 1)
+# Colores con alfa (para QSS: rgba)
+OVERLAY = "rgba(0,0,0,0.6)"
 
-# Disco del icono de informacion de las tarjetas (azul apagado que se aclara
-# al pasar el raton). La "i" que va encima siempre es blanca.
-INFO_DISC = (0x45 / 255, 0x72 / 255, 0x9B / 255, 1)
+# --- Tipografía ---
+FONT_SIZE = 13
+FONT_FAMILY = "sans-serif"
 
-# Fuente de iconos (Font Awesome Free). Se registra con un nombre lógico
-# para poder usarla desde el .kv con font_name: "Icons".
-ICON_FONT = "Icons"
-ICON_TTF = str(ASSETS_DIR / "fonts" / "fa-solid-900.ttf")
-
-# Degradado vertical (blanco con alfa) que se superpone a botones y barras para
-# dar un poco de volumen: más claro arriba, transparente abajo.
-GRADIENT_TOP = None
+# --- Fuente de iconos (Font Awesome Free) ---
+ICON_FONT_FILE = "fa-solid-900.ttf"
 
 
-def _vertical_gradient(top_alpha: float, bottom_alpha: float, steps: int = 64):
-    """Crea una textura de 1 x N con un degradado vertical de transparencia."""
-    data = array("B")
-    for i in range(steps):
-        # La primera fila de una textura es la de abajo (convención de OpenGL).
-        t = i / (steps - 1)
-        alpha = int(round((bottom_alpha + (top_alpha - bottom_alpha) * t) * 255))
-        data.extend((255, 255, 255, alpha))
-    texture = Texture.create(size=(1, steps), colorfmt="rgba")
-    texture.blit_buffer(data.tobytes(), colorfmt="rgba", bufferfmt="ubyte")
-    texture.wrap = "clamp_to_edge"
-    return texture
+def qcolor(token: str, alpha: float = 1.0) -> QColor:
+    """Convierte un token ``#RRGGBB`` en ``QColor`` (opcionalmente con alfa)."""
+    color = QColor(token)
+    if alpha < 1.0:
+        color.setAlphaF(alpha)
+    return color
 
 
-def init() -> None:
-    """Registra la fuente de iconos y crea las texturas; antes de montar la UI."""
-    global GRADIENT_TOP
-    LabelBase.register(name=ICON_FONT, fn_regular=ICON_TTF)
-    if GRADIENT_TOP is None:
-        GRADIENT_TOP = _vertical_gradient(0.09, 0.0)
+def luminance(token: str) -> float:
+    """Luminancia relativa WCAG de un ``#RRGGBB``."""
+    token = token.lstrip("#")
+    channels = [int(token[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    channels = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+                for c in channels]
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def contrast(a: str, b: str) -> float:
+    """Ratio de contraste WCAG entre dos ``#RRGGBB`` (para tests)."""
+    la, lb = luminance(a), luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)

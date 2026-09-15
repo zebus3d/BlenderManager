@@ -164,34 +164,63 @@ Python 3.14 de Arch exige **glibc 2.44**, y en Linux Mint 22 / Ubuntu
 ImportError: libm.so.6: version `GLIBC_2.44' not found
 ```
 
-### 2. SDL2 2.32 para que funcione en Mesa 26 + Wayland
+### 2. SDL2 2.32 (parcial) y el muro de Mesa 25/26
 
 El Kivy 2.3.1 que instala pip trae en `Kivy.libs/` una SDL2 **2.30.0.7**
-con un bug en Mesa 26 + Wayland: pide GLX y Xwayland devuelve 0 configs
-→ `No matching FB config found` al abrir.
+que en Mesa moderno + Wayland pide GLX y Xwayland devuelve 0 configs
+→ `No matching FB config found`. Forzando Wayland: `Could not get EGL display`.
 
-Solución: el CI compila **SDL2 2.32.10** en el mismo Ubuntu 22.04 y
-**sustituye** el `libSDL2-2-*.so*` que dejó PyInstaller
-(`dist/BlenderManager/_internal/Kivy.libs/`). Como SDL2 mantiene ABI
-dentro de la serie 2.x, el módulo Cython `_window_sdl2` (compilado contra
-2.30) carga la 2.32 sin recompilar. **Verificado con podman**: swap +
-ventana real funciona en Ubuntu 22.04 y el binario arranca en Ubuntu 24.04.
+El CI compila **SDL2 2.32.10** en el mismo Ubuntu 22.04 y **sustituye** el
+`libSDL2-2-*.so*` que dejó PyInstaller (`dist/BlenderManager/_internal/Kivy.libs/`).
+SDL2 mantiene ABI dentro de la serie 2.x, así que el módulo Cython
+`_window_sdl2` carga la 2.32 sin recompilar.
 
-Detalles:
+**OJO — el swap NO arregla Mesa 25/26.** Medido en esta máquina:
+
+| Entorno | Mesa | pip Kivy 2.30 | pip Kivy 2.32 | Kivy fuente + sdl2-compat+SDL3 |
+|---|---|---|---|---|
+| Ubuntu 22.04 (Xvfb) | 23 | ✅ | ✅ | ✅ |
+| Ubuntu 24.04 (Xvfb) | 25 | ❌ | ❌ | — |
+| Arch + KDE/Wayland | 26 | ❌ | ❌ | ❌ `Could not get EGL display` |
+| Arch con `python-kivy` de pacman | 26 | — | — | ✅ |
+
+Conclusiones firmes (no volver a intentarlas):
+- Cambiar SDL2 a 2.32 **no** habilita Mesa 25/26 con pip Kivy.
+- Compilar SDL3 + `sdl2-compat` + Kivy desde fuente en Ubuntu 22.04
+  **tampoco**: funciona en Ubuntu 22.04, pero el SDL3 compilado sobre el
+  EGL/libwayland viejos no inicializa EGL contra el Mesa 26 de Arch.
+- Lo único que abre en Arch+Mesa 26 es el **Kivy nativo de Arch**, porque su
+  paquete `sdl2` es en realidad **`sdl2-compat`** (SDL3 por debajo).
+
+Detalles de mantenimiento:
 - La compilación de SDL2 se cachea con `actions/cache` (clave
   `sdl2-2.32.10-ubuntu2204`) para no recompilar en cada push.
 - El swap usa `find dist/BlenderManager -name "libSDL2-2-*" -exec cp ...`.
   Ojo con el patrón: `libSDL2-2-*` solo pilla el core; `libSDL2_image-*`,
   `libSDL2_mixer-*` y `libSDL2_ttf-*` NO se tocan.
 - Hay un **smoke test** (`./binario --smoke`) tras el build con
-  `APPIMAGE_EXTRACT_AND_RUN=1` (el runner no tiene libfuse2) que falla el
-  job si el binario no arranca.
+  `APPIMAGE_EXTRACT_AND_RUN=1` (el runner no tiene libfuse2). `--smoke` NO
+  abre ventana: para eso, `xvfb-run ... --screenshot` y buscar
+  `[GL] OpenGL version`.
 - **NO volver a `pip install kivy` sin más**, ni meter el job en un
   contenedor con glibc más nueva: cualquiera de las dos cosas reintroduce
   un bug ya sufrido por usuarios reales.
-- Cuando salga Kivy 3.0 (SDL3, sin el bug de SDL2, ver
-  [milestones](https://github.com/kivy/kivy/milestones), previsto ~2027)
-  se puede quitar el paso de compilar/sustituir SDL2.
+
+### 3. El muro de Mesa 25/26 y la salida correcta: Flatpak
+
+Una app OpenGL depende del **driver del sistema** (Mesa/NVIDIA), y un AppImage
+NO lo empaqueta. Por eso la app usa el Mesa del anfitrión, y el Kivy/SDL2 que
+compilamos aquí no se lleva bien con Mesa 25/26. Con el Kivy actual **no existe
+un único AppImage que sirva para Mint/X11 y Arch/Mesa26 a la vez**; es un choque
+de stack, no un bug del código.
+
+Salida correcta para "que funcione en todas las distros": **Flatpak**, que
+ejecuta la app sobre un runtime fijo (`org.freedesktop.Platform`) con Mesa +
+SDL2/SDL3 de una sola era; el anfitrión solo aporta el driver del kernel
+(`/dev/dri`). `shelly` también instala/listа Flatpaks. La otra salida es esperar
+a **Kivy 3.0** (SDL3 nativo, milestone ~enero 2027), que elimina `sdl2-compat`
+de la ecuación. Plan mientras tanto: AppImage (Ubuntu 22.04) para quien no
+quiera flatpak + Flatpak para cobertura total.
 
 ### Verificación antes de tocar este job
 
@@ -207,7 +236,7 @@ podman exec -it bmtest bash
 #     (objdump -T <lib> | grep -oE 'GLIBC_[0-9.]+' | sort -V | tail -1)
 ```
 
-El binario resultante pesa ~34 MB (vs ~170 MB del intento en Arch, que
+El binario resultante pesa ~50 MB (vs ~170 MB del intento en Arch, que
 arrastraba más libs).
 
 ### Gotchas de GitHub Actions (aplican a cualquier job)
@@ -244,6 +273,19 @@ arrastraba más libs).
   en el diálogo.
 - Los diálogos usan `AppPopup`/`AppProgressBar` (reglas en `views/dialogs.kv`),
   no los widgets por defecto de Kivy.
+- **Bit de ejecución**: `downloader.py` hace `chmod +x` al fichero descargado
+  (`mode | 0o111`) tras renombrar el `.part`. Sin esto, si el self-replace falla,
+  el fallback "Downloaded to … Open it to install" apunta a un `.AppImage` a
+  `644` y el doble clic da "Permiso denegado" (bug visto en Linux Mint).
+- **`_apply_appimage` valida `$APPIMAGE`**: si no está definido, `Path("").resolve()`
+  es el directorio actual y el `os.replace` fallaba sin motivo aparente. Ahora
+  comprueba que sea un fichero, loguea el motivo real y, ante cualquier fallo,
+  deja la copia descargada ejecutable (`_make_executable`) para que el usuario
+  pueda aplicarla a mano.
+- **Cuidado al reemplazar el AppImage en ejecución**: el flujo es `copy2` a
+  `target.new`, `chmod 0755`, `os.replace` y `Popen` del nuevo. Funciona en Linux
+  (el inodo viejo sigue vivo), pero si `target` es un directorio o no está
+  definido se cierra la app sin haber instalado nada — de ahí la validación.
 - Firma de Windows: **descartada de momento** (un self-signed no reduce
   SmartScreen/AV). Si aparecen falsos positivos, valorar CA real o Azure
   Trusted Signing y resubmit a WDSI.

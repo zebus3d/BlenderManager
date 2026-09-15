@@ -1,55 +1,64 @@
 """Tarjetas de compilaciones: la tienda y las versiones instaladas.
 
-Cada tarjeta existe en dos versiones, una para la vista en lista (una fila) y
-otra para la vista en rejilla (icono grande). Las dos comparten una clase base
-con las propiedades y la lógica de relleno de textos.
+Sustituyen a ``ui/widgets/cards.py`` + ``views/cards.kv``. Cada tarjeta existe
+en versión lista (una fila) y rejilla (icono grande). En vez de llamar
+directamente al controlador, emiten señales; la ventana principal las conecta.
 """
 
-from kivy.properties import (
-    BooleanProperty,
-    ListProperty,
-    NumericProperty,
-    ObjectProperty,
-    StringProperty,
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
 )
-from kivy.uix.boxlayout import BoxLayout
 
 from i18n import tr
-from ui.theme import SURFACE
-from ui.tooltip import HoverBehavior
+from paths import ASSETS_DIR
+from ui import icons
+from ui.widgets.buttons import CardButton, IconLinkButton
+
+_LOGO = ASSETS_DIR / "images" / "blender_logo.png"
 
 
-class BaseBuildCard(HoverBehavior, BoxLayout):
-    """Base común para las tarjetas de compilaciones (vista lista y rejilla)."""
+def _icon_font() -> QFont:
+    from ui.fonts import icon_font
 
-    build = ObjectProperty(None, allownone=True)
-    owner = ObjectProperty(None, allownone=True)
-    title = StringProperty("")
-    channel_text = StringProperty("")
-    version_text = StringProperty("")
-    meta_text = StringProperty("")
-    # Plataforma de destino que se añade a la línea de metadatos (vacía si es
-    # la misma que la del equipo, para no repetirla en cada tarjeta).
-    platform_text = StringProperty("")
-    action_text = StringProperty("")
-    is_lts = BooleanProperty(False)
-    installed = BooleanProperty(False)
-    zoom = NumericProperty(1.0)
-    # Fondo normal de la tarjeta (sin contar el resaltado al pasar el ratón).
-    # Se calcula en Python para poder alternar filas claras/oscuras en modo lista.
-    row_color = ListProperty(list(SURFACE))
+    return icon_font()
 
-    def on_build(self, *_):
-        """Traduce los datos del modelo a las cadenas que pinta la tarjeta."""
-        build = self.build
-        if build is None:
-            return
-        self.title = build.version
-        self.version_text = build.version
+
+def _logo_label(size: int, dim: bool) -> QLabel:
+    label = QLabel()
+    pix = QPixmap(str(_LOGO))
+    if not pix.isNull():
+        label.setPixmap(pix.scaled(size, size, Qt.KeepAspectRatio,
+                                   Qt.SmoothTransformation))
+    if dim:
+        label.setStyleSheet("opacity: 0.32;")
+    return label
+
+
+class BaseBuildCard(QFrame):
+    """Base común de las tarjetas de compilaciones."""
+
+    action_clicked = Signal(object)   # build
+    notes_clicked = Signal(str)       # version
+
+    def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
+                 parent=None):
+        super().__init__(parent)
+        self.build = build
+        self.installed = installed
+        self.setObjectName("Card")
+        self.setProperty("zebra", "true" if zebra else "false")
+        self.setProperty("installed", "true" if installed else "false")
+        self.setAttribute(Qt.WA_Hover, True)
+
+        self.title_text = build.version
+        self.version = build.version
         if build.experimental:
-            # Las experimentales se identifican por el nombre de su rama (por
-            # ejemplo "geometry-nodes"), que es lo que le interesa al usuario.
-            # No se traduce: es un nombre técnico.
             self.channel_text = build.branch
             self.is_lts = False
         else:
@@ -61,67 +70,220 @@ class BaseBuildCard(HoverBehavior, BoxLayout):
                 channel = "Stable"
             self.channel_text = tr(channel)
             self.is_lts = build.is_lts
-        # La rama ya se ve como etiqueta de canal en las experimentales, así
-        # que no la repetimos en la línea de metadatos.
+
         details = [build.human_size]
         if not build.experimental:
             details.append(build.branch)
-        if self.platform_text:
-            details.append(self.platform_text)
         details.append(build.arch)
         self.meta_text = "  ·  ".join(details)
-        self.refresh_action()
 
-    def refresh_action(self):
-        """El botón dice 'Lanzar' si esa versión ya está instalada y 'Descargar' si no."""
-        self.action_text = tr("Launch") if self.installed else tr("Download")
+    def _badge(self) -> QLabel:
+        label = QLabel(self.channel_text)
+        label.setObjectName("Warning" if self.is_lts else "Info")
+        return label
+
+    def _info(self) -> IconLinkButton:
+        btn = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
+        btn.setFont(_icon_font())
+        btn.clicked.connect(lambda: self.notes_clicked.emit(self.version))
+        return btn
 
 
 class BuildCard(BaseBuildCard):
     """Tarjeta en modo lista (una fila por compilación)."""
 
-    pass
+    def __init__(self, build, installed: bool, zebra: bool, parent=None):
+        super().__init__(build, installed, zebra, parent=parent)
+        self.setFixedHeight(78)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(16, 11, 12, 11)
+        lay.setSpacing(12)
+        lay.addWidget(_logo_label(44, dim=not installed))
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(3)
+        top = QHBoxLayout()
+        top.setSpacing(10)
+        title = QLabel(f"Blender {self.version}")
+        title.setObjectName("Title")
+        if not installed:
+            title.setStyleSheet("color: rgba(230,230,230,0.6);")
+        top.addWidget(title)
+        top.addWidget(self._badge())
+        top.addStretch()
+        text_col.addLayout(top)
+        meta = QLabel(self.meta_text)
+        meta.setObjectName("Muted")
+        meta.setTextInteractionFlags(Qt.NoTextInteraction)
+        if not installed:
+            meta.setStyleSheet("color: rgba(152,152,152,0.6);")
+        text_col.addWidget(meta)
+        lay.addLayout(text_col, 1)
+
+        lay.addWidget(self._info())
+
+        action = CardButton(
+            tr("Launch") if installed else tr("Download"),
+            variant="neutral" if installed else "accent",
+            tooltip=tr("Launch this installed version") if installed
+            else tr("Download and install this version"),
+        )
+        action.clicked.connect(lambda: self.action_clicked.emit(self.build))
+        lay.addWidget(action)
 
 
 class GridBuildCard(BaseBuildCard):
     """Tarjeta en modo rejilla (icono grande y botón debajo)."""
 
-    pass
+    def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
+                 parent=None):
+        super().__init__(build, installed, zebra, zoom, parent=parent)
+        self.setFixedHeight(int(196 * zoom))
+        lay = QVBoxLayout(self)
+        m = int(14 * zoom)
+        lay.setContentsMargins(m, m, m, m)
+        lay.setSpacing(int(6 * zoom))
+
+        logo = _logo_label(int(68 * zoom), dim=not installed)
+        logo.setAlignment(Qt.AlignHCenter)
+        lay.addWidget(logo)
+
+        title = QLabel(f"Blender {self.version}")
+        title.setObjectName("Title")
+        title.setAlignment(Qt.AlignHCenter)
+        if not installed:
+            title.setStyleSheet("color: rgba(230,230,230,0.6);")
+        lay.addWidget(title)
+
+        sub = QLabel(f"{self.channel_text}  ·  {self.meta_text}")
+        sub.setObjectName("Warning" if self.is_lts else "Info")
+        sub.setAlignment(Qt.AlignHCenter)
+        lay.addWidget(sub)
+
+        if installed:
+            tag = QLabel(tr("Installed build"))
+            tag.setObjectName("Success")
+            tag.setAlignment(Qt.AlignHCenter)
+            lay.addWidget(tag)
+
+        lay.addStretch()
+
+        row = QHBoxLayout()
+        row.setSpacing(int(6 * zoom))
+        row.addStretch()
+        row.addWidget(self._info())
+        action = CardButton(
+            tr("Launch") if installed else tr("Download"),
+            variant="neutral" if installed else "accent",
+            tooltip=tr("Launch this installed version") if installed
+            else tr("Download and install this version"),
+        )
+        action.clicked.connect(lambda: self.action_clicked.emit(self.build))
+        row.addWidget(action)
+        row.addStretch()
+        lay.addLayout(row)
 
 
-class BaseInstalledCard(HoverBehavior, BoxLayout):
-    """Base común para las tarjetas de versiones instaladas (lista y rejilla)."""
+class InstalledCard(QFrame):
+    """Versión ya instalada (lanzar / desinstalar) en modo lista."""
 
-    entry = ObjectProperty(None, allownone=True)
-    owner = ObjectProperty(None, allownone=True)
-    title = StringProperty("")
-    version_text = StringProperty("")
-    meta_text = StringProperty("")
-    action_text = StringProperty("")
-    is_lts = BooleanProperty(False)
-    can_launch = BooleanProperty(False)
-    zoom = NumericProperty(1.0)
-    row_color = ListProperty(list(SURFACE))
+    launch_clicked = Signal(object)   # entry
+    delete_clicked = Signal(object)   # entry
+    notes_clicked = Signal(str)       # version
 
-    def on_entry(self, *_):
-        entry = self.entry
-        if entry is None:
-            return
-        self.title = entry.name
-        self.version_text = entry.version
-        self.meta_text = f"Blender {entry.version}   ·   {entry.path}"
-        self.is_lts = entry.is_lts
-        self.can_launch = entry.can_launch
-        self.action_text = tr("Launch")
+    def __init__(self, entry, zebra: bool, parent=None):
+        super().__init__(parent)
+        self.entry = entry
+        self.setObjectName("Card")
+        self.setProperty("zebra", "true" if zebra else "false")
+        self.setProperty("installed", "true")
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setFixedHeight(66)
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(14, 10, 12, 10)
+        lay.setSpacing(10)
+        lay.addWidget(_logo_label(40, dim=False))
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+        title = QLabel(entry.name)
+        title.setObjectName("Title")
+        text_col.addWidget(title)
+        meta = QLabel(f"Blender {entry.version}   ·   {entry.path}")
+        meta.setObjectName("Muted")
+        text_col.addWidget(meta)
+        lay.addLayout(text_col, 1)
+
+        info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
+        info.setFont(_icon_font())
+        info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
+        lay.addWidget(info)
+
+        launch = CardButton(f"{icons.LAUNCH}  {tr('Launch')}", variant="neutral",
+                            tooltip=tr("Launch this installed version"))
+        launch.clicked.connect(lambda: self.launch_clicked.emit(entry))
+        lay.addWidget(launch)
+
+        delete = CardButton(icons.DELETE, variant="danger",
+                            tooltip=tr("Remove this installed version"))
+        delete.setFont(_icon_font())
+        delete.setFixedWidth(46)
+        delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
+        lay.addWidget(delete)
 
 
-class InstalledCard(BaseInstalledCard):
-    """Versión instalada en modo lista (una fila)."""
+class GridInstalledCard(QFrame):
+    """Versión instalada en cuadrícula (icono grande y botones debajo)."""
 
-    pass
+    launch_clicked = Signal(object)
+    delete_clicked = Signal(object)
+    notes_clicked = Signal(str)
 
+    def __init__(self, entry, zebra: bool, zoom: float = 1.0, parent=None):
+        super().__init__(parent)
+        self.entry = entry
+        self.setObjectName("Card")
+        self.setProperty("zebra", "true" if zebra else "false")
+        self.setProperty("installed", "true")
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setFixedHeight(int(188 * zoom))
 
-class GridInstalledCard(BaseInstalledCard):
-    """Versión instalada en modo rejilla (icono grande y botones debajo)."""
+        lay = QVBoxLayout(self)
+        m = int(12 * zoom)
+        lay.setContentsMargins(m, m, m, m)
+        lay.setSpacing(int(6 * zoom))
 
-    pass
+        logo = _logo_label(int(64 * zoom), dim=False)
+        logo.setAlignment(Qt.AlignHCenter)
+        lay.addWidget(logo)
+
+        title = QLabel(entry.name)
+        title.setObjectName("Title")
+        title.setAlignment(Qt.AlignHCenter)
+        lay.addWidget(title)
+
+        meta = QLabel(f"Blender {entry.version}")
+        meta.setObjectName("Muted")
+        meta.setAlignment(Qt.AlignHCenter)
+        lay.addWidget(meta)
+
+        lay.addStretch()
+
+        row = QHBoxLayout()
+        row.setSpacing(int(6 * zoom))
+        info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
+        info.setFont(_icon_font())
+        info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
+        row.addWidget(info)
+        launch = CardButton(tr("Launch"), variant="neutral",
+                            tooltip=tr("Launch this installed version"))
+        launch.clicked.connect(lambda: self.launch_clicked.emit(entry))
+        row.addWidget(launch, 1)
+        delete = CardButton(icons.DELETE, variant="danger",
+                            tooltip=tr("Remove this installed version"))
+        delete.setFont(_icon_font())
+        delete.setFixedWidth(int(42 * zoom))
+        delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
+        row.addWidget(delete)
+        lay.addLayout(row)
