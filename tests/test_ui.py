@@ -280,6 +280,46 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.zoom_slider.mousePressEvent(event)
         self.assertAlmostEqual(window.zoom, DEFAULT_ZOOM)
 
+    def test_clic_en_la_ranura_lleva_el_tirador_al_punto(self):
+        """Un clic en la ranura mueve el tirador ahí, no un ``pageStep``.
+
+        Antes, pulsar a 12 px del tirador daba un salto del 10 % de zoom.
+        """
+        from PySide6.QtCore import QEvent, QPointF, Qt
+        from PySide6.QtGui import QMouseEvent
+        from PySide6.QtWidgets import QStyle
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(900, 600)
+        window.layout_mode = "grid"
+        slider = window.zoom_slider
+
+        def mouse(kind, x, button=Qt.LeftButton, buttons=Qt.LeftButton):
+            pos = QPointF(x, 12)
+            return QMouseEvent(kind, pos, pos, button, buttons, Qt.NoModifier)
+
+        slider.setValue(120)
+        center = slider._sub_rect(QStyle.SC_SliderHandle).center().x()
+        for offset in (-30, 20, 40):
+            x = center + offset
+            slider.mousePressEvent(mouse(QEvent.MouseButtonPress, x))
+            slider.mouseReleaseEvent(
+                mouse(QEvent.MouseButtonRelease, x, Qt.NoButton, Qt.NoButton))
+            landed = slider._sub_rect(QStyle.SC_SliderHandle).center().x()
+            self.assertLessEqual(abs(landed - x), 2,
+                                 f"clic en {x} dejó el tirador en {landed}")
+
+        # Y tras el salto se sigue pudiendo arrastrar.
+        slider.setValue(120)
+        center = slider._sub_rect(QStyle.SC_SliderHandle).center().x()
+        slider.mousePressEvent(mouse(QEvent.MouseButtonPress, center))
+        slider.mouseMoveEvent(mouse(QEvent.MouseMove, center + 30, Qt.NoButton))
+        self.assertGreater(slider.value(), 120)
+        slider.mouseReleaseEvent(
+            mouse(QEvent.MouseButtonRelease, center + 30, Qt.NoButton, Qt.NoButton))
+
     def test_zebra_solo_en_modo_lista(self):
         from ui.widgets.main_window import MainWindow
 
