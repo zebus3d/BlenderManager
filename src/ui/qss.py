@@ -77,6 +77,10 @@ def build_qss() -> str:
     QPushButton#CardButton[variant="accent"]:pressed {{ background-color: {t.ACCENT}; }}
     QPushButton#CardButton[variant="danger"] {{ background-color: {t.DANGER_BTN}; }}
     QPushButton#CardButton[variant="danger"]:hover {{ background-color: {t.DANGER}; }}
+    /* Botón que solo lleva un icono (papelera): con el padding normal (14 px por
+       lado) el glifo no cabe cuando la rejilla va pequeña y queda el recuadro
+       rojo vacío. Con 4 px sobra sitio incluso a zoom 0.6. */
+    QPushButton#CardButton[iconOnly="true"] {{ padding: 6px 4px; }}
 
     /* --- Botón de info (círculo azul con la "i"), diana 24x24 (WCAG 2.5.8) --- */
     QPushButton#IconLink {{

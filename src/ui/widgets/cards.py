@@ -22,11 +22,27 @@ from ui.widgets.buttons import CardButton, IconLinkButton
 
 _LOGO = ASSETS_DIR / "images" / "blender_logo.png"
 
+# Ancho minimo de un boton que solo lleva un icono (la papelera de la rejilla):
+# con el padding corto del QSS ([iconOnly]) el glifo de 13 px necesita ~21 px.
+MIN_ICON_BUTTON_WIDTH = 26
 
-def _icon_font() -> QFont:
+
+def _icon_font(size: int | None = None) -> QFont:
     from ui.fonts import icon_font
 
-    return icon_font()
+    return icon_font(size)
+
+
+def _icon_only(button) -> None:
+    """Marca un CardButton que solo lleva un icono.
+
+    El QSS le quita el padding lateral (``[iconOnly="true"]``): con el normal,
+    a zoom bajo el ancho fijo se queda por debajo del padding y la papelera
+    salía como un recuadro rojo vacío. Vale con poner la propiedad antes de que
+    el widget se muestre (igual que ``zebra`` o ``installed``): el primer
+    *polish* ya la lee.
+    """
+    button.setProperty("iconOnly", "true")
 
 
 def _launch_icon():
@@ -36,14 +52,56 @@ def _launch_icon():
     return glyph_icon(icons.LAUNCH, 12, "#22C55E")
 
 
+def logo_shadow(widget, size: int):
+    """Sombra negra suave bajo el logo: el `drop-shadow` de CSS, versión Qt.
+
+    Qt repinta el widget a un pixmap y lo difumina (efecto de software), asi que
+    se paga al pintar. Medido: con los logos de las tarjetas (40-120 px) la
+    rejilla completa sube ~1 ms, nada al lado de lo que cuesta reconstruirla.
+
+    El radio y el desplazamiento escalan con el tamaño para que la sombra no se
+    coma el icono cuando el zoom es bajo ni quede ridicula cuando es alto.
+    """
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+    effect = QGraphicsDropShadowEffect(widget)
+    effect.setBlurRadius(max(6.0, size * 0.28))
+    effect.setOffset(0, max(1.0, size * 0.07))
+    effect.setColor(QColor(0, 0, 0, 180))
+    widget.setGraphicsEffect(effect)
+    return effect
+
+
+def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
+    """Devuelve el pixmap con esa opacidad.
+
+    En Qt el ``opacity`` del QSS **no hace nada** sobre un QLabel con pixmap
+    (comprobado: el canal alfa sale igual), asi que el atenuado de las builds
+    que no tienes instaladas -que en la version Kivy si se veia- hay que
+    pintarlo aqui.
+    """
+    from PySide6.QtGui import QPainter
+
+    result = QPixmap(pix.size())
+    result.fill(Qt.transparent)
+    painter = QPainter(result)
+    painter.setOpacity(opacity)
+    painter.drawPixmap(0, 0, pix)
+    painter.end()
+    return result
+
+
 def _logo_label(size: int, dim: bool) -> QLabel:
     label = QLabel()
     pix = QPixmap(str(_LOGO))
     if not pix.isNull():
-        label.setPixmap(pix.scaled(size, size, Qt.KeepAspectRatio,
-                                   Qt.SmoothTransformation))
-    if dim:
-        label.setStyleSheet("opacity: 0.32;")
+        scaled = pix.scaled(size, size, Qt.KeepAspectRatio,
+                            Qt.SmoothTransformation)
+        if dim:
+            scaled = _with_opacity(scaled, 0.32)
+        label.setPixmap(scaled)
+    logo_shadow(label, size)
     return label
 
 
@@ -269,6 +327,7 @@ class InstalledCard(_HoverCard, QFrame):
 
         delete = CardButton(icons.DELETE, variant="danger",
                             tooltip=tr("Remove this installed version"))
+        _icon_only(delete)
         delete.setFont(_icon_font())
         delete.setFixedWidth(46)
         delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
@@ -325,8 +384,14 @@ class GridInstalledCard(_HoverCard, QFrame):
         row.addWidget(launch, 1)
         delete = CardButton(icons.DELETE, variant="danger",
                             tooltip=tr("Remove this installed version"))
+        _icon_only(delete)
+        # El ancho acompana al zoom, pero nunca por debajo de lo que necesita el
+        # glifo: a 0.6 salia un recuadro rojo vacio (el icono no cabia). El
+        # tamano del icono no se puede escalar con setFont: el `font-size` del
+        # QSS global (13 px) pisa lo que ponga el widget, y da igual, porque el
+        # resto del texto de la tarjeta tampoco escala.
         delete.setFont(_icon_font())
-        delete.setFixedWidth(int(42 * zoom))
+        delete.setFixedWidth(max(int(42 * zoom), MIN_ICON_BUTTON_WIDTH))
         delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
         row.addWidget(delete)
         lay.addLayout(row)
