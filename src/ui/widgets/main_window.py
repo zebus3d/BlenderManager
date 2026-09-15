@@ -147,7 +147,8 @@ class MainWindow(QWidget):
         self.view = "store"
         # A dónde vuelve el botón de ajustes al pulsarlo por segunda vez.
         self._previous_view = "store"
-        self.channel = "all"
+        # El filtro que estaba puesto la última vez (Favoritos incluido).
+        self.channel = self.settings.channel
         self.search = ""
 
         self.downloader = Downloader()
@@ -302,7 +303,9 @@ class MainWindow(QWidget):
             btn.clicked.connect(lambda _=False, k=key: self.set_channel(k))
             lay.addWidget(btn)
             self._channel_buttons[key] = btn
-        self._channel_buttons["all"].setChecked(True)
+        # Marcamos el filtro con el que se arranca, que es el que se guardó.
+        self._channel_buttons.get(self.channel,
+                                  self._channel_buttons["all"]).setChecked(True)
         lay.addStretch()
 
         self.layout_group = QButtonGroup(bar)
@@ -576,6 +579,9 @@ class MainWindow(QWidget):
         Experimentales o Favoritos.
         """
         self.channel = channel
+        # Se recuerda para la próxima vez que se abra la aplicación.
+        self.settings.channel = channel
+        self.settings.save()
         self._rebuild_store()
         self._rebuild_installed()
 

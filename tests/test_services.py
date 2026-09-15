@@ -411,6 +411,20 @@ class SettingsTests(unittest.TestCase):
         # Una clave vacia se ignora.
         self.assertFalse(settings.set_favorite("", True))
 
+    def test_recuerda_el_filtro_de_canal(self):
+        settings = settings_module.Settings()
+        self.assertEqual(settings.channel, "all")
+        settings.channel = "favorites"
+        settings.save()
+        self.assertEqual(settings_module.Settings.load().channel, "favorites")
+
+    def test_filtro_desconocido_cae_a_todas(self):
+        # Un settings.json editado a mano (o de una version con otros filtros)
+        # no puede dejar la barra sin ninguna pastilla marcada.
+        (Path(self.tmp.name) / "settings.json").write_text(
+            json.dumps({"channel": "inventado"}), encoding="utf-8")
+        self.assertEqual(settings_module.Settings.load().channel, "all")
+
     def test_favoritos_con_basura_en_el_json(self):
         (Path(self.tmp.name) / "settings.json").write_text(
             json.dumps({"favorites": ["v45|4.5.13", 7, None, "", "v45|4.5.13"]}),
