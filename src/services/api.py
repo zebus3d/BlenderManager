@@ -154,14 +154,21 @@ def available_for(builds, platform: str, arch: str):
     return sorted(best.values(), key=lambda build: build.sort_key, reverse=True)
 
 
-def filter_builds(builds, channel: str, search: str = ""):
+def filter_builds(builds, channel: str, search: str = "", favorites=()):
     """Aplica el filtro de canal y la búsqueda a las compilaciones de la tienda.
 
     Las ramas experimentales solo se ven en su propio canal ("experimental"):
     así no se cuelan entre las estables o las diarias y no confunden a quien
     solo quiere una versión normal de Blender.
+
+    ``favorites`` es la lista de claves marcadas por el usuario
+    (``model.build.favorite_key``). Con el canal "favorites" se muestran solo
+    esas, sin excluir las experimentales: ahí manda lo que haya marcado.
     """
-    if channel == "experimental":
+    if channel == "favorites":
+        marked = set(favorites or ())
+        selected = [build for build in builds if build.favorite_key in marked]
+    elif channel == "experimental":
         selected = [build for build in builds if build.experimental]
     else:
         selected = [build for build in builds if not build.experimental]

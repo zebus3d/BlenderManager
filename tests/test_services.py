@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 
 import services.settings as settings_module
-from model.build import Build
+from model.build import Build, favorite_key
 from services import api, detector, installed
 from services.extractor import extract, is_archive
 
@@ -143,6 +143,41 @@ class ChannelFilterTests(unittest.TestCase):
         self.assertEqual([build.version for build in result], ["5.3.0"])
 
 
+class FavoriteFilterTests(unittest.TestCase):
+    """El canal "Favoritos" es transversal: no es un canal de Blender."""
+
+    def _builds(self):
+        return [
+            make_build("4.5.13", "stable", "v45", "a.tar.xz"),
+            make_build("5.3.0", "alpha", "main", "b.tar.xz"),
+            make_build("4.5.0", "alpha", "geometry-nodes", "c.tar.xz",
+                       experimental=True),
+        ]
+
+    def test_solo_las_marcadas(self):
+        builds = self._builds()
+        marked = [favorite_key("v45", "4.5.13")]
+        selected = api.filter_builds(builds, "favorites", "", marked)
+        self.assertEqual([b.version for b in selected], ["4.5.13"])
+
+    def test_incluye_experimentales_si_estan_marcadas(self):
+        # A diferencia del resto de canales, aqui no se excluyen: si la has
+        # marcado, la quieres ver.
+        builds = self._builds()
+        marked = [favorite_key("geometry-nodes", "4.5.0")]
+        selected = api.filter_builds(builds, "favorites", "", marked)
+        self.assertEqual([b.version for b in selected], ["4.5.0"])
+
+    def test_la_busqueda_sigue_aplicando(self):
+        builds = self._builds()
+        marked = [b.favorite_key for b in builds]
+        selected = api.filter_builds(builds, "favorites", "5.3", marked)
+        self.assertEqual([b.version for b in selected], ["5.3.0"])
+
+    def test_sin_marcadas_sale_vacio(self):
+        self.assertEqual(api.filter_builds(self._builds(), "favorites"), [])
+
+
 class InstalledTests(unittest.TestCase):
     def test_scan_finds_versions_and_executable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -201,6 +236,27 @@ class InstalledFilterTests(unittest.TestCase):
         entries = self._entries()
         self.assertEqual(len(installed.filter_installed(entries, "lts")), 1)
         self.assertEqual(len(installed.filter_installed(entries, "daily")), 1)
+
+    def test_favoritos_comparten_clave_con_la_tienda(self):
+        # La clave no lleva plataforma ni arquitectura a proposito: asi marcar
+        # una version en la tienda marca tambien la que tienes instalada.
+        build = make_build("4.5.13", "stable", "v45", "b.tar.xz")
+        entry = installed.InstalledBuild("blender-4.5.13-linux-x64", Path("/tmp/a"),
+                                         "4.5.13", branch="v45")
+        self.assertEqual(build.favorite_key, entry.favorite_key)
+        self.assertEqual(build.favorite_key, favorite_key("v45", "4.5.13"))
+        # Dos builds del mismo dia (mismo numero, hash distinto) comparten
+        # favorito: si no, el de una diaria se perderia al dia siguiente.
+        otra = make_build("4.5.13", "daily", "v45", "c.tar.xz", build_hash="ffff")
+        self.assertEqual(build.favorite_key, otra.favorite_key)
+
+    def test_filtro_de_favoritos(self):
+        entries = self._entries()
+        marked = [entries[1].favorite_key]
+        selected = installed.filter_installed(entries, "favorites", "", marked)
+        self.assertEqual([entry.branch for entry in selected], ["main"])
+        # Sin marcar nada el canal sale vacio (y no revienta).
+        self.assertEqual(installed.filter_installed(entries, "favorites"), [])
 
 
 class FindInstalledTests(unittest.TestCase):
@@ -336,6 +392,30 @@ class SettingsTests(unittest.TestCase):
         self.assertTrue(loaded.dest_folder)
         self.assertEqual(loaded.layout_mode, "grid")
         self.assertTrue(loaded.auto_update)
+        self.assertEqual(loaded.favorites, [])
+
+    def test_favoritos_se_marcan_y_se_guardan(self):
+        settings = settings_module.Settings()
+        self.assertTrue(settings.set_favorite("v45|4.5.13", True))
+        # Repetirlo no cambia nada (y no ensucia el JSON con duplicados).
+        self.assertFalse(settings.set_favorite("v45|4.5.13", True))
+        self.assertTrue(settings.set_favorite("main|5.3.0", True))
+        settings.save()
+        self.assertEqual(settings_module.Settings.load().favorites,
+                         ["v45|4.5.13", "main|5.3.0"])
+        # Y se pueden quitar.
+        self.assertTrue(settings.set_favorite("v45|4.5.13", False))
+        self.assertFalse(settings.set_favorite("v45|4.5.13", False))
+        self.assertEqual(settings.favorites, ["main|5.3.0"])
+        # Una clave vacia se ignora.
+        self.assertFalse(settings.set_favorite("", True))
+
+    def test_favoritos_con_basura_en_el_json(self):
+        (Path(self.tmp.name) / "settings.json").write_text(
+            json.dumps({"favorites": ["v45|4.5.13", 7, None, "", "v45|4.5.13"]}),
+            encoding="utf-8")
+        loaded = settings_module.Settings.load()
+        self.assertEqual(loaded.favorites, ["v45|4.5.13"])
 
 
 class DetectorTests(unittest.TestCase):

@@ -13,6 +13,7 @@ from ui.widgets.buttons import (
     IconLinkButton,
     Pill,
     SideButton,
+    StarButton,
     SwitchPill,
 )
 from ui.widgets.cards import (
@@ -44,6 +45,7 @@ __all__ = [
     "Pill",
     "ProgressDialog",
     "SideButton",
+    "StarButton",
     "SwitchPill",
     "confirm",
     "show_error",

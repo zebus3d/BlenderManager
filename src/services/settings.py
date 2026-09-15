@@ -12,7 +12,7 @@ Prioridad de ubicación:
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from paths import APP_DIR
@@ -78,6 +78,21 @@ def default_destination() -> Path:
 DEFAULT_ZOOM = 0.8
 
 
+def _clean_favorites(value) -> list[str]:
+    """Normaliza la lista de favoritos leída del JSON: solo textos, sin repetir.
+
+    Un settings.json editado a mano no debería tumbar la app ni colar un tipo
+    raro en una lista que se recorre en cada repintado.
+    """
+    if not isinstance(value, list):
+        return []
+    cleaned = []
+    for item in value:
+        if isinstance(item, str) and item and item not in cleaned:
+            cleaned.append(item)
+    return cleaned
+
+
 @dataclass
 class Settings:
     dest_folder: str = ""
@@ -95,6 +110,10 @@ class Settings:
     # ejemplo para copiarlas en un USB.
     platform: str = ""
     arch: str = ""
+    # Series marcadas como favoritas (claves de ``model.build.favorite_key``:
+    # "rama|versión"). En la lista se permiten las que ya no existan: si Blender
+    # deja de publicar una rama, el favorito no estorba.
+    favorites: list[str] = field(default_factory=list)
 
     @classmethod
     def load(cls) -> "Settings":
@@ -119,10 +138,30 @@ class Settings:
             window_height=int(data.get("window_height") or 0),
             platform=str(data.get("platform") or ""),
             arch=str(data.get("arch") or ""),
+            favorites=_clean_favorites(data.get("favorites")),
         )
         if not settings.dest_folder:
             settings.dest_folder = str(default_destination())
         return settings
+
+    def set_favorite(self, key: str, marked: bool) -> bool:
+        """Marca o desmarca una serie y devuelve si ha cambiado algo.
+
+        Se fija el estado en vez de alternarlo para que la interfaz no dependa
+        de en qué orden lleguen las señales: si la estrella ya estaba así, esto
+        no hace nada.
+        """
+        if not key:
+            return False
+        current = list(self.favorites)
+        if marked and key not in current:
+            current.append(key)
+        elif not marked and key in current:
+            current.remove(key)
+        else:
+            return False
+        self.favorites = current
+        return True
 
     def save(self) -> Path:
         return write_json_atomic(config_dir() / "settings.json", asdict(self), indent=2)

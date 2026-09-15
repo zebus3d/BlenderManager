@@ -286,7 +286,8 @@ class MainWindow(QWidget):
         self.channel_group.setExclusive(True)
         self._channel_buttons = {}
         for key, label in (("all", "All"), ("lts", "LTS"), ("stable", "Stable"),
-                           ("daily", "Daily"), ("experimental", "Experimental")):
+                           ("daily", "Daily"), ("experimental", "Experimental"),
+                           ("favorites", "Favorites")):
             btn = Pill(tr(label), tr(f"Filter: {label.lower()}"))
             self.channel_group.addButton(btn)
             btn.clicked.connect(lambda _=False, k=key: self.set_channel(k))
@@ -650,6 +651,23 @@ class MainWindow(QWidget):
         if self._zoom_enabled():
             self._set_zoom_value(settings_service.DEFAULT_ZOOM)
 
+    def set_favorite(self, item, marked: bool) -> None:
+        """Marca o desmarca una serie como favorita (estrella de una tarjeta).
+
+        Se fija el estado que trae la señal en vez de alternarlo: así la estrella
+        y el ajuste no se pueden desincronizar aunque llegue dos veces el evento.
+        """
+        key = getattr(item, "favorite_key", "")
+        if not self.settings.set_favorite(key, marked):
+            return
+        self.settings.save()
+        # En el canal de favoritos la lista cambia (la tarjeta entra o sale);
+        # en los demás la rejilla sería la misma, así que no la repintamos para
+        # no perder la posición del scroll.
+        if self.channel == "favorites":
+            self._rebuild_store()
+            self._rebuild_installed()
+
     def set_platform(self, label: str) -> None:
         self.platform_label = label
         self.settings.platform = label
@@ -671,7 +689,8 @@ class MainWindow(QWidget):
         mano y los filtros de canal no filtraban nada.
         """
         builds = api.available_for(self.builds, self.platform, self.arch)
-        return api.filter_builds(builds, self.channel, self.search)
+        return api.filter_builds(builds, self.channel, self.search,
+                                 self.settings.favorites)
 
     def _filtered_installed(self):
         """Aplica canal y búsqueda a las versiones instaladas.
@@ -682,7 +701,8 @@ class MainWindow(QWidget):
         canal no filtraban nada en esta pestaña.
         """
         return installed_service.filter_installed(self.installed, self.channel,
-                                                 self.search)
+                                                  self.search,
+                                                  self.settings.favorites)
 
     def resizeEvent(self, event):
         """Refluye la rejilla al cambiar el ancho (recalcula columnas)."""
@@ -781,10 +801,12 @@ class MainWindow(QWidget):
         builds = self._filtered()
         columns = self._grid_columns(self.store_scroll, self.store_grid, 0)
         if not builds:
-            # El canal experimental casi siempre está vacío (Blender dejó de
-            # publicar ramas en 2021): se explica en vez de dejar el genérico.
+            # Cada canal vacío tiene su explicación, en vez del genérico.
             if self.channel == "experimental":
                 text, hint = tr("No experimental builds right now"), ""
+            elif self.channel == "favorites":
+                text = tr("No favorites yet")
+                hint = tr("Tap the star on a card to keep it here.")
             else:
                 text = tr("No builds found")
                 hint = tr("Try clearing the search or another channel filter.")
@@ -799,12 +821,14 @@ class MainWindow(QWidget):
             # tarjetas van sueltas sobre el fondo y alternar el gris solo
             # ensucia el conjunto.
             zebra = (not grid) and bool(index % 2)
+            marked = build.favorite_key in self.settings.favorites
             if grid:
-                card = GridBuildCard(build, installed, zebra, self.zoom)
+                card = GridBuildCard(build, installed, zebra, self.zoom, marked)
             else:
-                card = BuildCard(build, installed, zebra)
+                card = BuildCard(build, installed, zebra, marked)
             card.action_clicked.connect(self.install_build)
             card.notes_clicked.connect(self.open_release_notes)
+            card.favorite_toggled.connect(self.set_favorite)
             cards.append(card)
         self._fill_grid(self.store_grid, cards, columns)
 
@@ -817,22 +841,29 @@ class MainWindow(QWidget):
         entries = self._filtered_installed()
         columns = self._grid_columns(self.installed_scroll, self.installed_grid, 0)
         if not entries:
-            self._fill_grid(self.installed_grid, [self._placeholder(
-                tr("No installed versions found"),
-                tr("Download one from the store to see it here."))], columns)
+            if self.channel == "favorites":
+                text = tr("No favorites yet")
+                hint = tr("Tap the star on a card to keep it here.")
+            else:
+                text = tr("No installed versions found")
+                hint = tr("Download one from the store to see it here.")
+            self._fill_grid(self.installed_grid, [self._placeholder(text, hint)],
+                            columns)
             return
         grid = self.layout_mode == "grid"
         cards = []
         for index, entry in enumerate(entries):
             # Igual que en la tienda: cebra solo en modo lista.
             zebra = (not grid) and bool(index % 2)
+            marked = entry.favorite_key in self.settings.favorites
             if grid:
-                card = GridInstalledCard(entry, zebra, self.zoom)
+                card = GridInstalledCard(entry, zebra, self.zoom, marked)
             else:
-                card = InstalledCard(entry, zebra)
+                card = InstalledCard(entry, zebra, marked)
             card.launch_clicked.connect(self.launch_installed)
             card.delete_clicked.connect(self.delete_installed)
             card.notes_clicked.connect(self.open_release_notes)
+            card.favorite_toggled.connect(self.set_favorite)
             cards.append(card)
         self._fill_grid(self.installed_grid, cards, columns)
 

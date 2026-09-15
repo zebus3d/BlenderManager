@@ -93,6 +93,19 @@ def build_qss() -> str:
     }}
     QPushButton#IconLink:hover {{ background-color: {t.ACCENT}; }}
 
+    /* --- Estrella de favorito (misma diana de 24x24 que la "i") ---
+       Se usa el mismo glifo en los dos estados: apagado cuando no está marcada
+       y en ámbar cuando sí (solo empaquetamos la fuente sólida de iconos). */
+    QPushButton#StarButton {{
+        background: transparent;
+        border: none;
+        color: {t.MUTED};
+        min-width: 24px; max-width: 24px;
+        min-height: 24px; max-height: 24px;
+    }}
+    QPushButton#StarButton:hover {{ color: {t.TEXT}; }}
+    QPushButton#StarButton:checked {{ color: {t.WARNING}; }}
+
     /* --- Botón de icono plano (refrescar, etc.) --- */
     QPushButton#IconFlat {{
         background: transparent;
