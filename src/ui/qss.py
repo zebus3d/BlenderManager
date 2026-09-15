@@ -130,6 +130,13 @@ def build_qss() -> str:
         border: 1px solid {t.DANGER_EDGE};
         color: {t.TEXT_SEL};
     }}
+    /* La papelera es un glifo, así que en el realce vale teñirlo de rojo (3:1).
+       El selector se acota a [iconOnly] para no tocar el texto de los botones
+       rojos de los diálogos, que sí necesita 4,5:1 y por eso va en blanco. */
+    QPushButton#CardButton[variant="danger"][iconOnly="true"]:hover,
+    QPushButton#CardButton[variant="danger"][iconOnly="true"]:pressed {{
+        color: {t.DANGER_ICON};
+    }}
     /* Botón que solo lleva un icono (papelera): con el padding normal (14 px por
        lado) el glifo no cabe cuando la rejilla va pequeña y queda el recuadro
        rojo vacío. Con 4 px sobra sitio incluso a zoom 0.6. */
