@@ -58,7 +58,7 @@ def filter_builds(builds, channel, search=""):
 demás canales se excluyen, para no confundir a quien solo quiere una versión
 normal de Blender.
 
-## Paso 3 — El controlador (`ui/widgets/root.py`)
+## Paso 3 — El controlador (`ui/widgets/main_window.py`)
 
 Como el filtrado ya está en `api.py`, aquí solo hay que llamarlo:
 
@@ -76,22 +76,29 @@ if build.experimental:
     self.channel_text = build.branch
 ```
 
-## Paso 4 — La vista (`views/main.kv`)
+> **Cuidado aquí**: no reimplementes el filtro dentro de la ventana. La primera
+> versión del port lo repetía a mano y los canales dejaban de filtrar (pasó dos
+> veces: en la tienda y en Instaladas). Si `services/` ya tiene una función para
+> eso, se usa.
 
-Añadimos una pastilla más a la barra de filtros:
+## Paso 4 — La vista (`ui/widgets/main_window.py` + `ui/qss.py`)
 
-```kv
-Pill:
-    text: tr("Experimental")
-    tooltip_text: tr("Filter: experimental branches")
-    state: "down" if root.channel == "experimental" else "normal"
-    disabled: not root.show_filters
-    group: "channel"
-    on_release: root.set_channel("experimental")
+En Qt no hay `.kv`: la pastilla se crea en `_build_filters`, dentro del bucle de
+canales:
+
+```python
+for key, label in (("all", "All"), ("lts", "LTS"), ("stable", "Stable"),
+                   ("daily", "Daily"), ("experimental", "Experimental")):
+    btn = Pill(tr(label), tr(f"Filter: {label.lower()}"))
+    self.channel_group.addButton(btn)
+    btn.clicked.connect(lambda _=False, k=key: self.set_channel(k))
 ```
 
+El aspecto de `Pill` (y de su estado activo) ya está en `ui/qss.py`, así que una
+pastilla nueva no necesita nada más.
+
 Además, cuando el canal está vacío, mostramos un mensaje propio en vez del
-genérico "No se encontraron compilaciones" (`root.py`, `_rebuild_store`).
+genérico "No se encontraron compilaciones" (`main_window.py`, `_rebuild_store`).
 
 ## Paso 5 — Los textos (`i18n.py`)
 
@@ -113,7 +120,7 @@ def test_experimental_only_in_its_own_channel(self):
     builds = self._builds()   # incluye una experimental "geometry-nodes"
     experimental = api.filter_builds(builds, "experimental")
     self.assertEqual([b.branch for b in experimental], ["geometry-nodes"])
-    for channel in ("all", "lts", "stable", "lts_stable", "daily"):
+    for channel in ("all", "lts", "stable", "daily"):
         selected = api.filter_builds(builds, channel)
         self.assertNotIn("geometry-nodes", [b.branch for b in selected])
 ```
@@ -121,14 +128,14 @@ def test_experimental_only_in_its_own_channel(self):
 Ejecuta las pruebas:
 
 ```bash
-python3 -m unittest discover -t . -s tests -v
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m unittest discover -t . -s tests
 ```
 
 ## Lo que aprendimos de este ejemplo
 
 - **Añadir un campo con valor por defecto** no rompe lo que ya existe.
 - **Separar la lógica de la vista** (la función `filter_builds`) hace que se
-  pueda probar. Esa es la razón de que los servicios no sepan de Kivy.
+  pueda probar. Esa es la razón de que los servicios no sepan de Qt.
 - **Un canal nuevo** toca 6 sitios: modelo, servicio, controlador, vista, i18n y
   pruebas. Teniéndolos localizados, es siempre igual.
 - **Fíjate en las decisiones de diseño** (las experimentales no se mezclan con
