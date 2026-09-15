@@ -22,14 +22,12 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
-    QDialog,
     QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -62,6 +60,7 @@ from ui.widgets.cards import (
     GridInstalledCard,
     InstalledCard,
 )
+from ui.widgets.dialogs import confirm, show_error, update_available
 
 PLATFORMS = {"GNU/Linux": "linux", "Windows": "windows", "macOS": "darwin"}
 PLATFORM_LABELS = {value: key for key, value in PLATFORMS.items()}
@@ -823,16 +822,17 @@ class MainWindow(QWidget):
             download_log(f"launch failed: {error}")
 
     def delete_installed(self, entry) -> None:
-        answer = QMessageBox.question(
-            self, tr("Uninstall"),
-            tr("Delete {name}?", name=entry.name),
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if answer != QMessageBox.Yes:
+        # La confirmación dice QUÉ se borra (con nombre) y el botón usa el verbo
+        # ("Uninstall"), no un "Aceptar" genérico.
+        if not confirm(self, tr("Uninstall"),
+                       tr("Delete {name}?", name=entry.name)
+                       + "\n\n" + entry.path,
+                       accept_text=tr("Uninstall"), danger=True):
             return
         try:
             shutil.rmtree(entry.path, ignore_errors=True)
-        except OSError:
-            pass
+        except OSError as error:
+            show_error(self, tr("Uninstall"), str(error))
         self.refresh_installed()
 
     # ------------------------------------------------------------- updates
@@ -858,28 +858,7 @@ class MainWindow(QWidget):
             self._show_message(tr("You already have the latest version."), 5)
 
     def _show_update_available(self, tag: str, asset) -> None:
-        dialog = QDialog(self)
-        dialog.setWindowTitle(tr("Update available"))
-        dialog.setMinimumWidth(420)
-        lay = QVBoxLayout(dialog)
-        lay.setContentsMargins(18, 16, 18, 16)
-        lay.setSpacing(12)
-        title = QLabel(tr("A new version is available: {version}", version=tag))
-        title.setObjectName("DialogTitle")
-        lay.addWidget(title)
-        info = QLabel(tr("It will be installed and the app will restart."))
-        info.setWordWrap(True)
-        lay.addWidget(info)
-        buttons = QHBoxLayout()
-        buttons.addStretch()
-        later = CardButton(tr("Later"))
-        later.clicked.connect(dialog.reject)
-        buttons.addWidget(later)
-        update = CardButton(tr("Update"), variant="accent")
-        update.clicked.connect(lambda: (dialog.accept(), self._do_update(asset)))
-        buttons.addWidget(update)
-        lay.addLayout(buttons)
-        dialog.exec()
+        update_available(self, tag, lambda: self._do_update(asset))
 
     def _do_update(self, asset) -> None:
         self._set_status(tr("Downloading..."))
