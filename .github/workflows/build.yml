@@ -1,13 +1,16 @@
 name: build
 
-# Se ejecuta en cada push a master (publica una release final), al empujar una
-# etiqueta de version, o a mano desde Actions.
+# Se ejecuta en cada push a master, al empujar una etiqueta de version, o a mano
+# desde Actions.
 #
-# OJO: cada push a master publica una RELEASE FINAL (no pre-release), asi que
-# dispara el auto-update de todos los usuarios. Es intencionado: este proyecto
-# no mantiene un canal de pruebas aparte. Si en algun momento hace falta probar
-# algo sin que llegue a la gente, usa un workflow_dispatch en una rama (no
-# master) o desmarca temporalmente el auto-update.
+# En master se actualiza UN UNICO pre-release (siempre el mismo, con el tag de
+# la version final a la que aspira): cada push reconstruye los tres binarios y
+# reemplaza los assets de ese pre-release. Promoverlo (promote.yml) lo convierte
+# en release final sin reconstruir nada. Con un tag vX.Y.Z, en cambio, se crea
+# una release final directamente.
+#
+# El auto-update de la app consulta `.../releases/latest`, que IGNORA los
+# pre-releases: mientras iteres, nadie recibe nada.
 on:
   push:
     branches:
@@ -18,14 +21,21 @@ on:
 
 jobs:
   # Calcula la version que se inyecta en los binarios y el tag de la release.
-  # Con un tag vX.Y.Z usa esa version; en un push a master usa el ultimo tag
-  # como base y el numero de build como parche (p. ej. v1.1.42). En los dos
-  # casos la release sale como estable.
+  #
+  # OJO con esto: la version va COCIDA en el binario (inject_version.py la
+  # escribe en src/version.py antes de compilar). Por eso las iteraciones de
+  # master comparten version con la release final a la que aspiran (p. ej.
+  # v1.3.0): promover solo le quita la marca de pre-release, no reetiqueta nada.
+  # Si la promocion cambiara la version, la app se actualizaria en bucle (ver
+  # AGENTS.md -> "Por que no reetiquetar binarios ya subidos").
   version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.compute.outputs.version }}
       tag: ${{ steps.compute.outputs.tag }}
+      name: ${{ steps.compute.outputs.name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,16 +43,29 @@ jobs:
       - name: Calcular version
         id: compute
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
+            NAME="v${VERSION}"
           else
-            BASE="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo 'v0.0')"
-            MAJOR_MINOR="$(echo "$BASE" | sed -E 's/^v?([0-9]+)\.([0-9]+).*/\1.\2/')"
-            VERSION="${MAJOR_MINOR}.${GITHUB_RUN_NUMBER}"
+            # Base: la ultima release FINAL (la API ignora los pre-releases) y
+            # subimos la minor. Asi todo el ciclo comparte version y el
+            # pre-release es siempre el mismo hasta que se promueve.
+            BASE="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" \
+                      --jq .tag_name 2>/dev/null || true)"
+            if [[ -z "${BASE}" || "${BASE}" == "null" ]]; then
+              BASE="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)"
+            fi
+            MAJOR="$(echo "$BASE" | sed -E 's/^v?([0-9]+).*/\1/')"
+            MINOR="$(echo "$BASE" | sed -E 's/^v?[0-9]+\.([0-9]+).*/\1/')"
+            VERSION="${MAJOR}.$((MINOR + 1)).0"
+            NAME="v${VERSION} (build ${GITHUB_RUN_NUMBER})"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
 
   # Pruebas unitarias. Las de UI corren con el plugin offscreen de Qt, asi que
   # no hace falta servidor grafico (pero si PySide6 y sus libs de sistema).
@@ -156,15 +179,24 @@ jobs:
           name: BlenderManager-macos
           path: BlenderManager-macos.zip
 
-  # Crea una Release con los binarios adjuntos. En cada push a master se
-  # publica como pre-release; al empujar un tag vX.Y.Z, como release estable.
+  # Publica la release con los binarios adjuntos.
+  #
+  # - Push a master: actualiza el UNICO pre-release (mismo tag, mismos nombres
+  #   de asset, asi que se reemplazan). Mientras iteras, nadie recibe nada: el
+  #   auto-update mira `releases/latest`, que ignora los pre-releases.
+  # - Tag vX.Y.Z: release final de una vez.
+  # - workflow_dispatch en otra rama: NO publica; deja los binarios como
+  #   artefactos del run, para probar sin que salga en Releases.
   release:
     needs: [version, test, linux, windows, macos]
-    if: github.event_name != 'pull_request'
+    if: github.ref_type == 'tag' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
@@ -174,11 +206,22 @@ jobs:
           find . -type f -not -name checksums.txt -print0 \
             | sort -z | xargs -0 sha256sum > checksums.txt
           cat checksums.txt
+      # El tag del pre-release tiene que apuntar siempre a lo ultimo compilado
+      # (si no, `git describe` en un checkout da una version vieja y los
+      # commits de mas). El push va con el GITHUB_TOKEN: los eventos que lanza
+      # ese token NO disparan workflows, asi que esto no vuelve a entrar por el
+      # `on: push: tags`.
+      - name: Mover el tag del pre-release
+        if: github.ref == 'refs/heads/master'
+        run: |
+          git tag -f "${{ needs.version.outputs.tag }}" "$GITHUB_SHA"
+          git push -f origin "refs/tags/${{ needs.version.outputs.tag }}"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
-          name: ${{ needs.version.outputs.tag }}
-          prerelease: false
-          make_latest: true
-          generate_release_notes: true
+          name: ${{ needs.version.outputs.name }}
+          prerelease: ${{ github.ref == 'refs/heads/master' }}
+          make_latest: ${{ github.ref != 'refs/heads/master' }}
+          generate_release_notes: ${{ github.ref != 'refs/heads/master' }}
+          overwrite_files: true
           files: release-assets/**/*

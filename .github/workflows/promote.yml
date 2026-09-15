@@ -1,0 +1,37 @@
+name: promote
+
+# Convierte el pre-release rodante en release final, a mano (Actions ->
+# promote -> Run workflow).
+#
+# NO reconstruye nada: reutiliza los binarios que ya se compilaron y probaron,
+# asi que la version cocida dentro de ellos sigue coincidiendo con el tag. Es
+# justo por eso que las iteraciones de master comparten version con la final a
+# la que aspiran (v1.3.0): promover solo le quita la marca de pre-release. Si
+# la promocion cambiara la version, la app se actualizaria en bucle.
+#
+# Despues de promover, el siguiente push a master calcula la minor siguiente
+# (v1.4.0) y empieza un ciclo nuevo.
+on:
+  workflow_dispatch:
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Promover el pre-release a release final
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
+                   --jq '[.[] | select(.prerelease)][0].tag_name')"
+          if [[ -z "${TAG}" || "${TAG}" == "null" ]]; then
+            echo "No hay ningun pre-release que promover." >&2
+            exit 1
+          fi
+          echo "Promoviendo ${TAG} a release final"
+          gh release edit "${TAG}" --prerelease=false --latest
+          gh release view "${TAG}" --json tagName,isPrerelease,isLatest \
+            --jq '"listo: " + .tagName + "  prerelease=" + (.isPrerelease|tostring) + "  latest=" + (.isLatest|tostring)'

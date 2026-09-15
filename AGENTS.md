@@ -81,10 +81,10 @@ abajo).
 
 ## Releases (lo importante)
 
-Todo lo gestiona `.github/workflows/build.yml`. **No hay que crear tags para
-tener binarios publicados.**
+Todo lo gestiona `.github/workflows/build.yml` (y `promote.yml` para publicar).
+**No hay que crear tags para tener binarios publicados.**
 
-### Un push a master = una release
+### Un push a master actualiza el único pre-release
 
 Basta con empujar a `master`:
 
@@ -92,25 +92,43 @@ Basta con empujar a `master`:
 git push origin master
 ```
 
-El workflow calcula la versión (`v1.1.<nº de build>`, usando el último tag como
-base) y publica una **release final** (no pre-release) con los 3 binarios +
-`checksums.txt`, marcada como `latest`. **No hay paso de promoción** ni canal
-de pre-releases: cada commit es una release.
+El workflow calcula la versión y actualiza **el mismo pre-release** (`v1.3.0`)
+con los 3 binarios + `checksums.txt`: mueve el tag al commit nuevo y reemplaza
+los assets (mismos nombres). **Nunca hay más de un pre-release**, y su tag es ya
+el de la versión final a la que aspira ese ciclo.
 
-Consecuencia a tener en cuenta: como la release es `latest`, el auto-update de
-la app (que consulta `.../releases/latest`) **salta en todos los usuarios** en
-el siguiente arranque. Es intencionado. Si necesitas probar algo sin que llegue
-a la gente, lanza el workflow a mano (`workflow_dispatch`) sobre una rama que
-no sea `master`, o desmarca el auto-update temporalmente.
+Mientras iteres, la gente no recibe nada: el auto-update consulta
+`.../releases/latest`, que **ignora los pre-releases**. Antes cada push
+publicaba una release final y disparaba el auto-update de todos; se cambió
+porque acababa en un montón de versiones y pre-releases sueltos.
+
+Para probar algo sin que salga en Releases, lanza el workflow a mano
+(`workflow_dispatch`) sobre una rama que no sea `master`: compila y deja los
+binarios como artefactos del run, sin publicar.
+
+### Promover a release final
+
+Actions → **promote** → *Run workflow*. `promote.yml` busca el pre-release y le
+quita la marca de pre-release (`gh release edit --prerelease=false --latest`).
+
+**No reconstruye nada**: reutiliza los binarios ya compilados y probados, y por
+eso la versión cocida dentro de ellos sigue coincidiendo con el tag. Es el
+motivo de que todas las iteraciones de un ciclo compartan versión con la final
+(`v1.3.0`): solo cambia la marca.
+
+Tras promover, el siguiente push a master calcula la **minor siguiente**
+(`v1.4.0`) y empieza un ciclo nuevo: la versión se saca de la última release
+**final** (`/releases/latest`, que ignora pre-releases) + 1 en la minor.
 
 ### Publicar una release con un número concreto
 
-Empujar un tag `vX.Y.Z` compila los 3 binarios con esa versión:
+Empujar un tag `vX.Y.Z` compila los 3 binarios con esa versión y publica una
+release **final** directamente (sin pasar por el pre-release):
 
 ```bash
-git tag -a v1.2.0 -m "Blender Manager v1.2.0"
+git tag -a v1.3.0 -m "Blender Manager v1.3.0"
 git push origin master   # si aún no está empujado
-git push origin v1.2.0
+git push origin v1.3.0
 ```
 
 ### Por qué no reetiquetar binarios ya subidos
@@ -119,12 +137,12 @@ La versión va *cocida dentro del binario* (`inject_version.py` reescribe
 `src/version.py` antes de compilar). Si creas un tag `v1.2.0` apuntando a los
 binarios de `v1.1.87`, la app instalada seguirá diciendo «1.1.87», verá que
 `1.2.0` es más nueva, se actualizará... y volverá a decir «1.1.87»: **bucle
-infinito de actualización**. Reetiqueta siempre recompilando.
+infinito de actualización**. Reetiqueta siempre recompilando — y por eso
+promover no toca la versión, solo la marca de pre-release.
 
-**Cuidado con la numeración**: el parche es el número de run de GitHub Actions,
-que solo sube (`v1.1.87`, `v1.1.88`...). Si etiquetas a mano con un parche más
-bajo (`v1.1.2`), será *más antigua* que la que ya tienen algunos usuarios y
-nunca les llegará. Para etiquetar a mano, **sube siempre la minor** (`v1.2.0`).
+**Cuidado con la numeración**: si etiquetas a mano con un número más bajo que el
+que ya tienen algunos usuarios, nunca les llegará. A mano, **sube siempre la
+minor** (`v1.3.0`).
 
 ### Reglas que no hay que romper
 
