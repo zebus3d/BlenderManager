@@ -6,7 +6,17 @@ daily and the official experimental branches. It is cross-platform (Linux,
 Windows and macOS) and designed to be **portable**: once packaged, users don't
 need to install anything.
 
-![Grid view](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/store_grid.png)
+<p align="center">
+  <img width="49%" alt="Store, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/store_grid.png">
+  <img width="49%" alt="Store, list view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/store_list.png">
+</p>
+<p align="center">
+  <img width="49%" alt="Installed builds, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/installed_grid.png">
+  <img width="49%" alt="Installed builds, list view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/installed_list.png">
+</p>
+
+<sub>Store and installed builds, in grid and list view (Spanish UI shown; English
+is detected from your locale).</sub>
 
 ## Features
 
@@ -41,27 +51,32 @@ need to install anything.
 - **Interface in English and Spanish** with automatic language detection, plus
   **tooltips** and a **portable mode** (settings live next to the executable).
 
-![Installed build list](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/installed_list.png)
-
 ![Update dialog](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@master/docs/img/update_dialog.png)
 
 ## A small, readable codebase
 
 Beyond being a useful tool, this project is meant to be **read and learned
-from**. It is a complete desktop application in about 4,000 lines of Python,
-split into clear layers:
+from**. It is written as if it were a final degree project: every layer has a
+reason to exist, the public API has docstrings, and the comments (in Spanish)
+explain *why* a decision was made, not *what* the line does. It is a complete
+desktop application in about 4,000 lines of Python, split into clear layers:
 
 - **`model/`** — plain data classes (`Build`, `InstalledBuild`).
 - **`services/`** — the real work (API, downloads, extraction, settings...).
-  They know nothing about Qt, so they can be tested without a window.
+  They know nothing about Qt, so they can be tested without a window. This is
+  the layer to read first if you want to see the logic on its own.
 - **`ui/`** — the interface. `ui/qss.py` is a single Qt stylesheet that holds the
-  whole look; `ui/widgets/` holds the behaviour.
+  whole look; `ui/widgets/` holds the behaviour. A widget's colour or spacing
+  never lives in Python, so the two can be read separately.
 
-If you are learning Python or Qt, start with the guides in
-[`doc/`](doc/README.md) (in Spanish): they walk through the architecture, the Qt
-concepts used, the design system and a full worked example of adding a new
-feature. The code comments are in Spanish (Spain) and explain not just *what*
-each part does, but *why* the decisions were made.
+The same idea applies to the tests (`tests/`, 100+ of them, no window needed)
+and to the build: `packaging/` is commented well enough to follow what each step
+does and why (the Ubuntu 22.04 choice, the Qt `xcb` plugin, the AppImage icon).
+
+If you are learning Python or Qt, the guides in [`doc/`](doc/README.md) (in
+Spanish) walk through the architecture, the Qt concepts used, the design system
+and a full worked example of adding a feature. They are the written version of
+the reasoning behind the code.
 
 ## How is it different from Blender Launcher V2?
 

@@ -52,6 +52,7 @@ class CardButton(QPushButton):
             self.setToolTip(tooltip)
 
     def set_variant(self, variant: str) -> None:
+        """Cambia el color del botón y lo repinta."""
         self.setProperty("variant", variant)
         self.style().unpolish(self)
         self.style().polish(self)

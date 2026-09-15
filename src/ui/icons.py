@@ -19,3 +19,4 @@ ARROW_UP = "\uf062"
 HOME = "\uf015"
 INFO = "\uf129"     # "i" suelta (el circulo azul lo pinta el .kv)
 STAR = "\uf005"     # estrella de favorito
+DOWNLOAD = "\uf019"  # flecha hacia abajo (descargar)

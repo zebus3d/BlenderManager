@@ -28,6 +28,7 @@ def log(message: str) -> None:
 
 
 class DownloadError(Exception):
+    """Error de descarga, con el mensaje ya listo para mostrar."""
     pass
 
 
@@ -39,14 +40,17 @@ class Downloader:
         self._thread = None
 
     def cancel(self) -> None:
+        """Pide a la descarga en curso que se detenga."""
         self._cancel.set()
 
     @property
     def running(self) -> bool:
+        """True mientras haya una descarga en marcha."""
         return self._thread is not None and self._thread.is_alive()
 
     def start(self, url, dest_folder, filename, expected_sha256=None,
               on_progress=None, on_done=None, on_error=None) -> None:
+        """Lanza la descarga en un hilo aparte y va avisando por callbacks."""
         if self.running:
             return
         self._cancel.clear()

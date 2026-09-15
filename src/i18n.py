@@ -167,6 +167,7 @@ _current = DEFAULT
 
 
 def detect_language() -> str:
+    """Idioma según las variables de entorno (LANG, LC_ALL...)."""
     for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
         value = os.environ.get(var)
         if value:
@@ -185,6 +186,7 @@ def detect_language() -> str:
 
 
 def set_language(language) -> None:
+    """Fija el idioma de la interfaz: 'auto', 'en' o 'es'."""
     global _current
     if language in (None, "", "auto"):
         _current = detect_language()
@@ -193,10 +195,16 @@ def set_language(language) -> None:
 
 
 def get_language() -> str:
+    """Idioma que se está usando ahora mismo."""
     return _current
 
 
 def tr(text, **kwargs) -> str:
+    """Traduce una cadena (las claves van en inglés).
+
+    Si falta la traducción devuelve la clave tal cual, para que la
+    interfaz no se rompa por un texto sin traducir.
+    """
     translated = _TRANSLATIONS.get(_current, {}).get(text, text)
     if kwargs:
         try:

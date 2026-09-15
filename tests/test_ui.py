@@ -334,26 +334,72 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
                     count += 1
         return total / count if count else 0
 
-    def test_la_flecha_de_lanzar_esta_en_las_cuatro_tarjetas(self):
+    def test_iconos_de_lanzar_y_de_descargar(self):
         from ui.widgets.buttons import CardButton
         from ui.widgets.cards import BuildCard, GridBuildCard
 
         def action_button(card):
             for button in card.findChildren(CardButton):
-                if button.property("variant") in ("neutral", "accent"):
+                if button.property("variant") in ("dark", "accent"):
                     return button
             return None
 
         build = _build("5.2.1", "v52", "stable")
-        # En la tienda, la flecha verde solo sale si ya tienes esa version.
-        # En Kivy se pinta junto al texto; al portar a Qt se perdio en la
-        # tienda (list y rejilla) y solo quedo en la pestana Instaladas.
+        lanzar, descargar = [], []
         for card in (BuildCard(build, True, False),
                      GridBuildCard(build, True, False, 1.0)):
-            self.assertFalse(action_button(card).icon().isNull(), type(card))
+            lanzar.append(action_button(card))
         for card in (BuildCard(build, False, False),
                      GridBuildCard(build, False, False, 1.0)):
-            self.assertTrue(action_button(card).icon().isNull(), type(card))
+            descargar.append(action_button(card))
+
+        # Lanzar va oscuro (como el boton de pestana de Blender) con la flecha
+        # verde, en las cuatro tarjetas: en Kivy se pintaba dentro del texto y
+        # al portar a Qt se perdio en las dos de la tienda.
+        for button in lanzar:
+            self.assertEqual(button.property("variant"), "dark")
+            self.assertFalse(button.icon().isNull(), type(button))
+        # Descargar va azul y con su flecha blanca hacia abajo.
+        for button in descargar:
+            self.assertEqual(button.property("variant"), "accent")
+            self.assertFalse(button.icon().isNull(), type(button))
+        # Y no es el mismo icono.
+        self.assertNotEqual(lanzar[0].icon().cacheKey(),
+                            descargar[0].icon().cacheKey())
+
+    def test_ajustes_funciona_como_interruptor(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        # La segunda pulsacion del boton de ajustes vuelve a donde estabas
+        # (en el port se guardaba _previous_view pero no se usaba nunca).
+        window.set_view("installed")
+        window.set_view("settings")
+        self.assertEqual(window.view, "settings")
+        window.set_view("settings")
+        self.assertEqual(window.view, "installed")
+
+        window.set_view("store")
+        window.set_view("settings")
+        window.set_view("settings")
+        self.assertEqual(window.view, "store")
+
+    def test_el_buscador_va_pegado_al_boton_de_refrescar(self):
+        from ui.widgets.buttons import IconFlatButton
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(1500, 620)
+        window.show()
+        refresh = window.header_tools.findChild(IconFlatButton)
+        hueco = window.search_input.x() - (refresh.x() + refresh.width())
+        # Antes el bloque se estiraba y repartia el hueco que sobraba: a 1500 px
+        # llegaba a 97 px entre el icono y el campo.
+        self.assertLessEqual(hueco, 14)
+        # Y el bloque queda pegado al borde derecho (margen de la cabecera).
+        self.assertLessEqual(
+            window.width() - (window.header_tools.x() + window.header_tools.width()),
+            18)
 
     def test_hay_pastilla_de_favoritos(self):
         from ui.widgets.main_window import MainWindow

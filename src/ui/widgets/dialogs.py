@@ -52,6 +52,7 @@ class AppDialog(QDialog):
 
     def add_button(self, text: str, variant: str = "neutral",
                    on_click=None) -> CardButton:
+        """Añade un botón a la fila inferior y lo devuelve."""
         button = CardButton(text, variant=variant)
         if on_click is not None:
             button.clicked.connect(on_click)
@@ -107,9 +108,11 @@ class ProgressDialog(AppDialog):
         self._secondary.clicked.connect(self.reject)
 
     def set_progress(self, value: int) -> None:
+        """Mueve la barra de progreso (0-100)."""
         self.progress.setValue(max(0, min(100, value)))
 
     def set_text(self, text: str) -> None:
+        """Cambia el mensaje del diálogo, para ir contando qué pasa."""
         if hasattr(self, "body_label"):
             self.body_label.setText(text)
 

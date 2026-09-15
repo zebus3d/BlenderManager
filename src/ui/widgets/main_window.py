@@ -143,6 +143,8 @@ class MainWindow(QWidget):
             self.zoom = settings_service.DEFAULT_ZOOM
 
         self.view = "store"
+        # A dónde vuelve el botón de ajustes al pulsarlo por segunda vez.
+        self._previous_view = "store"
         self.channel = "all"
         self.search = ""
 
@@ -253,6 +255,10 @@ class MainWindow(QWidget):
 
         self.header_tools = QWidget()
         self.header_tools.setObjectName("HeaderTools")  # fondo transparente (QSS)
+        # Sin esto el bloque se estira y reparte el hueco que sobra: a 1500 px de
+        # ancho llegaban a verse ~97 px entre el botón de refrescar y el
+        # buscador. Es el mismo caso que el zoom del pie.
+        self.header_tools.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         tools = QHBoxLayout(self.header_tools)
         tools.setContentsMargins(0, 0, 0, 0)
         tools.setSpacing(10)
@@ -271,7 +277,7 @@ class MainWindow(QWidget):
         self.search_input.addAction(
             glyph_icon(icons.SEARCH, 14, t.MUTED), QLineEdit.LeadingPosition)
         tools.addWidget(self.search_input)
-        lay.addWidget(self.header_tools)
+        lay.addWidget(self.header_tools, 0, Qt.AlignRight)
         return header
 
     def _build_filters(self) -> QFrame:
@@ -548,6 +554,7 @@ class MainWindow(QWidget):
 
     @property
     def platform(self) -> str:
+        """Plataforma de destino elegida en la barra de filtros."""
         return PLATFORMS.get(self.platform_label, "linux")
 
     @property
@@ -562,6 +569,9 @@ class MainWindow(QWidget):
 
     # ------------------------------------------------------------- filtros
     def set_channel(self, channel: str) -> None:
+        """Cambia de canal: Todas, LTS, Estable, Diarias,
+        Experimentales o Favoritos.
+        """
         self.channel = channel
         self._rebuild_store()
         self._rebuild_installed()
@@ -576,8 +586,19 @@ class MainWindow(QWidget):
         self._rebuild_installed()
 
     def set_view(self, view: str) -> None:
-        if view == "settings" and self.view != "settings":
-            self._previous_view = self.view
+        """Cambia entre la tienda, las instaladas y los ajustes.
+
+        El botón de ajustes funciona como un interruptor (igual que en la
+        versión Kivy): la primera vez entra y la segunda vuelve a la vista en la
+        que estabas. Entre tienda e instaladas no hay interruptor, el clic
+        cambia de pestaña y ya.
+        """
+        if view == "settings" and self.view == "settings":
+            # Segundo clic en ajustes: volvemos a donde estábamos.
+            view = self._previous_view
+        elif view != "settings":
+            # Recordamos la última vista que no eran ajustes.
+            self._previous_view = view
         self.view = view
         self._set_view(view)
         if view == "installed":
@@ -594,6 +615,7 @@ class MainWindow(QWidget):
         self.zoom_box.setVisible(view != "settings" and self.layout_mode == "grid")
 
     def set_layout_mode(self, mode: str) -> None:
+        """Cambia entre rejilla y lista y recuerda la elección."""
         self.layout_mode = mode
         self.zoom_box.setVisible(self.view != "settings" and mode == "grid")
         (self.grid_btn if mode == "grid" else self.list_btn).setChecked(True)
@@ -603,6 +625,9 @@ class MainWindow(QWidget):
         self._rebuild_installed()
 
     def set_zoom(self, value: float) -> None:
+        """Fija el tamaño de la rejilla: la etiqueta va al instante y
+        la rejilla se reconstruye cuando el slider se para.
+        """
         self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(value)))
         self._update_zoom_label()
         # En vivo, pero con tope: si no, se reconstruye en cada pixel de
@@ -639,10 +664,12 @@ class MainWindow(QWidget):
         self.set_zoom(percent / 100.0)
 
     def zoom_in(self) -> None:
+        """Sube un paso el zoom (Ctrl +)."""
         if self._zoom_enabled():
             self._set_zoom_value(self.zoom + ZOOM_STEP)
 
     def zoom_out(self) -> None:
+        """Baja un paso el zoom (Ctrl -)."""
         if self._zoom_enabled():
             self._set_zoom_value(self.zoom - ZOOM_STEP)
 
@@ -669,6 +696,7 @@ class MainWindow(QWidget):
             self._rebuild_installed()
 
     def set_platform(self, label: str) -> None:
+        """Cambia la plataforma de destino y repinta."""
         self.platform_label = label
         self.settings.platform = label
         self.settings.save()
@@ -676,6 +704,7 @@ class MainWindow(QWidget):
         self.refresh_installed()
 
     def set_arch(self, label: str) -> None:
+        """Cambia la arquitectura de destino y repinta."""
         self.arch_label = label
         self.settings.arch = label
         self.settings.save()
@@ -833,6 +862,7 @@ class MainWindow(QWidget):
         self._fill_grid(self.store_grid, cards, columns)
 
     def refresh_installed(self) -> None:
+        """Vuelve a escanear la carpeta y repinta las instaladas."""
         self.installed = installed_service.scan(self.settings.dest_folder, self.platform)
         self._rebuild_installed()
 
@@ -869,6 +899,7 @@ class MainWindow(QWidget):
 
     # ------------------------------------------------------------- refresco
     def refresh(self, force: bool = False) -> None:
+        """Pide el listado de compilaciones y lo pinta cuando llega."""
         self._set_status(tr("Loading..."))
 
         def worker():
@@ -895,10 +926,12 @@ class MainWindow(QWidget):
 
     # -------------------------------------------------------------- acciones
     def open_release_notes(self, version_text: str) -> None:
+        """Abre en el navegador las notas de esa serie."""
         url = f"https://www.blender.org/download/releases/{version_text}/"
         threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
 
     def browse_dest(self) -> None:
+        """Pide la carpeta de descargas con el diálogo del sistema."""
         folder = QFileDialog.getExistingDirectory(self, tr("Choose destination folder"),
                                                   self.dest_folder or str(Path.home()))
         if folder:
@@ -929,12 +962,14 @@ class MainWindow(QWidget):
                 break
 
     def set_auto_update(self, active: bool) -> None:
+        """Guarda si hay que buscar actualizaciones al arrancar."""
         self.auto_update = active
         self.settings.auto_update = active
         self.settings.save()
 
     # ----------------------------------------------------- descarga / instalación
     def install_build(self, build) -> None:
+        """Descarga e instala una compilación (progreso y SHA-256)."""
         installed = next((e for e in self.installed if e.version == build.version), None)
         if installed is not None:
             self.launch_installed(installed)
@@ -962,6 +997,7 @@ class MainWindow(QWidget):
         self.percent.setText(f"{value} %")
 
     def cancel_download(self) -> None:
+        """Cancela la descarga en curso."""
         self.downloader.cancel()
         self._set_status(tr("Cancelled"))
 
@@ -1001,6 +1037,9 @@ class MainWindow(QWidget):
         self._set_status(tr("Download failed"), 5)
 
     def launch_installed(self, entry) -> None:
+        """Abre una versión instalada (Blender sigue vivo al
+        cerrar el gestor).
+        """
         try:
             args = shlex.split(self.launch_args or "")
             executable = getattr(entry, "executable", None)
@@ -1013,6 +1052,7 @@ class MainWindow(QWidget):
     def delete_installed(self, entry) -> None:
         # La confirmación dice QUÉ se borra (con nombre) y el botón usa el verbo
         # ("Uninstall"), no un "Aceptar" genérico.
+        """Borra una versión instalada, con confirmación."""
         if not confirm(self, tr("Uninstall"),
                        tr("Delete {name}?", name=entry.name)
                        + "\n\n" + entry.path,
@@ -1031,6 +1071,7 @@ class MainWindow(QWidget):
         # Al arrancar no avisamos; si el usuario lo pide a mano, ofrecemos
         # ``git pull``, que es la actualización de verdad. Sin ``.git`` no hay
         # nada que actualizar: tampoco avisamos.
+        """Comprueba si hay versión nueva, en un hilo aparte."""
         if not getattr(sys, "frozen", False) and not manual:
             return
         if self._update_checking:

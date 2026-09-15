@@ -43,6 +43,9 @@ def write_marker(folder, build) -> None:
 
 
 def read_marker(folder) -> dict:
+    """Lee el marcador ``.blendermanager.json`` de una build
+    instalada.
+    """
     path = Path(folder) / MARKER_NAME
     if not path.is_file():
         return {}
