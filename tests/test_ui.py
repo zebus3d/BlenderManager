@@ -74,6 +74,41 @@ class MainWindowTests(unittest.TestCase):
         result = window._filtered()
         self.assertEqual([b.version for b in result], ["5.3.0"])
 
+    def test_installed_filtra_por_canal(self):
+        """La pestaña de instaladas tambien filtra por canal, no solo busqueda.
+
+        Bug real del port: reimplemente filter_installed y solo miraba la
+        busqueda, asi que pulsar LTS/Stable/Daily no cambiaba nada en esa
+        pestana (que es la que se abre por defecto si hay versiones).
+        """
+        class _Entry:
+            def __init__(self, name, version, branch, lts):
+                self.name = name
+                self.version = version
+                self.branch = branch
+                self.path = "/tmp/" + name
+                self.is_lts = lts
+                self.can_launch = True
+
+        window = self._window()
+        window.installed = [
+            _Entry("blender-5.2.1", "5.2.1", "v52", lts=True),
+            _Entry("blender-5.1.2", "5.1.2", "v51", lts=False),
+            _Entry("blender-5.3.0-alpha", "5.3.0", "main", lts=False),
+        ]
+        window.channel = "lts"
+        self.assertEqual([e.name for e in window._filtered_installed()],
+                         ["blender-5.2.1"])
+        # OJO: en instaladas, "estable" es "no LTS", así que incluye la diaria
+        # (a diferencia de la tienda, donde además exige risk == "stable").
+        window.channel = "stable"
+        self.assertEqual(len(window._filtered_installed()), 2)
+        window.channel = "daily"
+        self.assertEqual([e.name for e in window._filtered_installed()],
+                         ["blender-5.3.0-alpha"])
+        window.channel = "all"
+        self.assertEqual(len(window._filtered_installed()), 3)
+
     def test_search_filtra_por_version(self):
         window = self._window()
         window.channel = "all"
