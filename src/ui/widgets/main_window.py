@@ -591,12 +591,19 @@ class MainWindow(QWidget):
         available = width - 28  # margins 14+14
         return max(1, available // max(1, card_width + 10))
 
+    # Ancho MÍNIMO que necesita una tarjeta de rejilla para no recortarse
+    # (medido: 227 px con el logo, las etiquetas y el botón). Si se piden más
+    # columnas que las que caben a ese ancho, la última se sale del viewport.
+    MIN_CARD_WIDTH = 230
+
     def _grid_columns(self, scroll: QScrollArea, grid: QGridLayout, list_width: int) -> int:
         """En modo lista, 1 columna a todo lo ancho; en rejilla, las que quepan."""
         if self.layout_mode == "list":
             return 1
-        # Ancho aproximado de una tarjeta de rejilla escalada por el zoom.
-        return self._columns_for(scroll, int(300 * self.zoom))
+        # Ancho objetivo de una tarjeta de rejilla escalada por el zoom, pero
+        # nunca por debajo del mínimo que necesita el contenido.
+        target = max(int(300 * self.zoom), self.MIN_CARD_WIDTH)
+        return self._columns_for(scroll, target)
 
     def _fill_grid(self, grid: QGridLayout, cards: list, columns: int) -> None:
         """Coloca las tarjetas en la rejilla, repartiendo el ancho a partes iguales.
@@ -662,7 +669,7 @@ class MainWindow(QWidget):
         if not entries:
             self._fill_grid(self.installed_grid, [self._placeholder(
                 tr("No installed versions found"),
-                tr("Download one from the store."))], columns)
+                tr("Download one from the store to see it here."))], columns)
             return
         grid = self.layout_mode == "grid"
         cards = []
