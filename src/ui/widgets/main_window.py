@@ -64,6 +64,7 @@ from ui.widgets.cards import (
     GridBuildCard,
     GridInstalledCard,
     InstalledCard,
+    card_shadow,
     logo_shadow,
 )
 from ui.widgets.dialogs import AppDialog, confirm, show_error, update_available
@@ -873,6 +874,7 @@ class MainWindow(QWidget):
     def _placeholder(self, text: str, hint: str = "") -> QFrame:
         frame = QFrame()
         frame.setObjectName("Card")
+        card_shadow(frame)
         lay = QVBoxLayout(frame)
         lay.setContentsMargins(20, 24, 20, 24)
         label = QLabel(text)
