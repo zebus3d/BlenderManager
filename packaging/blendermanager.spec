@@ -27,6 +27,14 @@ _version_match = re.search(
 APP_VERSION = _version_match.group(1) if _version_match else "0.0.0"
 VERSION_INFO = ROOT / "packaging" / "version_info.txt"
 
+# Iconos del .exe (Windows) y del .app (macOS). Los genera
+# `packaging/make_icons.py` a partir de src/assets/images/app_icon.png y se
+# dejan en el repo para no depender de Qt antes de empaquetar. El AppImage no
+# usa estos: ver build_appimage.sh (.DirIcon + .desktop).
+ICONS = ROOT / "packaging" / "icons"
+ICON_ICO = ICONS / "blendermanager.ico"
+ICON_ICNS = ICONS / "blendermanager.icns"
+
 block_cipher = None
 
 datas = [
@@ -85,6 +93,8 @@ exe = EXE(
     disable_windowed_traceback=False,
     # Recurso de versión del .exe (solo aplica en Windows).
     version=str(VERSION_INFO) if VERSION_INFO.is_file() else None,
+    # Icono del .exe (Windows ignora esto en las demas plataformas).
+    icon=str(ICON_ICO) if ICON_ICO.is_file() else None,
 )
 
 coll = COLLECT(
@@ -100,7 +110,7 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="BlenderManager.app",
-        icon=None,
+        icon=str(ICON_ICNS) if ICON_ICNS.is_file() else None,
         bundle_identifier="org.zebus3d.blendermanager",
         info_plist={
             "NSHighResolutionCapable": True,

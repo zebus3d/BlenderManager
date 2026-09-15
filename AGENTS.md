@@ -226,12 +226,30 @@ ldd dist/BlenderManager/_internal/PySide6/Qt/plugins/platforms/libqxcb.so | grep
 ### El spec (`packaging/blendermanager.spec`)
 
 - `datas` solo lleva `src/assets` (ya no hay `views/`).
-- `QT_EXCLUDES` deja fuera los módulos de Qt que no usamos (WebEngine, QML,
+- **Iconos**: `packaging/icons/blendermanager.ico` (Windows) y `.icns` (macOS)
+  los genera `packaging/make_icons.py` a partir de
+  `src/assets/images/app_icon.png`, y se dejan en el repo para no depender de Qt
+  antes de empaquetar. **Qt solo escribe un tamaño por fichero** (si encadenas
+  `write()` se queda con el primero), así que los contenedores se montan a mano:
+  el `.ico` uniendo los ICO de un tamaño que escribe Qt (pixeles en BMP/DIB, lo
+  más compatible) y el `.icns` concatenando PNG con el código que toca a cada
+  tamaño (`icp4`=16, `icp5`=32, `icp6`=64, `ic07`=128, `ic08`=256, `ic09`=512).
+  Si cambias el PNG, vuelve a ejecutar el script.
+- **El AppImage no usa esos ficheros**: `build_appimage.sh` copia el PNG como
+  `blendermanager.png`, el `.desktop` con `Icon=blendermanager` y un `.DirIcon`
+  (que es lo que enseña el gestor de ficheros). Si alguien dice que "el AppImage
+  sale sin icono", **el icono va dentro**: comprobarlo con
+  `./BlenderManager-x86_64.AppImage --appimage-extract` y mirar la raíz del
+  AppDir. Lo que suele faltar es un *thumbnailer* de AppImage en su sistema
+  (en KDE/Dolphin, sin uno, el fichero suelto sale con el icono genérico). El
+  CI lo verifica en cada build.
+- **`QT_EXCLUDES`** deja fuera los módulos de Qt que no usamos (WebEngine, QML,
   Multimedia, 3D...) para no arrastrar ~100 MB de más.
 - **No excluir `shiboken6` ni `shiboken6.Shiboken`**: PySide6 los necesita para
   arrancar. Sin ellos el binario falla con
   `ModuleNotFoundError: No module named 'shiboken6.Shiboken'` — y el smoke test
-  no lo pilla, porque `--smoke` no importa Qt. **Probar siempre la GUI.**
+  no lo pilla, porque `--smoke` no importa Qt. Por eso el CI ahora lanza además
+  la GUI empaquetada con el plugin *offscreen* en las tres plataformas.
 
 ### Verificación antes de tocar el job
 
