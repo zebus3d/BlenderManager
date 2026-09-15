@@ -8,27 +8,37 @@ de i18n son cadenas en inglés (ver `src/i18n.py`).
 
 ```
 src/
-  main.py            # entrada, --smoke / --screenshot / --apply-update
+  main.py            # entrada, QApplication, --smoke / --screenshot / --apply-update
   version.py         # __version__ (el CI la reescribe desde el tag)
   paths.py           # APP_DIR / RESOURCE_DIR
   i18n.py            # traducciones es/en
   model/build.py     # modelo de compilación
   services/          # api, downloader, extractor, installed, launcher,
                      # detector, settings, updater
-  ui/                # theme, icons, tooltip
-    widgets/         # widgets de Python, repartidos por temas:
-                     #   basic, spinners, dialogs, cards, root (controlador)
-  views/             # interfaz declarativa Kivy, un .kv por grupo:
-                     #   widgets.kv, dialogs.kv, cards.kv, main.kv
+  ui/
+    theme.py         # tokens de color (+ contraste WCAG medido)
+    qss.py           # stylesheet global (el "look" de toda la app)
+    icons.py         # glifos de Font Awesome
+    fonts.py         # carga de la fuente de iconos / glyph_icon()
+    widgets/
+      buttons.py     # Pill, SideButton, CardButton, IconLinkButton, SwitchPill...
+      cards.py       # tarjetas de la tienda e instaladas (lista y rejilla)
+      dialogs.py     # AppDialog, confirm(), show_error(), update_available()
+      main_window.py # MainWindow: controlador de la pantalla principal
 doc/                 # guía de arquitectura en español (para principiantes)
 packaging/           # spec de PyInstaller, scripts de build, inject_version.py
-tests/               # unittest
+tests/               # unittest (la UI corre con QT_QPA_PLATFORM=offscreen)
+run.sh               # lanzador de desarrollo (crea el venv si falta)
 ```
 
-`main.py` define `KV_FILES` (los `.kv` a cargar, en orden) y registra en la
-`Factory` las clases de `ui/widgets/` antes de cargar las vistas. El paquete
+La UI es **PySide6 (Qt Widgets)**. El aspecto vive en `ui/qss.py`; los widgets
+llevan un `objectName` (o una propiedad dinámica) que el QSS usa como selector.
 `ui/widgets/__init__.py` reexporta todo, así que `from ui.widgets import X`
-sigue funcionando como cuando era un solo archivo.
+sigue funcionando.
+
+`services/`, `model/`, `i18n.py`, `paths.py` y `updater.py` son **independientes
+de la UI** (no importan Qt): es lo que permitió portar la interfaz sin tocarlos
+y lo que hay que preservar al refactorizar.
 
 ## Canales de compilaciones
 
@@ -50,11 +60,14 @@ los cachés viejos caen a su valor por defecto.
 ## Comandos
 
 ```bash
-# Tests (rápidos, sin interfaz)
-python3 -m unittest discover -t . -s tests -v
+# App en desarrollo (crea el .venv si falta)
+./run.sh
 
-# App en desarrollo
-python3 src/main.py
+# Equivalente sin el script
+.venv/bin/python src/main.py
+
+# Tests (la UI corre sin pantalla, con QT_QPA_PLATFORM=offscreen)
+.venv/bin/python -m unittest discover -t . -s tests -v
 
 # Build local (one-folder; --appimage añade el AppImage en Linux)
 python3 packaging/inject_version.py 1.2.3   # opcional: fija la versión local
@@ -63,8 +76,8 @@ packaging/build.sh --appimage
 ```
 
 En modo fuente la app **no** comprueba actualizaciones (solo si `sys.frozen`).
-Para verificar la UI sin pantalla se puede arrancar Kivy con
-`SDL_VIDEODRIVER=offscreen` (ver más abajo).
+Para verificar la UI sin pantalla se usa el plugin *offscreen* de Qt (ver más
+abajo).
 
 ## Releases (lo importante)
 
@@ -115,11 +128,14 @@ nunca les llegará. Para etiquetar a mano, **sube siempre la minor** (`v1.2.0`).
 
 ### Reglas que no hay que romper
 
-- **Nada de `dp()`/`sp()` al definir una clase o en código de nivel de módulo.**
-  Se evalúa al *importar* el módulo y `dp()` necesita una ventana para calcular
-  la densidad. PyInstaller importa los módulos durante el empaquetado (sin
-  ventana) y en Windows eso abortaba el build con `SystemExit`. Defínelo con un
-  valor plano y fija el `dp()` real en `__init__` (que ya corre con ventana).
+- **El "look" va en `ui/qss.py`, no en el código.** Un widget nuevo se estiliza
+  dándole un `objectName` (o una propiedad dinámica, p. ej. `variant` en
+  `CardButton`) y añadiendo la regla al QSS. Ojo con la especificidad: en QSS
+  `#Card[installed="true"]` y `#Card:hover` empatan, y gana la última; por eso
+  los `:hover` van al final del bloque.
+- **Nada de importar Qt en `services/`, `model/`, `i18n.py` ni `paths.py`.**
+  Esa capa es independiente de la UI (es lo que permitió el port); si necesita
+  avisar de algo, expone funciones puras o callbacks.
 - **Nombres de asset**: deben coincidir con `ASSET_NAMES` de
   `src/services/updater.py` (`BlenderManager-x86_64.AppImage`,
   `BlenderManager-windows-x86_64.zip`, `BlenderManager-macos.zip`). Si cambian
@@ -136,101 +152,84 @@ nunca les llegará. Para etiquetar a mano, **sube siempre la minor** (`v1.2.0`).
   (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
   la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
 
-## Build Linux portable (glibc + SDL2)
+## Build Linux portable (PySide6)
 
-El job `linux:` compila en **Ubuntu 22.04 sin contenedor**. Hay dos
-restricciones que se pelean entre sí y esta es la única combinación que
-las satisface a la vez:
+El job `linux:` compila en **Ubuntu 22.04 sin contenedor**. Con Qt Widgets la
+portabilidad es sencilla: **no hay OpenGL de por medio** (Qt renderiza con el
+motor *raster*, CPU), así que el binario no depende del Mesa del anfitrión.
 
-### 1. glibc vieja para máxima compatibilidad
+### El bug que motivó dejar Kivy
 
-El binario embebe el intérprete de Python y las libs de C. Ese intérprete
-exige una versión mínima de glibc del sistema anfitrión. Ubuntu 22.04 da
-**glibc 2.35**, que cubre Ubuntu 22.04+, Debian 12+, **Linux Mint 21/22**,
-Fedora 36+ y Arch.
-
-**NO compilar en un contenedor Arch** (lo intentamos y lo revertimos): el
-Python 3.14 de Arch exige **glibc 2.44**, y en Linux Mint 22 / Ubuntu
-24.04 (glibc 2.39) el binario crashea al arrancar con:
+Kivy exige OpenGL vía SDL2. El Kivy que trae pip embebe su propia SDL2, y en
+**Mesa 25/26** (Linux Mint 22, Arch/CachyOS) la ventana no abría:
 
 ```
-ImportError: libm.so.6: version `GLIBC_2.44' not found
+No matching FB config found
+# o, forzando Wayland:
+Could not get EGL display
 ```
 
-### 2. SDL2 2.32 (parcial) y el muro de Mesa 25/26
+Se probaron cuatro enfoques sin éxito (SDL2 2.30, SDL2 2.32, `sdl2-compat` +
+SDL3, y Kivy compilado desde fuente con SDL3): todos funcionaban en Ubuntu
+22.04 y fallaban contra el Mesa moderno. **No volver a intentarlo.** La salida
+fue portar la UI a Qt (`ui/qss.py`, `ui/widgets/`), que no usa GL.
 
-El Kivy 2.3.1 que instala pip trae en `Kivy.libs/` una SDL2 **2.30.0.7**
-que en Mesa moderno + Wayland pide GLX y Xwayland devuelve 0 configs
-→ `No matching FB config found`. Forzando Wayland: `Could not get EGL display`.
+### glibc
 
-El CI compila **SDL2 2.32.10** en el mismo Ubuntu 22.04 y **sustituye** el
-`libSDL2-2-*.so*` que dejó PyInstaller (`dist/BlenderManager/_internal/Kivy.libs/`).
-SDL2 mantiene ABI dentro de la serie 2.x, así que el módulo Cython
-`_window_sdl2` carga la 2.32 sin recompilar.
+El binario embebe el intérprete de Python, y ese intérprete fija la glibc
+mínima del anfitrión. Ubuntu 22.04 da **glibc 2.35**, que cubre Ubuntu 22.04+,
+Debian 12+, **Linux Mint 21/22**, Fedora 36+, openSUSE Leap 15.5+ y Arch.
+`PySide6-Essentials` solo pide **glibc 2.34**, así que el techo lo pone el
+Python, no Qt.
 
-**OJO — el swap NO arregla Mesa 25/26.** Medido en esta máquina:
+**NO compilar en una distro rolling** (Arch): el Python de Arch exige glibc
+2.44 y crashea en Mint 22 / Ubuntu 24.04 (glibc 2.39) con
+`libm.so.6: version GLIBC_2.44 not found`.
 
-| Entorno | Mesa | pip Kivy 2.30 | pip Kivy 2.32 | Kivy fuente + sdl2-compat+SDL3 |
-|---|---|---|---|---|
-| Ubuntu 22.04 (Xvfb) | 23 | ✅ | ✅ | ✅ |
-| Ubuntu 24.04 (Xvfb) | 25 | ❌ | ❌ | — |
-| Arch + KDE/Wayland | 26 | ❌ | ❌ | ❌ `Could not get EGL display` |
-| Arch con `python-kivy` de pacman | 26 | — | — | ✅ |
+### El único gotcha: el plugin xcb de Qt
 
-Conclusiones firmes (no volver a intentarlas):
-- Cambiar SDL2 a 2.32 **no** habilita Mesa 25/26 con pip Kivy.
-- Compilar SDL3 + `sdl2-compat` + Kivy desde fuente en Ubuntu 22.04
-  **tampoco**: funciona en Ubuntu 22.04, pero el SDL3 compilado sobre el
-  EGL/libwayland viejos no inicializa EGL contra el Mesa 26 de Arch.
-- Lo único que abre en Arch+Mesa 26 es el **Kivy nativo de Arch**, porque su
-  paquete `sdl2` es en realidad **`sdl2-compat`** (SDL3 por debajo).
+Qt necesita el plugin de plataforma `xcb` (aunque renderice en CPU). Sus
+dependencias tienen que estar en el runner **para que PyInstaller las bundlee**;
+si no, el AppImage no abre en el equipo del usuario:
 
-Detalles de mantenimiento:
-- La compilación de SDL2 se cachea con `actions/cache` (clave
-  `sdl2-2.32.10-ubuntu2204`) para no recompilar en cada push.
-- El swap usa `find dist/BlenderManager -name "libSDL2-2-*" -exec cp ...`.
-  Ojo con el patrón: `libSDL2-2-*` solo pilla el core; `libSDL2_image-*`,
-  `libSDL2_mixer-*` y `libSDL2_ttf-*` NO se tocan.
-- Hay un **smoke test** (`./binario --smoke`) tras el build con
-  `APPIMAGE_EXTRACT_AND_RUN=1` (el runner no tiene libfuse2). `--smoke` NO
-  abre ventana: para eso, `xvfb-run ... --screenshot` y buscar
-  `[GL] OpenGL version`.
-- **NO volver a `pip install kivy` sin más**, ni meter el job en un
-  contenedor con glibc más nueva: cualquiera de las dos cosas reintroduce
-  un bug ya sufrido por usuarios reales.
+```
+qt.qpa.plugin: Could not load the Qt platform plugin "xcb"
+```
 
-### 3. El muro de Mesa 25/26 y la salida correcta: Flatpak
-
-Una app OpenGL depende del **driver del sistema** (Mesa/NVIDIA), y un AppImage
-NO lo empaqueta. Por eso la app usa el Mesa del anfitrión, y el Kivy/SDL2 que
-compilamos aquí no se lleva bien con Mesa 25/26. Con el Kivy actual **no existe
-un único AppImage que sirva para Mint/X11 y Arch/Mesa26 a la vez**; es un choque
-de stack, no un bug del código.
-
-Salida correcta para "que funcione en todas las distros": **Flatpak**, que
-ejecuta la app sobre un runtime fijo (`org.freedesktop.Platform`) con Mesa +
-SDL2/SDL3 de una sola era; el anfitrión solo aporta el driver del kernel
-(`/dev/dri`). `shelly` también instala/listа Flatpaks. La otra salida es esperar
-a **Kivy 3.0** (SDL3 nativo, milestone ~enero 2027), que elimina `sdl2-compat`
-de la ecuación. Plan mientras tanto: AppImage (Ubuntu 22.04) para quien no
-quiera flatpak + Flatpak para cobertura total.
-
-### Verificación antes de tocar este job
+Son estas (el job `linux:` las instala): `libxcb-icccm4`, `libxcb-image0`,
+`libxcb-keysyms1`, `libxcb-randr0`, `libxcb-render-util0`, `libxcb-shape0`,
+`libxcb-xinerama0`, `libxcb-xkb1`, `libxkbcommon-x11-0`, `libxcb-cursor0`
+(esta última es requisito desde Qt 6.5). Comprobar con:
 
 ```bash
-# En un contenedor Ubuntu 22.04 (persistente, para no chocar con timeouts):
+ldd dist/BlenderManager/_internal/PySide6/Qt/plugins/platforms/libqxcb.so | grep "not found"
+```
+
+### El spec (`packaging/blendermanager.spec`)
+
+- `datas` solo lleva `src/assets` (ya no hay `views/`).
+- `QT_EXCLUDES` deja fuera los módulos de Qt que no usamos (WebEngine, QML,
+  Multimedia, 3D...) para no arrastrar ~100 MB de más.
+- **No excluir `shiboken6` ni `shiboken6.Shiboken`**: PySide6 los necesita para
+  arrancar. Sin ellos el binario falla con
+  `ModuleNotFoundError: No module named 'shiboken6.Shiboken'` — y el smoke test
+  no lo pilla, porque `--smoke` no importa Qt. **Probar siempre la GUI.**
+
+### Verificación antes de tocar el job
+
+```bash
+# Ubuntu 22.04 (persistente, para no chocar con timeouts):
 podman run -d --name bmtest docker.io/ubuntu:22.04 sleep infinity
 podman exec -it bmtest bash
-# dentro: apt-get install python3-pip python3-venv cmake build-essential \
-#   libx11-dev libwayland-dev libegl1-mesa-dev ... ; pip install kivy pyinstaller
-# compilar SDL2 2.32, hacer el swap, y comprobar:
-#   - ventana real: xvfb-run ... --screenshot -> "OpenGL version <b'...'>"
-#   - máxima glibc requerida por _internal/*.so*: <= 2.35
+# dentro: apt-get install python3-pip python3-venv <libs xcb de arriba> ; \
+#   pip install -r requirements-build.txt
+# pyinstaller ... ; y comprobar:
+#   - GUI:  QT_QPA_PLATFORM=offscreen ./dist/BlenderManager/BlenderManager --screenshot /tmp/x.png
+#   - glibc máxima de _internal/*.so*: <= 2.35
 #     (objdump -T <lib> | grep -oE 'GLIBC_[0-9.]+' | sort -V | tail -1)
 ```
 
-El binario resultante pesa ~50 MB (vs ~170 MB del intento en Arch, que
-arrastraba más libs).
+El AppImage resultante pesa ~70 MB.
 
 ### Gotchas de GitHub Actions (aplican a cualquier job)
 
@@ -285,26 +284,30 @@ arrastraba más libs).
 
 ## Verificación de UI sin pantalla
 
-Como en el CI, Kivy puede correr sin display:
+Qt tiene un plugin *offscreen*, así que la UI se puede montar sin servidor
+gráfico (es lo que usa el CI y `tests/test_ui.py`):
 
 ```bash
-cd src && SDL_VIDEODRIVER=offscreen KIVY_WINDOW=sdl2 KIVY_NO_ARGS=1 python3 -c "
-from kivy.factory import Factory
-from kivy.lang import Builder
-from ui import theme
-import ui.widgets as W
-theme.init()
-for name in dir(W):
-    obj = getattr(W, name)
-    if isinstance(obj, type):
-        Factory.register(name, cls=obj)
-for name in ('widgets.kv', 'dialogs.kv', 'cards.kv', 'main.kv'):
-    Builder.load_file('views/' + name)
-r = W.RootWidget()
-print(r.current_version, r.show_filters)
+cd src && QT_QPA_PLATFORM=offscreen ../.venv/bin/python -c "
+from PySide6.QtWidgets import QApplication
+app = QApplication([])
+from ui import fonts, qss
+fonts.load(); app.setStyleSheet(qss.build_qss())
+from ui.widgets import MainWindow
+w = MainWindow()
+print(w.current_version, w.view)
 "
 ```
 
-Registrar en `Factory` las clases propias usadas en los `.kv` antes de
-`Builder.load_file`, igual que hace `run_ui` en `src/main.py`. Los `.kv` a
-cargar son los de `KV_FILES` en `main.py`.
+Dos cosas a tener en cuenta:
+
+- El plugin **tiene que fijarse ANTES de crear `QApplication`** (por eso va en
+  el entorno del comando, no dentro del script). Si se crea antes, Qt elige el
+  plugin por defecto y falla sin display.
+- `MainWindow` lanza la carga de builds en un `QTimer` a los 100 ms, así que en
+  un script de un tirón hay que dejar correr el bucle de eventos
+  (`QTimer.singleShot(9000, app.quit); app.exec()`) para que lleguen datos.
+
+Para una captura: `w.grab().save("/tmp/x.png")` (no depende de GL, a diferencia
+del `Window.screenshot` de Kivy). Y `tests/test_ui.py` trae ejemplos de montar la
+ventana e inyectar builds sin tocar la red.
