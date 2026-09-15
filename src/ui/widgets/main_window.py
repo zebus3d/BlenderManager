@@ -35,6 +35,8 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSlider,
     QStackedWidget,
+    QStyle,
+    QStyleOptionSlider,
     QVBoxLayout,
     QWidget,
 )
@@ -88,16 +90,66 @@ class _ZoomSlider(QSlider):
 
     ``QSlider`` no distingue el clic normal del clic con modificadores, así que
     hay que mirarlo en ``mousePressEvent``.
+
+    Y en la ranura, ``QSlider`` da un ``pageStep`` (10 % de zoom, medido) en vez
+    de llevar el tirador al punto pulsado. Aquí se mapea la coordenada a un valor
+    —el tirador queda justo bajo el cursor, y sigue ahí mientras se arrastra—,
+    que es lo que se espera de un deslizador. El dibujo sigue en ``qss.py``.
     """
 
     reset_requested = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # El tirador mide 16 px de alto, pero la diana la marca el widget: con
+        # los 15 px por defecto queda por debajo del mínimo de 24 px (WCAG 2.5.8).
+        # La fila de la cabecera ya mide 32 px, así que subirlo no mueve nada.
+        self.setMinimumHeight(24)
+        self._drag_active = False
+
+    def _sub_rect(self, sub_control):
+        """Rectángulo de una parte del slider (ranura o tirador) ya maquetado."""
+        option = QStyleOptionSlider()
+        self.initStyleOption(option)
+        return self.style().subControlRect(
+            QStyle.CC_Slider, option, sub_control, self)
+
+    def _value_at(self, x):
+        """Valor cuyo tirador queda centrado en la coordenada ``x``."""
+        groove = self._sub_rect(QStyle.SC_SliderGroove)
+        handle = self._sub_rect(QStyle.SC_SliderHandle)
+        span = groove.width() - handle.width()
+        if span <= 0:
+            return self.value()
+        value = QStyle.sliderValueFromPosition(
+            self.minimum(), self.maximum(),
+            x - groove.left() - handle.width() // 2, span)
+        return min(self.maximum(), max(self.minimum(), value))
 
     def mousePressEvent(self, event):
         if event.modifiers() & Qt.ControlModifier:
             self.reset_requested.emit()
             event.accept()
             return
-        super().mousePressEvent(event)
+        self._drag_active = True
+        self.setSliderDown(True)
+        self.setValue(self._value_at(event.position().toPoint().x()))
+        event.accept()
+
+    def mouseMoveEvent(self, event):
+        if not self._drag_active:
+            super().mouseMoveEvent(event)
+            return
+        self.setValue(self._value_at(event.position().toPoint().x()))
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if self._drag_active:
+            self._drag_active = False
+            self.setSliderDown(False)
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
 
 class MainWindow(QWidget):
