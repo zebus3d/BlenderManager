@@ -51,6 +51,20 @@ def smoke() -> int:
     return 0
 
 
+def _clean_previous_session(settings) -> None:
+    """Borra los restos de la sesión anterior.
+
+    Dos cosas: el binario que se descargó para actualizar (una AppImage son
+    ~73 MB) y las descargas de Blender que se quedaron a medias (``.part``).
+
+    OJO: estas dos llamadas vivían en ``root.py`` en la versión Kivy y se
+    perdieron al portar la interfaz, así que el binario de cada actualización se
+    quedaba en el caché para siempre. Hay un test que comprueba que se llaman.
+    """
+    updater.cleanup_staging()
+    updater.cleanup_partials(settings.dest_folder)
+
+
 def _install_exception_hook() -> None:
     """Deja constancia (y avisa) cuando un fallo no controlado revienta la UI.
 
@@ -126,6 +140,9 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     window.resize(max(880, settings.window_width or 1060),
                   max(540, settings.window_height or 680))
     window.show()
+
+    # Restos de la sesión anterior, con retardo para no retrasar el arranque.
+    QTimer.singleShot(600, lambda: _clean_previous_session(settings))
 
     if screenshot:
         def grab():
