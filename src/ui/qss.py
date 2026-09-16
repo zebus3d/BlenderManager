@@ -164,6 +164,11 @@ def build_qss() -> str:
         background: transparent;
         border: none;
         color: {t.MUTED};
+        /* El glifo de la estrella aprovecha menos su caja que la "i", así que a
+           13 px (el tamaño global) se veía más pequeña que el disco de info.
+           Medido con tightBoundingRect: 16 px le da 18x17 px de tinta, a la par
+           del disco azul de 20 px de la "i". */
+        font-size: 16px;
         min-width: 24px; max-width: 24px;
         min-height: 24px; max-height: 24px;
     }}

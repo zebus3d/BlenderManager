@@ -265,8 +265,8 @@ class BuildCard(BaseBuildCard):
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
-        lay.addWidget(self._star(marked))
         lay.addWidget(self._info())
+        lay.addWidget(self._star(marked))
 
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
@@ -343,8 +343,8 @@ class GridBuildCard(BaseBuildCard):
         row = QHBoxLayout()
         row.setSpacing(int(5 * zoom))
         row.addStretch()
-        row.addWidget(self._star(marked))
         row.addWidget(self._info())
+        row.addWidget(self._star(marked))
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
             variant="dark" if installed else "accent",
@@ -396,12 +396,12 @@ class InstalledCard(_HoverCard, QFrame):
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
-        lay.addWidget(_favorite_star(
-            marked, lambda on: self.favorite_toggled.emit(entry, on)))
         info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
         info.setFont(_icon_font())
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
         lay.addWidget(info)
+        lay.addWidget(_favorite_star(
+            marked, lambda on: self.favorite_toggled.emit(entry, on)))
 
         if update is not None:
             update_btn = CardButton(
@@ -484,12 +484,12 @@ class GridInstalledCard(_HoverCard, QFrame):
 
         row = QHBoxLayout()
         row.setSpacing(int(5 * zoom))
-        row.addWidget(_favorite_star(
-            marked, lambda on: self.favorite_toggled.emit(entry, on)))
         info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
         info.setFont(_icon_font())
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
         row.addWidget(info)
+        row.addWidget(_favorite_star(
+            marked, lambda on: self.favorite_toggled.emit(entry, on)))
         if update is not None:
             # En rejilla el aviso va sin texto: un botón ancho pediría más
             # ancho mínimo y ensancharía su columna (justo lo que arreglamos
