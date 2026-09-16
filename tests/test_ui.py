@@ -437,6 +437,41 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
                    for i in range(window.store_grid.count())}
         self.assertEqual(len(alturas), 1, alturas)
 
+    def test_las_instaladas_miden_como_las_de_la_tienda(self):
+        """Al cambiar de pestaña las tarjetas no pueden bailar de tamaño.
+
+        Las de la tienda (rejilla) salían más altas y con el logo más grande
+        porque reservan la fila de la insignia; ahora las instaladas usan la
+        misma estructura y medidas, y en lista también coinciden.
+        """
+        from PySide6.QtWidgets import QLabel
+
+        from model.build import InstalledBuild
+        from ui.widgets.cards import (BuildCard, GridBuildCard,
+                                      GridInstalledCard, InstalledCard)
+
+        build = _build("5.2.1", "v52", "stable")
+        entry = InstalledBuild(name="blender-5.2.1",
+                               path=Path("/tmp/blender-5.2.1"),
+                               version="5.2.1", branch="v52")
+
+        def logo_size(card):
+            for label in card.findChildren(QLabel):
+                if not label.pixmap().isNull():
+                    return label.pixmap().size()
+            return None
+
+        for zoom in (0.6, 0.8, 1.4):
+            tienda = GridBuildCard(build, False, False, zoom)
+            local = GridInstalledCard(entry, False, zoom)
+            self.assertEqual(tienda.height(), local.height(), zoom)
+            self.assertEqual(logo_size(tienda), logo_size(local), zoom)
+
+        tienda = BuildCard(build, False, False)
+        local = InstalledCard(entry, False)
+        self.assertEqual(tienda.height(), local.height())
+        self.assertEqual(logo_size(tienda), logo_size(local))
+
     def test_todas_las_tarjetas_llevan_sombra(self):
         from PySide6.QtWidgets import QGraphicsDropShadowEffect
 
