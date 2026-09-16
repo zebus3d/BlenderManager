@@ -54,6 +54,8 @@ _TRANSLATIONS = {
         "Same as destination folder": "Igual que la carpeta de destino",
         "Choose the folder for LTS builds":
             "Elige la carpeta donde se guardarán las versiones LTS",
+        "Could not write to the destination folder:":
+            "No se pudo escribir en la carpeta de destino:",
         "General": "General",
         "Downloads": "Descargas",
         "Language": "Idioma",

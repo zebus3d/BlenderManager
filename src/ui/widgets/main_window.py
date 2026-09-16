@@ -78,6 +78,27 @@ MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
 ZOOM_STEP = 0.1
 
 
+def _write_problem(folder) -> str:
+    """Motivo por el que no se puede escribir en ``folder``, o "" si sí se puede.
+
+    Crea la carpeta si falta (que es lo que hará la descarga igualmente) y
+    escribe y borra un fichero de prueba. Existe por un caso real: con la
+    carpeta de las LTS en otro disco, si no había permiso de escritura la
+    descarga terminaba en un genérico "Fallo en la descarga" y no había forma
+    de saber que era eso. Mejor decirlo antes de bajar cientos de MB.
+    """
+    path = Path(folder).expanduser()
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".blendermanager-write-test"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+    except OSError as error:
+        return str(error)
+    return ""
+
+
+
 class _Bridge(QObject):
     """Reenvía callbacks de hilos de descarga al hilo de la interfaz."""
 
@@ -1268,6 +1289,18 @@ class MainWindow(QWidget):
 
     def _start_download(self, build, source) -> None:
         """Arranca la descarga desde la fuente ya elegida."""
+        destination = str(Path(self._destination_for(build)).expanduser())
+        # La carpeta puede no dejar escribir (la de las LTS suele estar en otro
+        # disco y a veces es una de sistema). Comprobarlo ahora evita bajar
+        # cientos de MB para nada y, sobre todo, explica el motivo.
+        problem = _write_problem(destination)
+        if problem:
+            self._set_downloading(False)
+            self._set_status(tr("Download failed"), 6)
+            show_error(self, tr("Download failed"),
+                       tr("Could not write to the destination folder:")
+                       + "\n\n" + destination + "\n\n" + problem)
+            return
         self._set_status(tr("Downloading..."))
         download_log(f"downloading {build.filename} from {source.label}")
         self._bridge = _Bridge()
@@ -1275,7 +1308,7 @@ class MainWindow(QWidget):
         self._bridge.done.connect(lambda path: self._on_download_done(path, build))
         self._bridge.error.connect(self._on_download_error)
         self.downloader.start(
-            source.url, str(Path(self._destination_for(build)).expanduser()),
+            source.url, destination,
             build.filename, source.checksum,
             on_progress=lambda done, total: self._bridge.progress.emit(done, total),
             on_done=lambda path: self._bridge.done.emit(str(path)),
@@ -1391,7 +1424,17 @@ class MainWindow(QWidget):
         self.percent.setText("")
         # Si falló el "Reemplazar", la instalada vieja se queda como estaba.
         self._replace_entry = None
-        self._set_status(tr("Download failed"), 5)
+        if message == "cancelled":
+            # Cancelar no es un fallo: el estado ya lo puso ``cancel_download``.
+            self._set_status(tr("Cancelled"), 5)
+            return
+        # El motivo real, a la vista: antes solo se veía un "Fallo en la
+        # descarga" genérico y no había forma de saber si era red, checksum o
+        # permisos de la carpeta (justo el caso de las LTS en Windows).
+        download_log(f"download failed: {message}")
+        reason = tr("Checksum error") if message == "checksum" else message
+        self._set_status(tr("Download failed"), 8)
+        show_error(self, tr("Download failed"), reason)
 
     def launch_installed(self, entry) -> None:
         """Abre una versión instalada (Blender sigue vivo al
