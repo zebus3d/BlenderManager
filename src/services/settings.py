@@ -74,8 +74,9 @@ def default_destination() -> Path:
     return Path.home() / "Descargas" / "Blenders"
 
 
-# Zoom con el que arranca la rejilla: es también el valor al que vuelven
-# Ctrl+0 y el clic con Ctrl en el slider (lo lee la UI).
+# Zoom con el que arranca la rejilla y valor de fábrica del "restablecer".
+# El usuario puede elegir a qué zoom vuelven Ctrl+0 y el clic con Ctrl en el
+# slider (``reset_zoom``); esto solo es lo que se propone la primera vez.
 DEFAULT_ZOOM = 0.8
 
 # Filtros de canal que ofrece la barra. Son los que entiende
@@ -110,6 +111,10 @@ class Settings:
     launch_args: str = ""
     layout_mode: str = "grid"
     zoom: float = DEFAULT_ZOOM
+    # Valor al que vuelve la rejilla con Ctrl+0 o Ctrl+clic en el slider. Es
+    # distinto de ``zoom`` (que es "lo que tengo puesto ahora"): este es el
+    # destino del "restablecer", que el usuario puede elegir en los ajustes.
+    reset_zoom: float = DEFAULT_ZOOM
     auto_update: bool = True
     window_width: int = 0
     window_height: int = 0
@@ -150,6 +155,7 @@ class Settings:
             launch_args=str(data.get("launch_args") or ""),
             layout_mode=str(data.get("layout_mode") or "grid"),
             zoom=float(data.get("zoom") or DEFAULT_ZOOM),
+            reset_zoom=float(data.get("reset_zoom") or DEFAULT_ZOOM),
             auto_update=bool(data.get("auto_update", True)),
             window_width=int(data.get("window_width") or 0),
             window_height=int(data.get("window_height") or 0),
