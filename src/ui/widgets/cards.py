@@ -282,16 +282,20 @@ class BuildCard(BaseBuildCard):
         lay.addWidget(action)
 
 
-def _grid_height(zoom: float, with_badge: bool = True) -> int:
+def _grid_height(zoom: float) -> int:
     """Alto de una tarjeta de rejilla para un ``zoom`` dado.
 
     No es ``196 * zoom``: las etiquetas (título, meta, "Instalada"...) NO
     escalan con el zoom, así que con poca ampliación se recortaban. Medido:
-    el contenido mide ~120·zoom + 110 px (con insignia), y usamos un poco de
-    holgura para que nunca se corte.
+    el contenido mide ~120·zoom + 110 px, y usamos un poco de holgura para que
+    nunca se corte.
+
+    Lo usan las dos rejillas (tienda e instaladas): son la misma estructura
+    (logo, título, meta, fila de etiqueta y fila de botones) y tienen que medir
+    igual al cambiar de pestaña. La fila de la etiqueta se reserva siempre
+    aunque esté vacía, que es lo que fija este alto.
     """
-    base = 118 if with_badge else 96
-    return int(120 * zoom + base)
+    return int(120 * zoom + 118)
 
 
 class GridBuildCard(BaseBuildCard):
@@ -306,7 +310,7 @@ class GridBuildCard(BaseBuildCard):
         # con el texto vacío y así todas las tarjetas de la tienda medían lo
         # mismo. Al ahorrársela a las descargables, estas salían 22 px más bajas
         # que las instaladas y la rejilla quedaba desigual.
-        self.setFixedHeight(_grid_height(zoom, with_badge=True))
+        self.setFixedHeight(_grid_height(zoom))
         lay = QVBoxLayout(self)
         m = int(14 * zoom)
         lay.setContentsMargins(m, m, m, m)
@@ -372,15 +376,17 @@ class InstalledCard(_HoverCard, QFrame):
         self.setProperty("installed", "true")
         self.setAttribute(Qt.WA_Hover, True)
         card_shadow(self)
-        self.setFixedHeight(66)
+        # Mismas medidas que ``BuildCard`` (la fila de la tienda): al cambiar de
+        # pestaña las tarjetas no pueden medir distinto.
+        self.setFixedHeight(78)
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(14, 10, 12, 10)
-        lay.setSpacing(10)
-        lay.addWidget(_logo_label(40, dim=False))
+        lay.setContentsMargins(16, 11, 12, 11)
+        lay.setSpacing(12)
+        lay.addWidget(_logo_label(44, dim=False))
 
         text_col = QVBoxLayout()
-        text_col.setSpacing(2)
+        text_col.setSpacing(3)
         title = ElidedLabel(entry.name, Qt.ElideMiddle)
         title.setObjectName("Title")
         text_col.addWidget(title)
@@ -440,14 +446,18 @@ class GridInstalledCard(_HoverCard, QFrame):
         self.setProperty("installed", "true")
         self.setAttribute(Qt.WA_Hover, True)
         card_shadow(self)
-        self.setFixedHeight(_grid_height(zoom, with_badge=False))
+        # Misma estructura y medidas que ``GridBuildCard``: al cambiar de
+        # pestaña las tarjetas no pueden bailar de tamaño ni el logo cambiar de
+        # tamaño. La fila de la etiqueta se reserva siempre (aquí lleva el
+        # aviso de actualización, o va vacía).
+        self.setFixedHeight(_grid_height(zoom))
 
         lay = QVBoxLayout(self)
-        m = int(12 * zoom)
+        m = int(14 * zoom)
         lay.setContentsMargins(m, m, m, m)
         lay.setSpacing(int(6 * zoom))
 
-        logo = _logo_label(int(64 * zoom), dim=False)
+        logo = _logo_label(int(68 * zoom), dim=False)
         logo.setAlignment(Qt.AlignHCenter)
         lay.addWidget(logo)
 
@@ -460,6 +470,15 @@ class GridInstalledCard(_HoverCard, QFrame):
         meta.setObjectName("Muted")
         meta.setAlignment(Qt.AlignHCenter)
         lay.addWidget(meta)
+
+        # El aviso va como texto elidido (no pide ancho y no ensancha la
+        # columna); la acción de descarga es el botón de la fila de abajo.
+        hint_text = (tr("Update to {version}", version=update.version)
+                     if update is not None else "")
+        hint = ElidedLabel(hint_text, Qt.ElideRight)
+        hint.setObjectName("Info")
+        hint.setAlignment(Qt.AlignHCenter)
+        lay.addWidget(hint)
 
         lay.addStretch()
 
