@@ -2,9 +2,11 @@
 
 Uso:  QT_QPA_PLATFORM=offscreen .venv/bin/python packaging/capture_docs.py
 
-Las capturas del README son 1280x624, en español y con la barra de filtros
-visible. Se hacen con el plugin offscreen de Qt, así que no hace falta
-servidor gráfico (a diferencia del Kivy antiguo, que necesitaba ventana real).
+Las capturas del README son 1280x800, en español y con la barra de filtros
+visible. El alto es holgado a propósito: con 624 px la última fila de tarjetas
+salía cortada por abajo. Se hacen con el plugin offscreen de Qt, así que no hace
+falta servidor gráfico (a diferencia del Kivy antiguo, que necesitaba ventana
+real).
 """
 
 import sys
@@ -12,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "img"
-WIDTH, HEIGHT = 1280, 624
+WIDTH, HEIGHT = 1280, 800
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
