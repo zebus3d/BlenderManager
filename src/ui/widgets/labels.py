@@ -8,9 +8,11 @@ columna de la rejilla salía más ancha que las demás. En modo lista, el meta c
 la ruta pedía 666 px y la tarjeta entera 974 px en una ventana de 900.
 """
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QLabel, QSizePolicy
+from PySide6.QtWidgets import QLabel, QLineEdit, QSizePolicy
+
+from i18n import tr
 
 
 class ElidedLabel(QLabel):
@@ -78,3 +80,70 @@ class ElidedLabel(QLabel):
             self.palette(), self.isEnabled(), self.displayed_text(),
             self.foregroundRole())
         painter.end()
+
+
+class _InlineEditor(QLineEdit):
+    """Campo que se usa para renombrar; Escape avisa en vez de confirmar."""
+
+    escaped = Signal()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.escaped.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
+class EditableLabel(ElidedLabel):
+    """``ElidedLabel`` que se edita con doble clic (renombrar una instalada).
+
+    Al confirmar (Enter, o perder el foco) emite ``renamed`` con el texto nuevo;
+    con Escape se cancela. Aquí **no** se toca el texto original: quien escucha
+    decide si el cambio vale (validación, disco) y refresca la tarjeta. Se usa
+    solo en las tarjetas instaladas; el resto de etiquetas no son editables.
+    """
+
+    renamed = Signal(str)
+
+    def __init__(self, text: str = "", mode=Qt.ElideRight, parent=None):
+        super().__init__(text, mode, parent)
+        self._editor = None
+
+    def _actualizar_tooltip(self) -> None:
+        """Texto completo (si se recorta) + la pista de que se puede renombrar."""
+        hint = tr("Double-click to rename")
+        self.setToolTip(f"{self.text()}\n{hint}" if self.is_elided() else hint)
+
+    def mouseDoubleClickEvent(self, event):
+        self.start_editing()
+        event.accept()
+
+    def start_editing(self) -> None:
+        """Cambia la etiqueta por un campo de texto con el nombre actual."""
+        if self._editor is not None:
+            return
+        editor = _InlineEditor(self)
+        editor.setObjectName("InlineEdit")
+        editor.setText(self.text())
+        editor.setGeometry(self.rect())
+        editor.selectAll()
+        editor.show()
+        editor.setFocus()
+        editor.editingFinished.connect(self._commit)
+        editor.escaped.connect(self._cancel)
+        self._editor = editor
+
+    def _commit(self) -> None:
+        editor, self._editor = self._editor, None
+        if editor is None:
+            return
+        name = editor.text().strip()
+        editor.deleteLater()
+        if name and name != self.text():
+            self.renamed.emit(name)
+
+    def _cancel(self) -> None:
+        editor, self._editor = self._editor, None
+        if editor is not None:
+            editor.deleteLater()

@@ -233,6 +233,55 @@ class InstalledTests(unittest.TestCase):
             results = installed.scan_folders([root, str(root), ""], "linux")
             self.assertEqual(len(results), 1)
 
+    def test_scan_encuentra_una_renombrada_con_marcador(self):
+        # Al renombrar, el nombre puede dejar de llevar la versión; el marcador
+        # sigue diciendo qué es y el escaneo tiene que encontrarla igual.
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "Mi Blender"
+            folder.mkdir()
+            (folder / "blender").write_text("bin")
+            installed.write_marker(
+                folder, make_build("5.2.1", "stable", "v52", "f.tar.xz"))
+            results = installed.scan(Path(tmp), "linux")
+            self.assertEqual([entry.version for entry in results], ["5.2.1"])
+
+    def test_rename_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "blender-5.2.1-linux-x64"
+            folder.mkdir()
+            (Path(tmp) / "otra").mkdir()
+            self.assertEqual(installed.rename_failure(folder, ""), "empty")
+            self.assertEqual(installed.rename_failure(folder, "a/b"), "invalid")
+            self.assertEqual(installed.rename_failure(folder, folder.name), "same")
+            self.assertEqual(installed.rename_failure(folder, "otra"), "exists")
+            self.assertEqual(installed.rename_failure(folder, "Mi Blender"), "")
+
+    def test_rename_cambia_la_carpeta_y_conserva_la_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "blender-5.2.1-linux-x64"
+            folder.mkdir()
+            (folder / "blender").write_text("bin")
+            new_path = installed.rename(folder, "Mi Blender", version="5.2.1",
+                                        branch="v52", build_hash="abc123")
+            self.assertEqual(new_path.name, "Mi Blender")
+            self.assertFalse(folder.exists())
+            results = installed.scan(Path(tmp), "linux")
+            self.assertEqual([entry.version for entry in results], ["5.2.1"])
+            self.assertEqual(results[0].build_hash, "abc123")
+
+    def test_rename_no_pisa_el_marcador_existente(self):
+        # Una instalación con marcador conserva el suyo (con su hash) al
+        # renombrar; no se reescribe con lo que le pase el escaneo.
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "blender-5.3.0-linux-x64"
+            folder.mkdir()
+            installed.write_marker(
+                folder, make_build("5.3.0", "alpha", "main", "f.tar.xz",
+                                   build_hash="original"))
+            new_path = installed.rename(folder, "Mi Blender", version="5.3.0",
+                                        branch="main", build_hash="otro")
+            self.assertEqual(installed.read_marker(new_path)["hash"], "original")
+
     def test_is_version_installed(self):
         entry = installed.InstalledBuild("b", Path("/tmp/b"), "5.2.0")
         self.assertTrue(installed.is_version_installed([entry], "5.2.0"))
@@ -491,6 +540,54 @@ class SettingsTests(unittest.TestCase):
         settings.channel = "favorites"
         settings.save()
         self.assertEqual(settings_module.Settings.load().channel, "favorites")
+
+    def test_el_intervalo_de_actualizacion_se_guarda(self):
+        settings = settings_module.Settings()
+        # Por defecto, cada 30 minutos y el periódico encendido.
+        self.assertEqual(settings.update_interval_min,
+                         settings_module.DEFAULT_UPDATE_INTERVAL)
+        self.assertTrue(settings.periodic_update)
+        settings.update_interval_min = 60
+        settings.periodic_update = False
+        settings.save()
+        loaded = settings_module.Settings.load()
+        self.assertEqual(loaded.update_interval_min, 60)
+        self.assertFalse(loaded.periodic_update)
+
+    def test_se_recuerda_la_version_saltada(self):
+        settings = settings_module.Settings()
+        self.assertEqual(settings.skipped_version, "")
+        self.assertEqual(settings.skipped_series, [])
+        settings.skipped_version = "v1.20.0"
+        settings.skipped_series = ["1.20", "1.22"]
+        settings.save()
+        loaded = settings_module.Settings.load()
+        self.assertEqual(loaded.skipped_version, "v1.20.0")
+        self.assertEqual(loaded.skipped_series, ["1.20", "1.22"])
+
+    def test_se_recuerdan_las_series_de_blender_silenciadas(self):
+        settings = settings_module.Settings()
+        self.assertEqual(settings.ignored_blender_series, [])
+        settings.ignored_blender_series = ["5.2", "4.5"]
+        settings.save()
+        self.assertEqual(
+            settings_module.Settings.load().ignored_blender_series,
+            ["5.2", "4.5"])
+
+    def test_un_intervalo_inventado_cae_al_por_defecto(self):
+        (Path(self.tmp.name) / "settings.json").write_text(
+            json.dumps({"update_interval_min": -5}), encoding="utf-8")
+        self.assertEqual(settings_module.Settings.load().update_interval_min,
+                         settings_module.DEFAULT_UPDATE_INTERVAL)
+        (Path(self.tmp.name) / "settings.json").write_text(
+            json.dumps({"update_interval_min": "cada rato"}), encoding="utf-8")
+        self.assertEqual(settings_module.Settings.load().update_interval_min,
+                         settings_module.DEFAULT_UPDATE_INTERVAL)
+        # El 0 tampoco vale: para no comprobar está el interruptor.
+        (Path(self.tmp.name) / "settings.json").write_text(
+            json.dumps({"update_interval_min": 0}), encoding="utf-8")
+        self.assertEqual(settings_module.Settings.load().update_interval_min,
+                         settings_module.DEFAULT_UPDATE_INTERVAL)
 
     def test_filtro_desconocido_cae_a_todas(self):
         # Un settings.json editado a mano (o de una version con otros filtros)

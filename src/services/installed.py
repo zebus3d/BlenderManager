@@ -29,23 +29,28 @@ VERSION_RE = re.compile(r"blender[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
 MARKER_NAME = ".blendermanager.json"
 
 
+def _write_marker_payload(folder, payload: dict) -> None:
+    """Escribe el marcador; si no se puede (solo lectura, disco lleno) no pasa nada."""
+    try:
+        (Path(folder) / MARKER_NAME).write_text(json.dumps(payload, indent=2),
+                                                encoding="utf-8")
+    except OSError:
+        pass
+
+
 def write_marker(folder, build) -> None:
     """Anota dentro de la carpeta instalada de qué compilación viene.
 
     Si no se puede escribir (carpeta de solo lectura, disco lleno) no pasa
     nada: sin marcador se compara solo por versión, como antes.
     """
-    payload = {
+    _write_marker_payload(folder, {
         "version": build.version,
         "risk": build.risk,
         "branch": build.branch,
         "hash": build.build_hash,
         "filename": build.filename,
-    }
-    try:
-        (Path(folder) / MARKER_NAME).write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    except OSError:
-        pass
+    })
 
 
 def read_marker(folder) -> dict:
@@ -60,6 +65,52 @@ def read_marker(folder) -> dict:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+# Caracteres que Windows no admite en un nombre de archivo (y que no queremos
+# en ninguna plataforma, por coherencia). Incluye el separador de ruta.
+INVALID_NAME_CHARS = '\\/:*?"<>|'
+
+
+def rename_failure(folder, new_name: str) -> str:
+    """Motivo por el que no se puede renombrar esa carpeta, o "" si sí.
+
+    Devuelve un código ("empty", "invalid", "same", "exists") y no un texto: la
+    traducción es cosa de la interfaz. La comprobación es pura para poder
+    probarla sin tocar el disco.
+    """
+    name = (new_name or "").strip()
+    if not name:
+        return "empty"
+    if any(char in name for char in INVALID_NAME_CHARS) or name in (".", ".."):
+        return "invalid"
+    origin = Path(folder)
+    if name == origin.name:
+        return "same"
+    if (origin.parent / name).exists():
+        return "exists"
+    return ""
+
+
+def rename(folder, new_name: str, version: str = "", branch: str = "",
+           build_hash: str = "") -> Path:
+    """Renombra la carpeta de una instalación y devuelve la ruta nueva.
+
+    Si la instalación no tenía marcador (de antes de que existiera) se le
+    escribe uno con lo que sabemos **antes** de renombrar: si no, al perder el
+    nombre la versión, el escaneo ya no la reconocería. La validación del nombre
+    va aparte (``rename_failure``); esto solo hace el cambio en disco.
+    """
+    origin = Path(folder)
+    target = origin.with_name((new_name or "").strip())
+    if version and not read_marker(origin):
+        _write_marker_payload(origin, {
+            "version": version,
+            "branch": branch,
+            "hash": build_hash,
+        })
+    origin.rename(target)
+    return target
 
 
 def _executable_for(directory: Path, platform: str, depth: int = 1):
@@ -107,16 +158,20 @@ def _scan_root(root: Path, platform: str):
         if not entry.is_dir():
             continue
         match = VERSION_RE.search(entry.name)
-        if not match:
+        marker = read_marker(entry)
+        # Sirve si el nombre lleva la versión (lo normal) o si tiene marcador
+        # propio: al renombrar una instalación el nombre puede dejar de llevar
+        # la versión, pero el marcador sigue diciendo qué es.
+        if not match and not marker:
             # Ignoramos carpetas que no son de Blender (archivos temporales, etc.).
             continue
+        version = str(marker.get("version") or (match.group(1) if match else ""))
         executable = _executable_for(entry, platform)
-        marker = read_marker(entry)
         results.append(
             InstalledBuild(
                 name=entry.name,
                 path=entry,
-                version=str(marker.get("version") or match.group(1)),
+                version=version,
                 executable=executable,
                 build_hash=str(marker.get("hash") or ""),
                 branch=str(marker.get("branch") or ""),

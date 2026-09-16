@@ -229,6 +229,14 @@ def build_qss() -> str:
         selection-background-color: {t.ACCENT};
     }}
     QLineEdit::placeholder {{ color: {t.MUTED}; }}
+    /* Campo de renombrado en línea (doble clic en una instalada): compacto y
+       con borde de acento, para que se note que se está editando. */
+    QLineEdit#InlineEdit {{
+        background-color: {t.FIELD};
+        border: 1px solid {t.ACCENT};
+        border-radius: 4px;
+        padding: 0 4px;
+    }}
 
     /* --- Desplegables --- */
     QComboBox {{
@@ -250,17 +258,14 @@ def build_qss() -> str:
     }}
 
     /* --- Interruptor Sí/No --- */
+    /* --- Interruptor (toggle) ---
+       Se pinta a mano en SwitchPill.paintEvent: aquí solo se quita el fondo, el
+       borde y el padding que pondría el estilo. */
     QPushButton#Switch {{
-        background-color: {t.BUTTON};
-        border: 1px solid rgba(0,0,0,0.35);
-        border-radius: 6px;
-        padding: 3px 10px;
-        color: {t.TEXT};
-        font-weight: bold;
-        min-width: 64px;
+        background: transparent;
+        border: none;
+        padding: 0;
     }}
-    QPushButton#Switch:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
-    QPushButton#Switch:checked {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
 
     /* --- Barra de progreso --- */
     QProgressBar {{

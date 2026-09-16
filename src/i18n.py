@@ -138,6 +138,16 @@ _TRANSLATIONS = {
         "Opening the release notes...": "Abriendo las notas de versión...",
         "Could not open the browser": "No se pudo abrir el navegador",
         "Remove this installed version": "Elimina esta versión instalada",
+        "Double-click to rename": "Doble clic para renombrar",
+        "Rename folder": "Renombrar carpeta",
+        "Renamed to {name}": "Renombrado a {name}",
+        "The name cannot be empty.": "El nombre no puede estar vacío.",
+        'The name cannot contain \\ / : * ? " < > |.':
+            'El nombre no puede contener \\ / : * ? " < > |.',
+        "That is already the name.": "Ese ya es el nombre.",
+        "There is already a folder with that name.":
+            "Ya existe una carpeta con ese nombre.",
+        "The name is not valid.": "El nombre no es válido.",
         "Choose destination folder": "Elige la carpeta donde se guardarán las versiones",
         "Parent folder": "Carpeta superior",
         "Home folder": "Carpeta personal",
@@ -150,6 +160,27 @@ _TRANSLATIONS = {
             "Zoom al que vuelve la rejilla (Ctrl+0 o Ctrl+clic en el deslizador)",
         "Updates": "Actualizaciones",
         "Check for updates automatically": "Buscar actualizaciones automáticamente",
+        "Check for updates periodically": "Buscar actualizaciones periódicamente",
+        "Look for new versions of BlenderManager every so often":
+            "Busca versiones nuevas de BlenderManager cada cierto tiempo",
+        "Check for updates every": "Buscar actualizaciones cada",
+        "Never": "Nunca",
+        "Every minute": "Cada minuto",
+        "{count} minutes": "{count} minutos",
+        "Every hour": "Cada hora",
+        "Every {count} hours": "Cada {count} horas",
+        "Skip this version": "Saltar esta versión",
+        "Skip this series": "Saltar esta serie",
+        "You will not be reminded about {version}.":
+            "No se te volverá a avisar de {version}.",
+        "You will not be reminded about the {series} series.":
+            "No se te volverá a avisar de la serie {series}.",
+        "You will not be reminded about Blender {series} updates.":
+            "No se te volverá a avisar de actualizaciones de Blender {series}.",
+        "Reactivate": "Reactivar",
+        "Blender series you silenced with Never":
+            "Series de Blender que silenciaste con «Nunca»",
+        "Silenced: {series}": "Silenciadas: {series}",
         "Check for updates now": "Buscar actualizaciones ahora",
         "Check now": "Buscar ahora",
         "Version {version}": "Versión {version}",
@@ -200,6 +231,117 @@ _TRANSLATIONS = {
             "{count} actualizaciones de Blender disponibles",
         "Replaced {name}": "Reemplazado {name}",
         "This version is already installed": "Esta versión ya está instalada",
+
+        # --- Tooltips descriptivos (pueden ser de varias líneas con \n) ---
+        "Download the list of builds again.\nUse it if something looks out of "
+        "date.":
+            "Vuelve a descargar la lista de compilaciones.\n"
+            "Úsalo si ves algo desactualizado.",
+        "Filter by version, branch or file name as you type.":
+            "Filtra por versión, rama o nombre de archivo mientras escribes.",
+        "Show every build: stable, LTS, daily and alpha.":
+            "Muestra todas las compilaciones: estables, LTS, diarias y alfa.",
+        "LTS = Long Term Support.\nVersions maintained for years and the most "
+        "stable.\nRecommended for everyday work.":
+            "LTS = soporte a largo plazo (Long Term Support).\n"
+            "Versiones mantenidas durante años y las más estables.\n"
+            "Recomendadas para trabajar a diario.",
+        "Stable versions that are not LTS.\nThey are the latest official "
+        "releases, supported until the next one.":
+            "Versiones estables que no son LTS.\n"
+            "Son las últimas versiones oficiales, con soporte hasta la "
+            "siguiente.",
+        "Daily and alpha builds with the newest changes.\nThey can fail: for "
+        "testing, not for work.":
+            "Compilaciones diarias y alfa con los últimos cambios.\n"
+            "Pueden fallar: son para probar, no para trabajar.",
+        "Branches with new features still in development.\nThey are not ready "
+        "for production and the list is usually empty.":
+            "Ramas con funciones nuevas todavía en desarrollo.\n"
+            "No están listas para producción y la lista suele estar vacía.",
+        "Only the builds you marked with the star.":
+            "Solo las compilaciones que marcaste con la estrella.",
+        "Show the builds as a grid of icons.":
+            "Muestra las compilaciones como una cuadrícula de iconos.",
+        "Show the builds as a list of rows.":
+            "Muestra las compilaciones como una lista de filas.",
+        "System the build is for.\nChange it to download for another computer "
+        "(for example, to copy it on a USB stick).":
+            "Sistema para el que es la compilación.\n"
+            "Cámbialo para descargar para otro equipo (por ejemplo, para "
+            "copiarla en un USB).",
+        "Processor type the build is for.\nx86_64 is the usual one on most "
+        "PCs; arm64 is for Apple Silicon and ARM machines.":
+            "Tipo de procesador para el que es la compilación.\n"
+            "x86_64 es el habitual en la mayoría de PCs; arm64 es para Apple "
+            "Silicon y equipos ARM.",
+        "Show the versions you already have on this computer.":
+            "Muestra las versiones que ya tienes en este equipo.",
+        "Show the builds you can download from Blender.":
+            "Muestra las compilaciones que puedes descargar de Blender.",
+        "Change folders, language, zoom and updates.":
+            "Cambia carpetas, idioma, zoom y actualizaciones.",
+        "Folder where the Blender versions you download are stored.\nEach "
+        "version goes in its own subfolder.":
+            "Carpeta donde se guardan las versiones de Blender que "
+            "descargas.\nCada versión va en su propia subcarpeta.",
+        "Folder for the LTS versions only.\nLeave it empty to use the "
+        "destination folder.":
+            "Carpeta solo para las versiones LTS.\n"
+            "Déjala vacía para usar la carpeta de destino.",
+        "Delete the downloaded .zip/.tar.xz after extracting it.\nSaves disk "
+        "space; you can download it again if you need it.":
+            "Borra el .zip/.tar.xz descargado tras extraerlo.\n"
+            "Ahorra espacio; puedes volver a descargarlo si lo necesitas.",
+        "Language of the interface.\nIt changes when you restart the app.":
+            "Idioma de la interfaz.\nCambia al reiniciar la aplicación.",
+        "Size the grid returns to when you reset the zoom.":
+            "Tamaño al que vuelve la rejilla cuando restableces el zoom.",
+        "Extra arguments Blender receives when you launch it.\nExample: "
+        "--background to start without the interface.":
+            "Argumentos extra que recibe Blender al lanzarlo.\n"
+            "Ejemplo: --background para arrancar sin interfaz.",
+        "Check for new BlenderManager versions when the app starts.\nTurn it "
+        "off if you do not want to update.":
+            "Busca versiones nuevas de BlenderManager al abrir la "
+            "aplicación.\nApágalo si no quieres actualizar.",
+        "How often BlenderManager looks for its own updates.\nIt only "
+        "downloads one when you accept; checking is cheap.":
+            "Cada cuánto busca BlenderManager sus propias actualizaciones.\n"
+            "Solo descarga una cuando aceptas; comprobar apenas cuesta.",
+        "Version of BlenderManager you are using right now.":
+            "Versión de BlenderManager que estás usando ahora mismo.",
+        "Download progress.": "Progreso de la descarga.",
+        "Stop the download running now.":
+            "Detén la descarga que está en marcha.",
+        "Size of the cards in the grid.\nCtrl + and Ctrl - change it, Ctrl+0 "
+        "resets it.":
+            "Tamaño de las tarjetas en la cuadrícula.\n"
+            "Ctrl + y Ctrl - lo cambian, Ctrl+0 lo restablece.",
+        "Current zoom.": "Zoom actual.",
+        "Ask me again another time.": "Pregúntame otra vez más tarde.",
+        'Do not offer any version of this series again.\n"Check now" still '
+        'shows it.':
+            'No vuelvas a ofrecer ninguna versión de esta serie.\n'
+            '"Buscar ahora" sí la muestra.',
+        'Do not offer this exact version again.\n"Check now" still shows it.':
+            'No vuelvas a ofrecer esta versión concreta.\n'
+            '"Buscar ahora" sí la muestra.',
+        "Download and install it now.\nThe app restarts by itself.":
+            "Descárgala e instálala ahora.\nLa aplicación se reinicia sola.",
+        "Keep the version you have and add the new one next to it.":
+            "Conserva la versión que tienes y añade la nueva al lado.",
+        "Delete the installed version and put the new one in its place.":
+            "Borra la versión instalada y pon la nueva en su lugar.",
+        "Never offer updates for this Blender series again.\nYou can undo it "
+        "in Settings.":
+            "No vuelvas a ofrecer actualizaciones de esta serie de Blender.\n"
+            "Puedes deshacerlo en Ajustes.",
+        "Run git pull and restart the app.":
+            "Ejecuta git pull y reinicia la aplicación.",
+        "Do nothing.": "No hace nada.",
+        "This cannot be undone.": "Esto no se puede deshacer.",
+        "Close this message.": "Cierra este aviso.",
     }
 }
 

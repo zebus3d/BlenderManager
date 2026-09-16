@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 import i18n
 import version
 from i18n import tr
+from model.build import minor_of
 from services import (
     api,
     detector,
@@ -79,6 +80,23 @@ LANGUAGE_IDS = {"auto": "Automatic", "en": "English", "es": "Spanish"}
 MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
 # Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
 ZOOM_STEP = 0.1
+
+# Tooltips de los filtros de canal. Se explican para quien no sabe qué es una
+# LTS o una compilación diaria; las claves de i18n son estos textos en inglés.
+# Los saltos de línea (\n) se ven en el tooltip, así que pueden ser varias
+# líneas.
+CHANNEL_TOOLTIPS = {
+    "all": "Show every build: stable, LTS, daily and alpha.",
+    "lts": "LTS = Long Term Support.\nVersions maintained for years and the "
+           "most stable.\nRecommended for everyday work.",
+    "stable": "Stable versions that are not LTS.\nThey are the latest official "
+              "releases, supported until the next one.",
+    "daily": "Daily and alpha builds with the newest changes.\nThey can fail: "
+             "for testing, not for work.",
+    "experimental": "Branches with new features still in development.\nThey are "
+                    "not ready for production and the list is usually empty.",
+    "favorites": "Only the builds you marked with the star.",
+}
 
 
 def _write_problem(folder) -> str:
@@ -220,6 +238,7 @@ class MainWindow(QWidget):
         self.launch_args = self.settings.launch_args
         self.delete_archive = bool(self.settings.delete_archive)
         self.auto_update = bool(self.settings.auto_update)
+        self.periodic_update = bool(self.settings.periodic_update)
         self.layout_mode = (self.settings.layout_mode
                             if self.settings.layout_mode in ("grid", "list") else "grid")
         try:
@@ -284,6 +303,13 @@ class MainWindow(QWidget):
         self._update_checking = False
         self._auto_checked = False
         self._source_dialog = None
+        # Versión de la app de la que ya se avisó en esta sesión (para que el
+        # chequeo periódico no repita el diálogo cada X minutos).
+        self._offered_update_tag = ""
+        # Chequeo periódico de la propia aplicación (BlenderManager).
+        self._update_timer = QTimer(self)
+        self._update_timer.timeout.connect(self._periodic_update_check)
+        self._apply_update_timer()
 
         # Conectamos las señales de los hilos ANTES de montar la UI.
         self.builds_loaded.connect(self._on_builds_loaded)
@@ -370,13 +396,17 @@ class MainWindow(QWidget):
         tools = QHBoxLayout(self.header_tools)
         tools.setContentsMargins(0, 0, 0, 0)
         tools.setSpacing(10)
-        refresh = IconFlatButton(icons.REFRESH, tr("Refresh the list of builds"))
+        refresh = IconFlatButton(icons.REFRESH, tr(
+            "Download the list of builds again.\n"
+            "Use it if something looks out of date."))
         refresh.setFont(icon_font(16))
         refresh.clicked.connect(lambda: self.refresh(force=True))
         tools.addWidget(refresh)
         self.search_input = QLineEdit()
         self.search_input.setObjectName("SearchField")
         self.search_input.setPlaceholderText(tr("Search..."))
+        self.search_input.setToolTip(tr(
+            "Filter by version, branch or file name as you type."))
         self.search_input.setFixedWidth(240)
         self.search_input.textChanged.connect(self._on_search_text)
         # Icono de lupa dentro del campo, como en la versión original.
@@ -402,7 +432,7 @@ class MainWindow(QWidget):
         for key, label in (("all", "All"), ("lts", "LTS"), ("stable", "Stable"),
                            ("daily", "Daily"), ("experimental", "Experimental"),
                            ("favorites", "Favorites")):
-            btn = Pill(tr(label), tr(f"Filter: {label.lower()}"))
+            btn = Pill(tr(label), tr(CHANNEL_TOOLTIPS[key]))
             self.channel_group.addButton(btn)
             btn.clicked.connect(lambda _=False, k=key: self.set_channel(k))
             lay.addWidget(btn)
@@ -414,9 +444,9 @@ class MainWindow(QWidget):
 
         self.layout_group = QButtonGroup(bar)
         self.layout_group.setExclusive(True)
-        self.grid_btn = Pill(icons.GRID, tr("Grid view"))
+        self.grid_btn = Pill(icons.GRID, tr("Show the builds as a grid of icons."))
         self.grid_btn.setFont(icon_font(14))
-        self.list_btn = Pill(icons.LIST, tr("List view"))
+        self.list_btn = Pill(icons.LIST, tr("Show the builds as a list of rows."))
         self.list_btn.setFont(icon_font(14))
         for btn, mode in ((self.grid_btn, "grid"), (self.list_btn, "list")):
             self.layout_group.addButton(btn)
@@ -428,7 +458,10 @@ class MainWindow(QWidget):
         self.platform_combo.addItems(list(PLATFORMS.keys()))
         self.platform_combo.setCurrentText(self.platform_label)
         self.platform_combo.setFixedWidth(104)
-        self.platform_combo.setToolTip(tr("Target operating system"))
+        self.platform_combo.setToolTip(tr(
+            "System the build is for.\n"
+            "Change it to download for another computer (for example, to copy "
+            "it on a USB stick)."))
         self.platform_combo.currentTextChanged.connect(self.set_platform)
         lay.addWidget(self.platform_combo)
 
@@ -436,7 +469,10 @@ class MainWindow(QWidget):
         self.arch_combo.addItems(ARCH_LABELS)
         self.arch_combo.setCurrentText(self.arch_label)
         self.arch_combo.setFixedWidth(82)
-        self.arch_combo.setToolTip(tr("Target architecture"))
+        self.arch_combo.setToolTip(tr(
+            "Processor type the build is for.\n"
+            "x86_64 is the usual one on most PCs; arm64 is for Apple Silicon "
+            "and ARM machines."))
         self.arch_combo.currentTextChanged.connect(self.set_arch)
         lay.addWidget(self.arch_combo)
         return bar
@@ -452,8 +488,10 @@ class MainWindow(QWidget):
         self.side_group.setExclusive(True)
         self.side_buttons = {}
         for key, glyph, tip in (
-            ("installed", icons.INSTALLED, tr("Show installed versions")),
-            ("store", icons.STORE, tr("Show the store")),
+            ("installed", icons.INSTALLED, tr(
+                "Show the versions you already have on this computer.")),
+            ("store", icons.STORE, tr(
+                "Show the builds you can download from Blender.")),
         ):
             btn = SideButton(glyph, tip)
             btn.setFont(icon_font(20))
@@ -462,7 +500,8 @@ class MainWindow(QWidget):
             lay.addWidget(btn)
             self.side_buttons[key] = btn
         lay.addStretch()
-        settings_btn = SideButton(icons.SETTINGS, tr("Open settings"))
+        settings_btn = SideButton(icons.SETTINGS, tr(
+            "Change folders, language, zoom and updates."))
         settings_btn.setFont(icon_font(20))
         self.side_group.addButton(settings_btn)
         settings_btn.clicked.connect(lambda: self.set_view("settings"))
@@ -525,6 +564,9 @@ class MainWindow(QWidget):
         lay.addWidget(QLabel(tr("Destination folder")))
         row = QHBoxLayout()
         self.dest_input = QLineEdit(self.dest_folder)
+        self.dest_input.setToolTip(tr(
+            "Folder where the Blender versions you download are stored.\n"
+            "Each version goes in its own subfolder."))
         self.dest_input.textChanged.connect(self._on_dest_changed)
         row.addWidget(self.dest_input, 1)
         browse = CardButton(tr("Browse..."), tooltip=tr("Choose destination folder"))
@@ -537,9 +579,8 @@ class MainWindow(QWidget):
         row_lts = QHBoxLayout()
         row_lts.addWidget(QLabel(tr("Install LTS versions in a separate folder")))
         row_lts.addStretch()
-        self.lts_switch = SwitchPill(self.separate_lts, tr("Yes"), tr("No"))
-        self.lts_switch.setToolTip(
-            tr("Keep LTS versions on another drive or folder (for example an SSD)"))
+        self.lts_switch = SwitchPill(self.separate_lts, tooltip=tr(
+            "Keep LTS versions on another drive or folder (for example an SSD)"))
         self.lts_switch.toggled.connect(self._on_separate_lts_toggled)
         row_lts.addWidget(self.lts_switch)
         lay.addLayout(row_lts)
@@ -550,6 +591,9 @@ class MainWindow(QWidget):
         lts_lay.setSpacing(6)
         self.lts_input = QLineEdit(self.lts_folder)
         self.lts_input.setPlaceholderText(tr("Same as destination folder"))
+        self.lts_input.setToolTip(tr(
+            "Folder for the LTS versions only.\n"
+            "Leave it empty to use the destination folder."))
         self.lts_input.textChanged.connect(self._on_lts_folder_changed)
         lts_lay.addWidget(self.lts_input, 1)
         lts_browse = CardButton(tr("Browse..."),
@@ -562,7 +606,10 @@ class MainWindow(QWidget):
         row2 = QHBoxLayout()
         row2.addWidget(QLabel(tr("Delete archive after extraction")))
         row2.addStretch()
-        self.archive_switch = SwitchPill(self.delete_archive, tr("Yes"), tr("No"))
+        self.archive_switch = SwitchPill(
+            self.delete_archive,
+            tooltip=tr("Delete the downloaded .zip/.tar.xz after extracting it.\n"
+                       "Saves disk space; you can download it again if you need it."))
         self.archive_switch.toggled.connect(self._on_archive_toggled)
         row2.addWidget(self.archive_switch)
         lay.addLayout(row2)
@@ -573,6 +620,8 @@ class MainWindow(QWidget):
         self.language_combo = QComboBox()
         self.language_combo.addItems([tr(v) for v in LANGUAGE_IDS.values()])
         self.language_combo.setCurrentText(self.language_label)
+        self.language_combo.setToolTip(tr(
+            "Language of the interface.\nIt changes when you restart the app."))
         self.language_combo.currentTextChanged.connect(self._on_language_changed)
         row3.addWidget(self.language_combo)
         lay.addLayout(row3)
@@ -596,6 +645,8 @@ class MainWindow(QWidget):
         row4.addWidget(self.reset_zoom_slider)
         self.reset_zoom_label = QLabel(f"{round(self.settings.reset_zoom * 100)} %")
         self.reset_zoom_label.setObjectName("Muted")
+        self.reset_zoom_label.setToolTip(
+            tr("Size the grid returns to when you reset the zoom."))
         self.reset_zoom_label.setFixedWidth(40)
         self.reset_zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         row4.addWidget(self.reset_zoom_label)
@@ -607,6 +658,9 @@ class MainWindow(QWidget):
         lay.addWidget(QLabel(tr("Launch arguments")))
         self.args_input = QLineEdit(self.launch_args)
         self.args_input.setPlaceholderText("--background --python script.py")
+        self.args_input.setToolTip(tr(
+            "Extra arguments Blender receives when you launch it.\n"
+            "Example: --background to start without the interface."))
         self.args_input.textChanged.connect(self._on_args_changed)
         lay.addWidget(self.args_input)
 
@@ -618,19 +672,82 @@ class MainWindow(QWidget):
         row = QHBoxLayout()
         row.addWidget(QLabel(tr("Check for updates automatically")))
         row.addStretch()
-        self.update_switch = SwitchPill(self.auto_update, tr("Yes"), tr("No"))
+        self.update_switch = SwitchPill(
+            self.auto_update, tooltip=tr(
+                "Check for new BlenderManager versions when the app "
+                "starts.\nTurn it off if you do not want to update."))
         self.update_switch.toggled.connect(self.set_auto_update)
         row.addWidget(self.update_switch)
         lay.addLayout(row)
 
+        # Cada cuánto se comprueba sola (el "y luego se me olvida abrirlo").
+        row_periodic = QHBoxLayout()
+        row_periodic.addWidget(QLabel(tr("Check for updates periodically")))
+        row_periodic.addStretch()
+        self.periodic_switch = SwitchPill(self.periodic_update, tooltip=tr(
+            "Look for new versions of BlenderManager every so often"))
+        self.periodic_switch.setEnabled(self.auto_update)
+        self.periodic_switch.toggled.connect(self.set_periodic_update)
+        row_periodic.addWidget(self.periodic_switch)
+        lay.addLayout(row_periodic)
+
+        row_interval = QHBoxLayout()
+        row_interval.addWidget(QLabel(tr("Check for updates every")))
+        row_interval.addStretch()
+        self.update_interval_combo = QComboBox()
+        for minutes in settings_service.UPDATE_INTERVALS:
+            self.update_interval_combo.addItem(self._interval_text(minutes), minutes)
+        index = self.update_interval_combo.findData(
+            self.settings.update_interval_min)
+        self.update_interval_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.update_interval_combo.setToolTip(tr(
+            "How often BlenderManager looks for its own updates.\n"
+            "It only downloads one when you accept; checking is cheap."))
+        self.update_interval_combo.setEnabled(
+            self.auto_update and self.periodic_update)
+        self.update_interval_combo.currentIndexChanged.connect(
+            self._on_update_interval_changed)
+        row_interval.addWidget(self.update_interval_combo)
+        lay.addLayout(row_interval)
+
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel(tr("Version {version}", version=self.current_version)))
+        version_label = QLabel(tr("Version {version}", version=self.current_version))
+        version_label.setToolTip(
+            tr("Version of BlenderManager you are using right now."))
+        row2.addWidget(version_label)
         row2.addStretch()
         check = CardButton(tr("Check now"), tooltip=tr("Check for updates now"))
         check.clicked.connect(lambda: self.check_updates(manual=True))
         row2.addWidget(check)
         lay.addLayout(row2)
+
+        # Series de Blender silenciadas con "Nunca" en su aviso de actualización:
+        # la fila solo se ve si hay alguna, para poder reactivarlas.
+        self.muted_series_row = QWidget()
+        muted_lay = QHBoxLayout(self.muted_series_row)
+        muted_lay.setContentsMargins(0, 0, 0, 0)
+        muted_lay.setSpacing(8)
+        self.muted_series_label = QLabel("")
+        self.muted_series_label.setObjectName("Muted")
+        muted_lay.addWidget(self.muted_series_label)
+        muted_lay.addStretch()
+        reset_series = CardButton(tr("Reactivate"),
+                                  tooltip=tr("Blender series you silenced with Never"))
+        reset_series.clicked.connect(self.reset_blender_series)
+        muted_lay.addWidget(reset_series)
+        lay.addWidget(self.muted_series_row)
+        self._update_blender_series_controls()
         return card
+
+    def _update_blender_series_controls(self) -> None:
+        """Enseña (u oculta) la fila de series de Blender silenciadas."""
+        if not hasattr(self, "muted_series_row"):
+            return
+        series = self.settings.ignored_blender_series
+        self.muted_series_row.setVisible(bool(series))
+        if series:
+            self.muted_series_label.setText(
+                tr("Silenced: {series}", series=", ".join(series)))
 
     def _build_footer(self) -> QFrame:
         footer = QFrame()
@@ -657,13 +774,16 @@ class MainWindow(QWidget):
         self.progress.setRange(0, 100)
         self.progress.setFixedHeight(12)
         self.progress.setValue(0)
+        self.progress.setToolTip(tr("Download progress."))
         # Solo se muestra mientras hay una descarga en curso.
         self.progress.setVisible(False)
         progress_lay.addWidget(self.progress, 1)
         self.percent = QLabel("")
+        self.percent.setToolTip(tr("Download progress."))
         self.percent.setVisible(False)
         progress_lay.addWidget(self.percent)
-        self.cancel_btn = CardButton(tr("Cancel"))
+        self.cancel_btn = CardButton(tr("Cancel"),
+                                     tooltip=tr("Stop the download running now."))
         self.cancel_btn.clicked.connect(self.cancel_download)
         self.cancel_btn.setVisible(False)
         progress_lay.addWidget(self.cancel_btn)
@@ -682,10 +802,13 @@ class MainWindow(QWidget):
         self.zoom_slider.setFixedWidth(130)
         self.zoom_slider.valueChanged.connect(lambda v: self.set_zoom(v / 100.0))
         self.zoom_slider.reset_requested.connect(self.reset_zoom)
-        self.zoom_slider.setToolTip(tr("Zoom the icon size (Ctrl +/- / Ctrl+0)"))
+        self.zoom_slider.setToolTip(tr(
+            "Size of the cards in the grid.\n"
+            "Ctrl + and Ctrl - change it, Ctrl+0 resets it."))
         zoom_lay.addWidget(self.zoom_slider)
         self.zoom_label = QLabel()
         self.zoom_label.setObjectName("Muted")
+        self.zoom_label.setToolTip(tr("Current zoom."))
         # Ancho fijo para que el pie no "baile" al pasar de 100 % a 180 %.
         self.zoom_label.setFixedWidth(40)
         self.zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -1085,6 +1208,12 @@ class MainWindow(QWidget):
         """
         builds = api.available_for(self.builds, self.platform, self.arch)
         updates = installed_service.available_updates(self.installed, builds)
+        # Las series que el usuario silenció con "Nunca" no se ofrecen (ni el
+        # parche de la tarjeta ni el aviso de salto de serie).
+        muted = set(self.settings.ignored_blender_series)
+        if muted:
+            updates = [u for u in updates
+                       if minor_of(u.entry.version) not in muted]
         self.updates_by_path = {
             str(u.entry.path): u.build for u in updates if u.kind == "patch"}
         self.series_updates = [
@@ -1121,6 +1250,7 @@ class MainWindow(QWidget):
             card.notes_clicked.connect(self.open_release_notes)
             card.favorite_toggled.connect(self.set_favorite)
             card.update_clicked.connect(self.offer_blender_update)
+            card.rename_requested.connect(self.rename_installed)
             cards.append(card)
         self._fill_grid(self.installed_grid, cards, columns)
 
@@ -1278,10 +1408,71 @@ class MainWindow(QWidget):
         self.reset_zoom_slider.setValue(round(settings_service.DEFAULT_ZOOM * 100))
 
     def set_auto_update(self, active: bool) -> None:
-        """Guarda si hay que buscar actualizaciones al arrancar."""
+        """Guarda si hay que buscar actualizaciones automáticamente.
+
+        Es el interruptor maestro: al apagarlo no se comprueba nada (ni al
+        arrancar ni cada X) y se deshabilitan los controles del periódico.
+        """
         self.auto_update = active
         self.settings.auto_update = active
         self.settings.save()
+        if hasattr(self, "periodic_switch"):
+            self.periodic_switch.setEnabled(active)
+            self.update_interval_combo.setEnabled(active and self.periodic_update)
+        self._apply_update_timer()
+
+    def set_periodic_update(self, active: bool) -> None:
+        """Apaga/enciende solo el chequeo periódico (el de arranque sigue)."""
+        self.periodic_update = active
+        self.settings.periodic_update = active
+        self.settings.save()
+        if hasattr(self, "update_interval_combo"):
+            self.update_interval_combo.setEnabled(self.auto_update and active)
+        self._apply_update_timer()
+
+    def _apply_update_timer(self) -> None:
+        """(Re)programa el chequeo periódico de la app según los ajustes."""
+        minutes = self.settings.update_interval_min
+        if self.auto_update and self.periodic_update and minutes > 0:
+            self._update_timer.start(minutes * 60 * 1000)
+        else:
+            self._update_timer.stop()
+
+    def _periodic_update_check(self) -> None:
+        """Chequeo automático de la app cada ``update_interval_min`` minutos.
+
+        No interrumpe: si hay una descarga en curso o un diálogo abierto se salta
+        esta vuelta, y si ya se avisó de una versión en esta sesión tampoco la
+        repite (darle a "Más tarde" no puede sacar el aviso cada X minutos).
+        """
+        if self.downloader.running or self.update_downloader.running:
+            return
+        if QApplication.activeModalWidget() is not None:
+            return
+        if self._offered_update_tag:
+            return
+        self.check_updates(manual=False)
+
+    @staticmethod
+    def _interval_text(minutes: int) -> str:
+        """Etiqueta del intervalo (el valor guardado van en minutos enteros)."""
+        if minutes <= 0:
+            return tr("Never")
+        if minutes == 1:
+            return tr("Every minute")
+        if minutes < 60:
+            return tr("{count} minutes", count=minutes)
+        if minutes == 60:
+            return tr("Every hour")
+        return tr("Every {count} hours", count=minutes // 60)
+
+    def _on_update_interval_changed(self, index: int) -> None:
+        minutes = self.update_interval_combo.itemData(index)
+        if minutes is None:
+            return
+        self.settings.update_interval_min = int(minutes)
+        self.settings.save()
+        self._apply_update_timer()
 
     # ----------------------------------------------------- descarga / instalación
     def install_build(self, build) -> None:
@@ -1466,7 +1657,8 @@ class MainWindow(QWidget):
 
         Es el mismo diálogo para el parche de la misma serie (botón de la
         tarjeta) y para el salto de serie (aviso al cargar compilaciones): en
-        los dos casos la decisión es la misma.
+        los dos casos la decisión es la misma. "Nunca" silencia esa serie de
+        Blender (ver ``mute_blender_series``).
         """
         message = (
             tr("You have Blender {current} installed. Blender {new} is available.",
@@ -1475,17 +1667,59 @@ class MainWindow(QWidget):
             + tr("Replace the installed version or download the new one as a copy?")
         )
         dialog = AppDialog(self, tr("Update available"), message)
-        choice = {"replace": None}
-        dialog.add_button(tr("Later"), on_click=dialog.reject)
+        choice = {"replace": None, "never": False}
+        dialog.add_button(tr("Later"), on_click=dialog.reject,
+                          tooltip=tr("Ask me again another time."))
         dialog.add_button(
             tr("Download as copy"),
-            on_click=lambda: (choice.update(replace=False), dialog.accept()))
+            on_click=lambda: (choice.update(replace=False), dialog.accept()),
+            tooltip=tr("Keep the version you have and add the new one next to "
+                       "it."))
         dialog.add_button(
             tr("Replace"), variant="accent",
-            on_click=lambda: (choice.update(replace=True), dialog.accept()))
+            on_click=lambda: (choice.update(replace=True), dialog.accept()),
+            tooltip=tr("Delete the installed version and put the new one in its "
+                       "place."))
+        dialog.add_button(
+            tr("Never"),
+            on_click=lambda: (choice.update(never=True), dialog.reject()),
+            tooltip=tr("Never offer updates for this Blender series again.\n"
+                       "You can undo it in Settings."))
         dialog.exec()
+        if choice["never"]:
+            self.mute_blender_series(entry)
+            return
         if choice["replace"] is not None:
             self._start_blender_update(entry, build, choice["replace"])
+
+    def mute_blender_series(self, entry) -> None:
+        """No volver a ofrecer actualizar esta serie de Blender instalada.
+
+        Se guarda la serie (mayor.menor) y se recalcula: desaparecen tanto el
+        botón de parche de la tarjeta como el aviso de salto de serie. Se puede
+        reactivar desde Ajustes.
+        """
+        series = minor_of(entry.version)
+        if series and series not in self.settings.ignored_blender_series:
+            self.settings.ignored_blender_series = [
+                *self.settings.ignored_blender_series, series]
+            self.settings.save()
+        self._recompute_updates()
+        self._rebuild_installed()
+        self._update_blender_series_controls()
+        self._show_message(
+            tr("You will not be reminded about Blender {series} updates.",
+               series=series), 8)
+
+    def reset_blender_series(self) -> None:
+        """Vuelve a avisar de las series de Blender silenciadas con "Nunca"."""
+        if not self.settings.ignored_blender_series:
+            return
+        self.settings.ignored_blender_series = []
+        self.settings.save()
+        self._recompute_updates()
+        self._rebuild_installed()
+        self._update_blender_series_controls()
 
     def _start_blender_update(self, entry, build, replace: bool) -> None:
         """Descarga la build nueva; si ``replace``, borra la vieja al extraer."""
@@ -1540,6 +1774,37 @@ class MainWindow(QWidget):
             self.launcher.launch(executable, args=args)
         except Exception as error:
             download_log(f"launch failed: {error}")
+
+    def rename_installed(self, entry, new_name: str) -> None:
+        """Renombra la carpeta de una instalación (doble clic en el nombre).
+
+        Cambia la carpeta **real** en disco y vuelve a escanear. Si el nombre no
+        vale o el disco no deja (en Windows, Blender abierto desde esa carpeta la
+        bloquea), se avisa con el motivo y se deja el nombre viejo.
+        """
+        reason = installed_service.rename_failure(entry.path, new_name)
+        if reason:
+            show_error(self, tr("Rename folder"), self._rename_error(reason))
+            return
+        try:
+            installed_service.rename(entry.path, new_name, entry.version,
+                                     entry.branch, entry.build_hash)
+        except OSError as error:
+            download_log(f"rename failed ({entry.path}): {error}")
+            show_error(self, tr("Rename folder"), str(error))
+            return
+        self._show_message(tr("Renamed to {name}", name=new_name), 5)
+        self.refresh_installed()
+
+    @staticmethod
+    def _rename_error(reason: str) -> str:
+        """Traduce el código de ``installed.rename_failure`` a un texto."""
+        return {
+            "empty": tr("The name cannot be empty."),
+            "invalid": tr('The name cannot contain \\ / : * ? " < > |.'),
+            "same": tr("That is already the name."),
+            "exists": tr("There is already a folder with that name."),
+        }.get(reason, tr("The name is not valid."))
 
     def delete_installed(self, entry) -> None:
         """Borra una versión instalada, con confirmación.
@@ -1618,7 +1883,18 @@ class MainWindow(QWidget):
                      f"ultima={tag} hay_nueva={nueva}")
         if nueva:
             self._update_assets = assets
-            self._show_update_available(tag, asset)
+            # El usuario puede haber pedido no volver a saber de esta versión o
+            # de toda su serie: los chequeos automáticos las callan (el manual
+            # las muestra igual).
+            silenced = not manual and (
+                tag == self.settings.skipped_version
+                or updater.version_series(tag) in self.settings.skipped_series)
+            # Un aviso por versión y sesión: el chequeo periódico comprueba a
+            # menudo, pero no puede sacar el diálogo una y otra vez si le diste
+            # a "Más tarde". Si sale una versión aún más nueva, sí se avisa.
+            if not silenced and (manual or tag != self._offered_update_tag):
+                self._offered_update_tag = tag
+                self._show_update_available(tag, asset)
         elif manual:
             self._show_message(tr("You already have the latest version ({version}).",
                                  version=self.current_version), 6)
@@ -1636,8 +1912,11 @@ class MainWindow(QWidget):
                    + "\n\n"
                    + tr("Running from source: the app will run git pull and restart."))
         dialog = AppDialog(self, tr("Update available"), message)
-        later = dialog.add_button(tr("Later"), on_click=dialog.reject)
-        update = dialog.add_button(tr("Update"), variant="accent")
+        later = dialog.add_button(tr("Later"), on_click=dialog.reject,
+                                  tooltip=tr("Ask me again another time."))
+        update = dialog.add_button(
+            tr("Update"), variant="accent",
+            tooltip=tr("Run git pull and restart the app."))
         update.clicked.connect(lambda: self._do_source_update(dialog, update, later))
         dialog.exec()
 
@@ -1687,7 +1966,31 @@ class MainWindow(QWidget):
         self.close()
 
     def _show_update_available(self, tag: str, asset) -> None:
-        update_available(self, tag, lambda: self._do_update(asset))
+        update_available(self, tag, lambda: self._do_update(asset),
+                         on_skip=lambda: self.skip_update_version(tag),
+                         on_skip_series=lambda: self.skip_update_series(tag))
+
+    def skip_update_version(self, tag: str) -> None:
+        """No volver a avisar de esta versión en los chequeos automáticos.
+
+        El chequeo manual ("Buscar ahora") la muestra igual, y una versión más
+        nueva sí se ofrece: se guarda el tag exacto, no la serie entera.
+        """
+        self.settings.skipped_version = tag
+        self.settings.save()
+        self._show_message(
+            tr("You will not be reminded about {version}.", version=tag), 8)
+
+    def skip_update_series(self, tag: str) -> None:
+        """No volver a avisar de ninguna versión de esta serie (mayor.menor)."""
+        series = updater.version_series(tag)
+        if series and series not in self.settings.skipped_series:
+            self.settings.skipped_series = [
+                *self.settings.skipped_series, series]
+            self.settings.save()
+        self._show_message(
+            tr("You will not be reminded about the {series} series.",
+               series=series), 8)
 
     def _do_update(self, asset) -> None:
         self._set_status(tr("Downloading..."))

@@ -84,9 +84,15 @@ DEFAULT_ZOOM = 0.8
 # validar el que se guardó la última vez.
 CHANNELS = ("all", "lts", "stable", "daily", "experimental", "favorites")
 
+# Cada cuánto se comprueba si hay una versión nueva de la propia aplicación (en
+# minutos). Las comprobaciones repetidas usan el ETag de GitHub, así que cuando
+# nada ha cambiado la respuesta es un 304 y **no gasta cuota** de la API.
+UPDATE_INTERVALS = (1, 5, 15, 30, 60, 180)
+DEFAULT_UPDATE_INTERVAL = 30
 
-def _clean_favorites(value) -> list[str]:
-    """Normaliza la lista de favoritos leída del JSON: solo textos, sin repetir.
+
+def _clean_string_list(value) -> list[str]:
+    """Normaliza una lista de textos del JSON: solo cadenas, sin repetir.
 
     Un settings.json editado a mano no debería tumbar la app ni colar un tipo
     raro en una lista que se recorre en cada repintado.
@@ -123,6 +129,26 @@ class Settings:
     # destino del "restablecer", que el usuario puede elegir en los ajustes.
     reset_zoom: float = DEFAULT_ZOOM
     auto_update: bool = True
+    # Interruptor propio del chequeo periódico (independiente del de arranque):
+    # así se puede seguir avisando al abrir sin repetir cada X minutos.
+    periodic_update: bool = True
+    # Cada cuántos minutos se busca una versión nueva de la app.
+    update_interval_min: int = DEFAULT_UPDATE_INTERVAL
+    # Versión (tag) de la que el usuario pidió no volver a avisar desde el
+    # diálogo de actualización. El chequeo manual ("Buscar ahora") la muestra
+    # igual, y una versión más nueva sí se ofrece: esto solo silencia las
+    # automáticas. Se guarda el tag exacto, así que un lanzamiento posterior no
+    # queda tapado por haber saltado el anterior.
+    skipped_version: str = ""
+    # Series (mayor.menor, p. ej. "1.20") de las que no se quiere volver a
+    # saber: al saltar una serie, cualquier versión nueva de esa misma serie
+    # deja de ofrecerse en los chequeos automáticos (el manual la muestra
+    # igual). Se guardan varias porque el usuario puede saltar más de una.
+    skipped_series: list[str] = field(default_factory=list)
+    # Series de Blender (mayor.menor, p. ej. "5.2") para las que el usuario
+    # pulsó "Nunca" en el aviso de actualización: no se le vuelve a ofrecer
+    # actualizar esas instaladas. Se puede reactivar desde Ajustes.
+    ignored_blender_series: list[str] = field(default_factory=list)
     window_width: int = 0
     window_height: int = 0
     # Plataforma y arquitectura de destino elegidas en la barra de filtros.
@@ -155,6 +181,11 @@ class Settings:
                 # Si el archivo está corrupto preferimos valores por defecto
                 # antes que impedir el arranque.
                 data = {}
+        try:
+            interval = int(data.get("update_interval_min", DEFAULT_UPDATE_INTERVAL))
+        except (TypeError, ValueError):
+            # Un valor no numérico editado a mano no puede impedir el arranque.
+            interval = DEFAULT_UPDATE_INTERVAL
         settings = cls(
             dest_folder=str(data.get("dest_folder") or ""),
             lts_folder=str(data.get("lts_folder") or ""),
@@ -166,18 +197,28 @@ class Settings:
             zoom=float(data.get("zoom") or DEFAULT_ZOOM),
             reset_zoom=float(data.get("reset_zoom") or DEFAULT_ZOOM),
             auto_update=bool(data.get("auto_update", True)),
+            periodic_update=bool(data.get("periodic_update", True)),
+            update_interval_min=interval,
+            skipped_version=str(data.get("skipped_version") or ""),
+            skipped_series=_clean_string_list(data.get("skipped_series")),
+            ignored_blender_series=_clean_string_list(
+                data.get("ignored_blender_series")),
             window_width=int(data.get("window_width") or 0),
             window_height=int(data.get("window_height") or 0),
             platform=str(data.get("platform") or ""),
             arch=str(data.get("arch") or ""),
             channel=str(data.get("channel") or "all"),
-            favorites=_clean_favorites(data.get("favorites")),
+            favorites=_clean_string_list(data.get("favorites")),
         )
         if not settings.dest_folder:
             settings.dest_folder = str(default_destination())
         if settings.channel not in CHANNELS:
             # Ajustes editados a mano (o de una versión con otros filtros).
             settings.channel = "all"
+        if settings.update_interval_min not in UPDATE_INTERVALS:
+            # Un valor raro (editado a mano) no puede dejar el temporizador con
+            # un intervalo absurdo o negativo.
+            settings.update_interval_min = DEFAULT_UPDATE_INTERVAL
         return settings
 
     def destination_for(self, is_lts: bool) -> str:
