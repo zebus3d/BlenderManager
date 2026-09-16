@@ -156,6 +156,53 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         window.platform_label = "Windows"
         self.assertEqual(window.arch, "amd64")
 
+    def test_el_icono_de_info_usa_la_url_de_la_api(self):
+        """El port la había sustituido por una URL a mano que no existe.
+
+        ``open_release_notes`` tiene que delegar en ``api.release_notes_url``,
+        que recorta a la serie ("5.2.1" -> .../release_notes/5.2/). Antes se
+        componía "blender.org/download/releases/5.2.1/", que es 404.
+        """
+        from unittest import mock
+
+        from PySide6.QtTest import QTest
+
+        from services import api
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        abiertas = []
+        with mock.patch.object(main_window.webbrowser, "open",
+                               side_effect=lambda url: abiertas.append(url) or True):
+            window.open_release_notes("5.2.1")
+            QTest.qWait(200)
+
+        self.assertEqual(abiertas, [api.release_notes_url("5.2.1")])
+        self.assertTrue(abiertas[0].endswith("/release_notes/5.2/"))
+
+    def test_si_el_navegador_no_abre_lo_dice(self):
+        from unittest import mock
+
+        from i18n import tr
+        from PySide6.QtTest import QTest
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        # Se deja pasar el refresco de arranque (a los 100 ms pone "Cargando...")
+        # para que no pise el mensaje que estamos comprobando.
+        with mock.patch.object(main_window.api, "get_builds", return_value=[]):
+            window = MainWindow()
+            QTest.qWait(300)
+            with mock.patch.object(main_window.webbrowser, "open",
+                                   return_value=False):
+                window.open_release_notes("5.2.1")
+                QTest.qWait(200)
+
+        self.assertEqual(window.status_label.text(),
+                         tr("Could not open the browser"))
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class LayoutTests(SettingsIsolated, unittest.TestCase):
