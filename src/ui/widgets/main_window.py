@@ -197,6 +197,14 @@ class MainWindow(QWidget):
             self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(self.settings.zoom)))
         except (TypeError, ValueError):
             self.zoom = settings_service.DEFAULT_ZOOM
+        # Zoom al que vuelven Ctrl+0 y el Ctrl+clic del slider. Se acota aquí
+        # (como ``zoom``) para que un settings.json editado a mano no deje la
+        # rejilla en un valor imposible.
+        try:
+            self.settings.reset_zoom = min(
+                MAX_ZOOM, max(MIN_ZOOM, float(self.settings.reset_zoom)))
+        except (TypeError, ValueError):
+            self.settings.reset_zoom = settings_service.DEFAULT_ZOOM
 
         self.view = "store"
         # A dónde vuelve el botón de ajustes al pulsarlo por segunda vez.
@@ -511,6 +519,30 @@ class MainWindow(QWidget):
         self.language_combo.currentTextChanged.connect(self._on_language_changed)
         row3.addWidget(self.language_combo)
         lay.addLayout(row3)
+
+        # Destino del "restablecer" (Ctrl+0 / Ctrl+clic en el slider del pie).
+        # Es una preferencia, no el zoom actual: moverlo aquí NO cambia la
+        # rejilla; solo decide a qué tamaño vuelve el reset. Por eso el slider
+        # del pie sigue persistiendo lo que el usuario dejara la última sesión.
+        row4 = QHBoxLayout()
+        row4.addWidget(QLabel(tr("Reset zoom")))
+        row4.addStretch()
+        self.reset_zoom_slider = _ZoomSlider(Qt.Horizontal)
+        self.reset_zoom_slider.setRange(int(MIN_ZOOM * 100), int(MAX_ZOOM * 100))
+        self.reset_zoom_slider.setValue(round(self.settings.reset_zoom * 100))
+        self.reset_zoom_slider.setFixedWidth(130)
+        self.reset_zoom_slider.setToolTip(
+            tr("Zoom the grid returns to (Ctrl+0 or Ctrl+click on the slider)"))
+        self.reset_zoom_slider.valueChanged.connect(self._on_reset_zoom_changed)
+        self.reset_zoom_slider.sliderReleased.connect(self._save_reset_zoom)
+        self.reset_zoom_slider.reset_requested.connect(self._factory_reset_zoom)
+        row4.addWidget(self.reset_zoom_slider)
+        self.reset_zoom_label = QLabel(f"{round(self.settings.reset_zoom * 100)} %")
+        self.reset_zoom_label.setObjectName("Muted")
+        self.reset_zoom_label.setFixedWidth(40)
+        self.reset_zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        row4.addWidget(self.reset_zoom_label)
+        lay.addLayout(row4)
         return card
 
     def _settings_launch_card(self) -> QFrame:
@@ -749,9 +781,9 @@ class MainWindow(QWidget):
             self._set_zoom_value(self.zoom - ZOOM_STEP)
 
     def reset_zoom(self) -> None:
-        """Vuelve al zoom por defecto (Ctrl+0 o Ctrl+clic en el slider)."""
+        """Vuelve al zoom de restablecimiento elegido en los ajustes (Ctrl+0)."""
         if self._zoom_enabled():
-            self._set_zoom_value(settings_service.DEFAULT_ZOOM)
+            self._set_zoom_value(self.settings.reset_zoom)
 
     def set_favorite(self, item, marked: bool) -> None:
         """Marca o desmarca una serie como favorita (estrella de una tarjeta).
@@ -1114,6 +1146,25 @@ class MainWindow(QWidget):
                 self.settings.language = lang_id
                 self.settings.save()
                 break
+
+    def _on_reset_zoom_changed(self, percent: int) -> None:
+        """Mueve el destino del reset: etiqueta en vivo, guardado al soltar.
+
+        No escribimos el JSON en cada píxel del arrastre (como con el slider
+        del pie): aquí no hay nada que reconstruir, así que basta con esperar a
+        que el usuario suelte el tirador (o use el teclado).
+        """
+        self.settings.reset_zoom = min(MAX_ZOOM, max(MIN_ZOOM, percent / 100.0))
+        self.reset_zoom_label.setText(f"{percent} %")
+        if not self.reset_zoom_slider.isSliderDown():
+            self._save_reset_zoom()
+
+    def _save_reset_zoom(self) -> None:
+        self.settings.save()
+
+    def _factory_reset_zoom(self) -> None:
+        """Ctrl+clic en el slider del ajuste: vuelve al valor de fábrica."""
+        self.reset_zoom_slider.setValue(round(settings_service.DEFAULT_ZOOM * 100))
 
     def set_auto_update(self, active: bool) -> None:
         """Guarda si hay que buscar actualizaciones al arrancar."""

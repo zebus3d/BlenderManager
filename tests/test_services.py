@@ -361,6 +361,7 @@ class SettingsTests(unittest.TestCase):
             launch_args="--background",
             layout_mode="list",
             zoom=1.4,
+            reset_zoom=1.2,
             auto_update=False,
             window_width=1200,
             window_height=700,
@@ -374,6 +375,7 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(loaded.delete_archive)
         self.assertEqual(loaded.layout_mode, "list")
         self.assertAlmostEqual(loaded.zoom, 1.4)
+        self.assertAlmostEqual(loaded.reset_zoom, 1.2)
         self.assertFalse(loaded.auto_update)
         self.assertEqual(loaded.window_width, 1200)
         self.assertEqual(loaded.window_height, 700)

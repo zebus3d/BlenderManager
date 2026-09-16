@@ -226,6 +226,34 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         from services.settings import Settings
 
         self.assertEqual(Settings().zoom, 0.8)
+        # El destino del reset arranca en el mismo valor de fabrica.
+        self.assertEqual(Settings().reset_zoom, 0.8)
+
+    def test_ctrl_0_va_al_zoom_de_restablecimiento(self):
+        """Ctrl+0 vuelve al zoom elegido en los ajustes, no siempre a 80 %.
+
+        El slider de ajustes solo decide el destino: moverlo NO cambia la
+        rejilla (el zoom actual sigue siendo cosa del slider del pie).
+        """
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(900, 600)
+        window.layout_mode = "grid"
+        window._set_zoom_value(1.0)
+
+        # Mover el ajuste no toca el zoom actual, pero si el destino.
+        window.reset_zoom_slider.setValue(120)
+        self.assertAlmostEqual(window.zoom, 1.0)
+        self.assertAlmostEqual(window.settings.reset_zoom, 1.2)
+
+        window.reset_zoom()
+        self.assertAlmostEqual(window.zoom, 1.2)
+
+        # Ctrl+clic en el slider del ajuste vuelve al valor de fabrica.
+        window.reset_zoom_slider.setValue(150)
+        window._factory_reset_zoom()
+        self.assertEqual(window.settings.reset_zoom, 0.8)
 
     def test_zoom_en_vivo_con_tope(self):
         from PySide6.QtTest import QTest

@@ -124,6 +124,9 @@ _TRANSLATIONS = {
         "Save settings": "Guarda los ajustes",
         "Zoom the icon size (Ctrl +/- / Ctrl+0)":
             "Ajusta el tamaño de los iconos (Ctrl +/- / Ctrl+0)",
+        "Reset zoom": "Zoom al restablecer",
+        "Zoom the grid returns to (Ctrl+0 or Ctrl+click on the slider)":
+            "Zoom al que vuelve la rejilla (Ctrl+0 o Ctrl+clic en el deslizador)",
         "Updates": "Actualizaciones",
         "Check for updates automatically": "Buscar actualizaciones automáticamente",
         "Check for updates now": "Buscar actualizaciones ahora",
