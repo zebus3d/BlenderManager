@@ -274,6 +274,27 @@ Por eso **todas** las llamadas pasan un contexto explícito:
 nueva, pásale el contexto; no uses `urlopen` a pelo. En el CI (Ubuntu) el fallo
 no se reproduce, así que los tests solo cubren la función, no el síntoma.
 
+### Y el tercero: `LD_LIBRARY_PATH` rompe los programas externos
+
+El bootloader de PyInstaller mete la carpeta `_internal` en `LD_LIBRARY_PATH`
+(deja el valor previo en `LD_LIBRARY_PATH_ORIG`) y **el entorno se hereda a
+cualquier hijo**. En el AppImage, `xdg-open` y, detrás, el navegador o Blender
+cargaban las `libstdc++`, `libssl`, `libglib`... del bundle en vez de las del
+sistema y no arrancaban — casi siempre en silencio, porque el lanzamiento sí se
+produce (el aviso de "no se pudo abrir el navegador" no saltaba). En modo fuente
+no hay contaminación, así que solo se veía en el binario. Comprobado leyendo
+`/proc/<pid>/environ` de un binario empaquetado:
+
+```
+LD_LIBRARY_PATH=/ruta/dist/BlenderManager/_internal
+```
+
+Por eso **nada externo se lanza a pelo**: `services/opener` (`clean_env`,
+`open_url`, `open_path`, `reveal`) es el único camino para abrir URLs, carpetas
+o lanzar Blender (`launcher.launch` le pasa `env=clean_env()`). Si añades una
+llamada a `xdg-open`/`webbrowser`/`Popen` de un programa de fuera, pásale ese
+entorno o el fallo vuelve.
+
 ### El spec (`packaging/blendermanager.spec`)
 
 - `datas` solo lleva `src/assets` (ya no hay `views/`).

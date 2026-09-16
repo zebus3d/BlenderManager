@@ -15,7 +15,6 @@ import shutil
 import subprocess
 import sys
 import threading
-import webbrowser
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
@@ -48,6 +47,7 @@ from services import (
     api,
     detector,
     installed as installed_service,
+    opener,
     settings as settings_service,
     sources,
     updater,
@@ -213,6 +213,17 @@ class MainWindow(QWidget):
         self.builds = []
         self.installed = installed_service.scan(self.settings.dest_folder, self.platform)
         self.view = "installed" if self.installed else "store"
+        # Actualizaciones de Blender detectadas para lo que ya tienes instalado:
+        # un parche de la misma serie (botón en la tarjeta) o una serie nueva
+        # (diálogo). Se recalculan al cargar compilaciones y al reescanear.
+        self.updates_by_path = {}
+        self.series_updates = []
+        # Series ya ofrecidas en esta sesión: el diálogo no se repite cada vez
+        # que se refresca el listado.
+        self._series_offered = set()
+        # Instalada que hay que borrar cuando acabe de extraerse la nueva
+        # (cuando el usuario eligió "Reemplazar").
+        self._replace_entry = None
 
         self._status_timer = QTimer(self)
         self._status_timer.setSingleShot(True)
@@ -929,7 +940,22 @@ class MainWindow(QWidget):
     def refresh_installed(self) -> None:
         """Vuelve a escanear la carpeta y repinta las instaladas."""
         self.installed = installed_service.scan(self.settings.dest_folder, self.platform)
+        self._recompute_updates()
         self._rebuild_installed()
+
+    def _recompute_updates(self) -> None:
+        """Recalcula qué instaladas tienen parche o serie nueva disponible.
+
+        Las builds se filtran por plataforma/arquitectura (``available_for``)
+        para no ofrecer un parche que no es para este sistema. Se guardan por
+        ruta para que las tarjetas lo consulten al construirse.
+        """
+        builds = api.available_for(self.builds, self.platform, self.arch)
+        updates = installed_service.available_updates(self.installed, builds)
+        self.updates_by_path = {
+            str(u.entry.path): u.build for u in updates if u.kind == "patch"}
+        self.series_updates = [
+            u for u in updates if u.kind == "series"]
 
     def _rebuild_installed(self) -> None:
         self._clear_grid(self.installed_grid)
@@ -951,14 +977,17 @@ class MainWindow(QWidget):
             # Igual que en la tienda: cebra solo en modo lista.
             zebra = (not grid) and bool(index % 2)
             marked = entry.favorite_key in self.settings.favorites
+            update = self.updates_by_path.get(str(entry.path))
             if grid:
-                card = GridInstalledCard(entry, zebra, self.zoom, marked)
+                card = GridInstalledCard(entry, zebra, self.zoom, marked,
+                                         update=update)
             else:
-                card = InstalledCard(entry, zebra, marked)
+                card = InstalledCard(entry, zebra, marked, update=update)
             card.launch_clicked.connect(self.launch_installed)
             card.delete_clicked.connect(self.delete_installed)
             card.notes_clicked.connect(self.open_release_notes)
             card.favorite_toggled.connect(self.set_favorite)
+            card.update_clicked.connect(self.offer_blender_update)
             cards.append(card)
         self._fill_grid(self.installed_grid, cards, columns)
 
@@ -979,11 +1008,22 @@ class MainWindow(QWidget):
 
     def _on_builds_loaded(self, builds) -> None:
         self.builds = builds
+        self._recompute_updates()
         self._rebuild_store()
+        # Las instaladas también llevan el aviso de parche, y ese aviso depende
+        # del listado que acaba de llegar.
+        self._rebuild_installed()
         # La ventana puede no tener todavía su ancho final: refloweamos en
         # cuanto el layout esté asentado para calcular bien las columnas.
         QTimer.singleShot(250, self._reflow)
-        self._set_status(tr("Ready"), 2)
+        if self.updates_by_path:
+            self._show_message(
+                tr("{count} Blender updates available",
+                   count=len(self.updates_by_path)), 6)
+        else:
+            self._set_status(tr("Ready"), 2)
+        # El salto de serie (5.2 -> 5.3) se ofrece aparte, en un diálogo.
+        QTimer.singleShot(400, self._offer_series_update)
         if not self._auto_checked:
             self._auto_checked = True
             if self.auto_update:
@@ -998,7 +1038,7 @@ class MainWindow(QWidget):
         sustituyó por una URL a mano que no existe, y por eso el icono dejó de
         abrir nada útil.
 
-        ``webbrowser.open`` puede tardar (arranca el navegador), así que corre
+        ``opener.open_url`` puede tardar (arranca el navegador), así que corre
         en un hilo y el resultado vuelve por señal.
         """
         url = api.release_notes_url(version_text)
@@ -1006,7 +1046,7 @@ class MainWindow(QWidget):
 
         def worker():
             try:
-                opened = webbrowser.open(url)
+                opened = opener.open_url(url)
             except Exception:
                 opened = False
             self.release_notes_result.emit(bool(opened))
@@ -1099,6 +1139,8 @@ class MainWindow(QWidget):
     def cancel_download(self) -> None:
         """Cancela la descarga en curso."""
         self.downloader.cancel()
+        # Si la descarga era un "Reemplazar", ya no se borra nada.
+        self._replace_entry = None
         self._set_status(tr("Cancelled"))
 
     def _on_download_done(self, path: str, build) -> None:
@@ -1128,12 +1170,76 @@ class MainWindow(QWidget):
         self.percent.setText("")
         self._set_status(tr("Ready"), 3)
         self.refresh_installed()
+        # "Reemplazar": ahora que la nueva está extraída, se borra la vieja.
+        # Si el borrado falla, la nueva queda igualmente instalada y se avisa.
+        if self._replace_entry is not None:
+            old, self._replace_entry = self._replace_entry, None
+            try:
+                shutil.rmtree(old.path)
+            except OSError as error:
+                download_log(f"replace failed ({old.path}): {error}")
+                show_error(self, tr("Uninstall"), str(error))
+            else:
+                self._show_message(tr("Replaced {name}", name=old.name), 5)
+                self.refresh_installed()
         self._rebuild_store()
+
+    # ---------------------------------------------------- updates de Blender
+    def offer_blender_update(self, entry, build) -> None:
+        """Pregunta si reemplazar la instalada o bajar la nueva como copia.
+
+        Es el mismo diálogo para el parche de la misma serie (botón de la
+        tarjeta) y para el salto de serie (aviso al cargar compilaciones): en
+        los dos casos la decisión es la misma.
+        """
+        message = (
+            tr("You have Blender {current} installed. Blender {new} is available.",
+               current=entry.version, new=build.version)
+            + "\n\n"
+            + tr("Replace the installed version or download the new one as a copy?")
+        )
+        dialog = AppDialog(self, tr("Update available"), message)
+        choice = {"replace": None}
+        dialog.add_button(tr("Later"), on_click=dialog.reject)
+        dialog.add_button(
+            tr("Download as copy"),
+            on_click=lambda: (choice.update(replace=False), dialog.accept()))
+        dialog.add_button(
+            tr("Replace"), variant="accent",
+            on_click=lambda: (choice.update(replace=True), dialog.accept()))
+        dialog.exec()
+        if choice["replace"] is not None:
+            self._start_blender_update(entry, build, choice["replace"])
+
+    def _start_blender_update(self, entry, build, replace: bool) -> None:
+        """Descarga la build nueva; si ``replace``, borra la vieja al extraer."""
+        if self.downloader.running:
+            self._show_message(tr("A download is already in progress"), 4)
+            return
+        if installed_service.is_version_installed(self.installed, build.version):
+            # Ya la tienes (quizá la bajaste antes como copia): no hay parche
+            # que aplicar ni nada que reemplazar.
+            self._show_message(tr("This version is already installed"), 4)
+            return
+        self._replace_entry = entry if replace else None
+        self.install_build(build)
+
+    def _offer_series_update(self) -> None:
+        """Ofrece el salto de serie una vez por sesión y por serie."""
+        for update in self.series_updates:
+            key = update.build.favorite_key
+            if key in self._series_offered:
+                continue
+            self._series_offered.add(key)
+            self.offer_blender_update(update.entry, update.build)
+            return
 
     def _on_download_error(self, message: str) -> None:
         self._set_downloading(False)
         self.progress.setValue(0)
         self.percent.setText("")
+        # Si falló el "Reemplazar", la instalada vieja se queda como estaba.
+        self._replace_entry = None
         self._set_status(tr("Download failed"), 5)
 
     def launch_installed(self, entry) -> None:

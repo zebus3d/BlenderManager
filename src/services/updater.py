@@ -32,7 +32,7 @@ from pathlib import Path
 
 import version
 from paths import APP_DIR
-from services import tls
+from services import opener, tls
 from services.downloader import log
 from services.extractor import extract
 from services.settings import cache_dir, write_json_atomic
@@ -310,23 +310,20 @@ def checksum_for(assets, filename: str, timeout: int = 15):
 # --- Aplicar la actualización ----------------------------------------------
 
 def _open_fallback(path=None) -> None:
-    """Abre la descarga o la página de releases para actualizar a mano."""
+    """Abre la descarga o la página de releases para actualizar a mano.
+
+    Va por ``services.opener`` para que funcione dentro del AppImage: si
+    lanzáramos ``xdg-open`` con el entorno del binario, heredaría el
+    ``LD_LIBRARY_PATH`` de PyInstaller y el gestor de ficheros/navegador no
+    arrancaría (ver el docstring de ``opener``).
+    """
     try:
-        if path and Path(path).exists():
+        if path and Path(path).exists() and not sys.platform.startswith("win"):
             # Mejor dejar al usuario delante del archivo que acaba de bajar
             # que en la página de releases, donde tendría que bajarlo otra vez.
-            if sys.platform == "darwin":
-                subprocess.Popen(["open", "-R", str(path)])
-                return
-            if not sys.platform.startswith("win"):
-                subprocess.Popen(["xdg-open", str(Path(path).parent)])
-                return
-        if sys.platform.startswith("win"):
-            os.startfile(RELEASES_URL)  # noqa: S606 (solo Windows)
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", RELEASES_URL])
-        else:
-            subprocess.Popen(["xdg-open", RELEASES_URL])
+            opener.reveal(path)
+            return
+        opener.open_url(RELEASES_URL)
     except Exception as error:
         log(f"open fallback failed: {error}")
 

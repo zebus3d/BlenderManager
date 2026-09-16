@@ -12,9 +12,15 @@ carpeta al instalar, con el hash que nos dio la API.
 
 import json
 import re
+from collections import namedtuple
 from pathlib import Path
 
-from model.build import InstalledBuild, version_tuple
+from model.build import InstalledBuild, minor_of, version_tuple
+
+# Actualización disponible para una versión instalada.
+#   kind == "patch":  misma serie con parche más nuevo (5.2.0 -> 5.2.2).
+#   kind == "series": serie estable superior (5.2.x -> 5.3.0).
+Update = namedtuple("Update", "entry build kind")
 
 # Captura la versión del nombre de la carpeta, por ejemplo 4.5.13.
 VERSION_RE = re.compile(r"blender[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
@@ -198,3 +204,64 @@ def filter_installed(entries, channel: str, search: str = "", favorites=()):
             if text in entry.name.lower() or text in entry.version.lower()
         ]
     return selected
+
+
+def _is_stable_install(entry) -> bool:
+    """True si la instalación es una versión estable (no diaria/alfa).
+
+    Los marcadores guardan la rama, y las diarias la llaman ``main``. Las
+    instalaciones antiguas (o sin marcador) no traen rama: se dan por estables,
+    que es lo razonable. Las ramas experimentales quedan fuera.
+    """
+    branch = (entry.branch or "").strip()
+    if branch == "main":
+        return False
+    if branch and not branch.startswith("v"):
+        return False
+    name = (entry.name or "").lower()
+    return not any(token in name for token in ("alpha", "beta", "daily"))
+
+
+def _minor_tuple(version: str):
+    """Serie de una versión como tupla ordenable: '5.2.1' -> (5, 2)."""
+    return version_tuple(minor_of(version))
+
+
+def available_updates(installed, builds):
+    """Empareja cada instalada con las actualizaciones que le corresponden.
+
+    ``builds`` debe venir ya filtrada por plataforma y arquitectura (es lo que
+    hace ``api.available_for``): no tendría sentido ofrecer un parche para otra
+    plataforma. Solo se miran instaladas estables y compilaciones ``stable``;
+    las diarias/alfa se renumeran solas y aquí serían ruido.
+
+    Devuelve una lista de ``Update(entry, build, kind)`` donde ``kind`` es
+    ``"patch"`` (misma serie, número mayor) o ``"series"`` (serie superior). Una
+    misma instalada puede salir dos veces si hay parche *y* salto de serie; son
+    dos avisos distintos (el botón de la tarjeta y el diálogo de salto).
+    """
+    stable_builds = [build for build in builds if build.risk == "stable"]
+    updates = []
+    for entry in installed:
+        if not _is_stable_install(entry):
+            continue
+        entry_version = version_tuple(entry.version)
+        entry_minor = _minor_tuple(entry.version)
+
+        patch = None
+        series = None
+        for build in stable_builds:
+            build_version = version_tuple(build.version)
+            build_minor = _minor_tuple(build.version)
+            if build_minor == entry_minor:
+                if build_version > entry_version and (
+                        patch is None or build.sort_key > patch.sort_key):
+                    patch = build
+            elif build_minor > entry_minor:
+                if series is None or build.sort_key > series.sort_key:
+                    series = build
+        if patch is not None:
+            updates.append(Update(entry, patch, "patch"))
+        if series is not None:
+            updates.append(Update(entry, series, "series"))
+    return updates

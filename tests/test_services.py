@@ -522,3 +522,92 @@ class ReleaseNotesUrlTests(unittest.TestCase):
             self.assertEqual(
                 api.release_notes_url(version),
                 "https://developer.blender.org/docs/release_notes/")
+
+
+class AvailableUpdatesTests(unittest.TestCase):
+    """Avisar de Blender más nuevos que los que ya tienes instalados."""
+
+    def _entry(self, version, branch="v52", name=None):
+        return installed.InstalledBuild(
+            name=name or f"blender-{version}-linux-x64",
+            path=Path("/tmp") / (name or f"blender-{version}"),
+            version=version, branch=branch)
+
+    def test_parche_y_salto_de_serie(self):
+        builds = [
+            make_build("5.2.1", "stable", "v52", "a.tar.xz"),
+            make_build("5.2.2", "stable", "v52", "b.tar.xz"),
+            make_build("5.3.0", "stable", "v53", "c.tar.xz"),
+        ]
+        result = installed.available_updates([self._entry("5.2.0")], builds)
+        by_kind = {u.kind: u.build.version for u in result}
+        self.assertEqual(by_kind, {"patch": "5.2.2", "series": "5.3.0"})
+
+    def test_sin_novedades_no_hay_avisos(self):
+        builds = [make_build("5.2.0", "stable", "v52", "a.tar.xz")]
+        self.assertEqual(installed.available_updates([self._entry("5.2.0")], builds), [])
+
+    def test_las_no_estables_no_cuentan(self):
+        # Una alfa con el mismo número no es un parche, y una serie alfa no
+        # debe ofrecerse como salto (todavía no es una versión de verdad).
+        builds = [
+            make_build("5.2.9", "alpha", "main", "a.tar.xz"),
+            make_build("5.9.0", "alpha", "main", "b.tar.xz"),
+        ]
+        self.assertEqual(installed.available_updates([self._entry("5.2.0")], builds), [])
+
+    def test_una_instalada_diaria_no_se_avisa(self):
+        builds = [make_build("5.3.0", "stable", "v53", "a.tar.xz")]
+        entry = self._entry("5.3.0-alpha", branch="main")
+        self.assertEqual(installed.available_updates([entry], builds), [])
+
+
+class OpenerTests(unittest.TestCase):
+    """Abrir cosas fuera del binario sin heredar el entorno de PyInstaller.
+
+    En el AppImage, PyInstaller mete ``_internal`` en ``LD_LIBRARY_PATH`` y el
+    navegador (o Blender) cargaba sus librerías en vez de las del sistema, así
+    que no arrancaba. El entorno va saneado.
+    """
+
+    def test_clean_env_restaura_el_original(self):
+        from services import opener
+
+        with mock.patch.dict("os.environ", {
+                "LD_LIBRARY_PATH": "/tmp/.mount/usr/bin/BlenderManager/_internal",
+                "LD_LIBRARY_PATH_ORIG": "/usr/lib",
+                "LD_PRELOAD": "/tmp/.mount/libfoo.so",
+                "QT_PLUGIN_PATH": "/tmp/.mount/plugins",
+                "PATH": "/usr/bin"}, clear=False):
+            env = opener.clean_env()
+
+        self.assertEqual(env["LD_LIBRARY_PATH"], "/usr/lib")
+        self.assertNotIn("LD_PRELOAD", env)
+        self.assertNotIn("QT_PLUGIN_PATH", env)
+        self.assertEqual(env["PATH"], "/usr/bin")
+
+    def test_clean_env_sin_original_borra_la_variable(self):
+        from services import opener
+
+        with mock.patch.dict("os.environ", {
+                "LD_LIBRARY_PATH": "/tmp/.mount/_internal"}, clear=False):
+            env = opener.clean_env()
+
+        self.assertNotIn("LD_LIBRARY_PATH", env)
+
+    @unittest.skipIf(__import__("sys").platform != "linux", "solo Linux")
+    def test_open_url_lanza_xdg_open_con_entorno_limpio(self):
+        from services import opener
+
+        with mock.patch.dict("os.environ", {
+                "LD_LIBRARY_PATH": "/tmp/.mount/_internal",
+                "LD_PRELOAD": "/tmp/.mount/libfoo.so"}, clear=False), \
+                mock.patch.object(opener.subprocess, "Popen") as popen:
+            ok = opener.open_url("https://example.test/x")
+
+        self.assertTrue(ok)
+        command = popen.call_args.args[0]
+        self.assertEqual(command, ["xdg-open", "https://example.test/x"])
+        env = popen.call_args.kwargs["env"]
+        self.assertNotIn("LD_LIBRARY_PATH", env)
+        self.assertNotIn("LD_PRELOAD", env)
