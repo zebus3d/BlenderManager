@@ -8,10 +8,11 @@ de la tienda salía cortada por abajo (la rejilla tiene más filas que la lista)
 Se hacen con el plugin offscreen de Qt, así que no hace falta servidor gráfico
 (a diferencia del Kivy antiguo, que necesitaba ventana real).
 
-Al regenerarlas hay que **subir el `?v=` de las URLs en el README**: jsdelivr
-sirve `@main` desde caché y GitHub pasa las imágenes por su proxy (camo), así
-que sin cambiar la URL se sigue viendo la captura vieja aunque el PNG del repo
-ya esté actualizado.
+El README las referencia con **rutas relativas** (`docs/img/...`), no con un
+CDN: al estar en el mismo repositorio, GitHub sirve siempre la versión del
+commit actual. Se probó antes con jsdelivr y no vale para esto: cachea `@main`
+hasta 12 h e ignora los parámetros (`?v=`), así que seguía enseñando capturas
+viejas aunque el PNG del repo estuviera actualizado.
 """
 
 import sys

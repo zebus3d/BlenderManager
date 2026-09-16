@@ -7,7 +7,7 @@ Windows and macOS) and designed to be **portable**: once packaged, users don't
 need to install anything.
 
 <p align="center">
-  <img width="80%" alt="Installed builds, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/installed_grid.png?v=2">
+  <img width="80%" alt="Installed builds, grid view" src="docs/img/installed_grid.png">
 </p>
 
 <sub>The Installed tab: launch, uninstall or update the builds you already have
@@ -54,7 +54,7 @@ need to install anything.
   **tooltips** and a **portable mode** (settings live next to the executable).
 
 <p align="center">
-  <img width="80%" alt="Store, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/store_grid.png?v=2">
+  <img width="80%" alt="Store, grid view" src="docs/img/store_grid.png">
 </p>
 
 <sub>The build store, in grid view. Every build can also be shown as a list.</sub>
@@ -236,7 +236,7 @@ The binaries are **not** committed to the repository; they are downloadable from
 the Release (or from the workflow run).
 
 <p align="center">
-  <img width="60%" alt="Update dialog" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/update_dialog.png?v=2">
+  <img width="60%" alt="Update dialog" src="docs/img/update_dialog.png">
 </p>
 
 <sub>The in-app update dialog: packaged builds replace themselves and restart.</sub>
