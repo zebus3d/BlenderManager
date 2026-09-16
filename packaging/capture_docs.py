@@ -7,6 +7,11 @@ visible. El alto es holgado a propósito: con 624 px la última fila de tarjetas
 de la tienda salía cortada por abajo (la rejilla tiene más filas que la lista).
 Se hacen con el plugin offscreen de Qt, así que no hace falta servidor gráfico
 (a diferencia del Kivy antiguo, que necesitaba ventana real).
+
+Al regenerarlas hay que **subir el `?v=` de las URLs en el README**: jsdelivr
+sirve `@main` desde caché y GitHub pasa las imágenes por su proxy (camo), así
+que sin cambiar la URL se sigue viendo la captura vieja aunque el PNG del repo
+ya esté actualizado.
 """
 
 import sys
