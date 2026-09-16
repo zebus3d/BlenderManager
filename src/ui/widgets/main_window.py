@@ -166,6 +166,7 @@ class MainWindow(QWidget):
     update_applied = Signal(str)
     source_chosen = Signal(object, object)   # build, Source
     source_update_done = Signal(bool, str)
+    release_notes_result = Signal(bool)   # abierta o no
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -243,6 +244,7 @@ class MainWindow(QWidget):
         self.update_result.connect(self._on_update_result)
         self.update_applied.connect(self._on_update_applied)
         self.source_update_done.connect(self._on_source_update_done)
+        self.release_notes_result.connect(self._on_release_notes_result)
         self.source_chosen.connect(self._start_download)
 
         self._build_ui()
@@ -989,9 +991,31 @@ class MainWindow(QWidget):
 
     # -------------------------------------------------------------- acciones
     def open_release_notes(self, version_text: str) -> None:
-        """Abre en el navegador las notas de esa serie."""
-        url = f"https://www.blender.org/download/releases/{version_text}/"
-        threading.Thread(target=lambda: webbrowser.open(url), daemon=True).start()
+        """Abre en el navegador las notas de esa serie de Blender.
+
+        La URL la construye ``api.release_notes_url`` (va por serie, no por
+        versión exacta: de "5.2.1" sale .../release_notes/5.2/). El port la
+        sustituyó por una URL a mano que no existe, y por eso el icono dejó de
+        abrir nada útil.
+
+        ``webbrowser.open`` puede tardar (arranca el navegador), así que corre
+        en un hilo y el resultado vuelve por señal.
+        """
+        url = api.release_notes_url(version_text)
+        self._show_message(tr("Opening the release notes..."))
+
+        def worker():
+            try:
+                opened = webbrowser.open(url)
+            except Exception:
+                opened = False
+            self.release_notes_result.emit(bool(opened))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_release_notes_result(self, opened: bool) -> None:
+        if not opened:
+            self._show_message(tr("Could not open the browser"))
 
     def browse_dest(self) -> None:
         """Pide la carpeta de descargas con el diálogo del sistema."""
