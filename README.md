@@ -7,11 +7,11 @@ Windows and macOS) and designed to be **portable**: once packaged, users don't
 need to install anything.
 
 <p align="center">
-  <img width="80%" alt="Store, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/store_grid.png">
+  <img width="80%" alt="Installed builds, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/installed_grid.png">
 </p>
 
-<sub>The build store, in grid view (Spanish UI shown; English is detected from
-your locale).</sub>
+<sub>The Installed tab: launch, uninstall or update the builds you already have
+(Spanish UI shown; English is detected from your locale).</sub>
 
 ## Features
 
@@ -54,11 +54,10 @@ your locale).</sub>
   **tooltips** and a **portable mode** (settings live next to the executable).
 
 <p align="center">
-  <img width="80%" alt="Installed builds, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/installed_grid.png">
+  <img width="80%" alt="Store, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/store_grid.png">
 </p>
 
-<sub>The Installed tab: launch, uninstall or update what you already have. The
-same builds can also be shown as a list.</sub>
+<sub>The build store, in grid view. Every build can also be shown as a list.</sub>
 
 ## A small, readable codebase
 
