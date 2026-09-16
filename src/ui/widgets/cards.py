@@ -24,6 +24,39 @@ from ui.widgets.labels import ElidedLabel
 
 _LOGO = ASSETS_DIR / "images" / "blender_logo.png"
 
+# Logo de Blender cacheado. Antes cada tarjeta hacía ``QPixmap(_LOGO)`` al
+# construirse: al mover el zoom se reconstruye la rejilla entera cada pocos
+# ticks, así que eran cientos de lecturas y decodificaciones del mismo PNG por
+# segundo (y en Windows cada lectura pasa por el antivirus). Con el origen
+# cargado una vez y las versiones escaladas/atenuadas guardadas por tamaño, cada
+# reconstrucción reutiliza el pixmap en vez de rehacerlo.
+_logo_source = None
+_logo_cache: dict = {}
+
+
+def _logo_source_pixmap() -> QPixmap:
+    """El PNG de Blender cargado una sola vez."""
+    global _logo_source
+    if _logo_source is None:
+        _logo_source = QPixmap(str(_LOGO))
+    return _logo_source
+
+
+def _logo_pixmap(size: int, dim: bool) -> QPixmap:
+    """Logo escalado a ``size`` (y atenuado si ``dim``), desde la caché."""
+    key = (size, dim)
+    cached = _logo_cache.get(key)
+    if cached is not None:
+        return cached
+    pix = _logo_source_pixmap()
+    if pix.isNull():
+        return pix
+    scaled = pix.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    if dim:
+        scaled = _with_opacity(scaled, 0.32)
+    _logo_cache[key] = scaled
+    return scaled
+
 # Ancho minimo de un boton que solo lleva un icono (la papelera de la rejilla):
 # con el padding corto del QSS ([iconOnly]) el glifo de 13 px necesita ~21 px.
 MIN_ICON_BUTTON_WIDTH = 26
@@ -146,13 +179,9 @@ def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
 
 def _logo_label(size: int, dim: bool) -> QLabel:
     label = QLabel()
-    pix = QPixmap(str(_LOGO))
+    pix = _logo_pixmap(size, dim)
     if not pix.isNull():
-        scaled = pix.scaled(size, size, Qt.KeepAspectRatio,
-                            Qt.SmoothTransformation)
-        if dim:
-            scaled = _with_opacity(scaled, 0.32)
-        label.setPixmap(scaled)
+        label.setPixmap(pix)
     logo_shadow(label, size)
     return label
 
