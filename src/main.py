@@ -126,6 +126,26 @@ def _prefer_xwayland_for_tray(settings) -> None:
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
 
+def _start_window(window, start_minimized: bool) -> None:
+    """Enseña la ventana, o la deja en la bandeja si se pidió arrancar oculto.
+
+    Arrancar oculto (``start_minimized``) es lo que hace útil el autoarranque:
+    la aplicación queda a mano sin aparecer al iniciar la sesión. Si no hay
+    bandeja se enseña igual, porque esconderla sin un icono al que volver la
+    dejaría inaccesible.
+    """
+    from PySide6.QtCore import QTimer
+
+    from ui.widgets.tray import TrayIcon
+
+    if start_minimized and TrayIcon.available():
+        window.center_on_screen()
+        QTimer.singleShot(0, window._hide_to_tray)
+    else:
+        window.show()
+        window.center_on_screen()
+
+
 def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     """Arranca la aplicación Qt."""
     from services import settings as settings_service
@@ -172,8 +192,7 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     window = MainWindow()
     window.resize(max(MIN_WINDOW_WIDTH, settings.window_width or DEFAULT_WINDOW_WIDTH),
                   max(MIN_WINDOW_HEIGHT, settings.window_height or DEFAULT_WINDOW_HEIGHT))
-    window.show()
-    window.center_on_screen()
+    _start_window(window, settings.start_minimized)
 
     # Restos de la sesión anterior, con retardo para no retrasar el arranque.
     QTimer.singleShot(600, lambda: _clean_previous_session(settings))

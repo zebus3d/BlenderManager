@@ -155,6 +155,11 @@ class Settings:
     # Si ya se enseñó el aviso "sigue en la bandeja" la primera vez que se
     # ocultó. Se guarda para no repetirlo en cada apertura.
     tray_hint_shown: bool = False
+    # Arrancar directamente en la bandeja, sin enseñar la ventana. Es lo que
+    # hace útil el autoarranque: la app queda a mano sin molestar al iniciar
+    # la sesión. No confundir con el autoarranque en sí, que no es un ajuste
+    # nuestro sino que vive en el sistema (ver ``services/autostart.py``).
+    start_minimized: bool = False
     # Plataforma y arquitectura de destino elegidas en la barra de filtros.
     # Vacías = usar las del propio equipo (lo detecta ``detector``). Se guardan
     # para poder descargar builds de otra plataforma de forma repetida, por
@@ -209,6 +214,7 @@ class Settings:
             close_to_tray=bool(data.get("close_to_tray", True)),
             minimize_to_tray=bool(data.get("minimize_to_tray", False)),
             tray_hint_shown=bool(data.get("tray_hint_shown", False)),
+            start_minimized=bool(data.get("start_minimized", False)),
             window_width=int(data.get("window_width") or 0),
             window_height=int(data.get("window_height") or 0),
             platform=str(data.get("platform") or ""),

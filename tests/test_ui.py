@@ -2000,6 +2000,64 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(window.settings.minimize_to_tray)
         self.assertTrue(aviso.called)
 
+    def test_arrancar_minimizado_deja_la_ventana_en_la_bandeja(self):
+        from PySide6.QtTest import QTest
+
+        import main
+
+        window = self._window()
+        main._start_window(window, start_minimized=True)
+        QTest.qWait(20)
+        self.assertFalse(window.isVisible())
+        self.assertIsNotNone(window._tray)
+        self.assertTrue(window._tray.is_visible())
+
+    def test_sin_bandeja_arrancar_minimizado_enseña_la_ventana(self):
+        import main
+
+        window = self._window(available=False)
+        main._start_window(window, start_minimized=True)
+        self.app.processEvents()
+        # Sin icono al que volver, se enseña igual en vez de quedar escondida.
+        self.assertTrue(window.isVisible())
+        self.assertIsNone(window._tray)
+
+    def test_arrancar_minimizado_se_guarda(self):
+        from services.settings import Settings
+
+        window = self._window()
+        window.start_minimized_switch.setChecked(True)
+        self.assertTrue(window.settings.start_minimized)
+        self.assertTrue(Settings.load().start_minimized)
+
+    def test_el_autoarranque_se_registra_y_se_revierte_si_falla(self):
+        from ui.widgets import main_window
+
+        window = self._window()
+        with mock.patch.object(main_window.autostart, "enable",
+                               return_value=True) as activar:
+            window.autostart_switch.setChecked(True)
+        self.assertTrue(activar.called)
+
+        # Si el sistema no deja desactivarlo, se avisa y el interruptor vuelve
+        # al estado real (no puede quedarse mintiendo).
+        with mock.patch.object(main_window.autostart, "disable",
+                               return_value=False), \
+                mock.patch.object(main_window.autostart, "is_enabled",
+                                  return_value=True), \
+                mock.patch.object(main_window, "show_error") as error:
+            window.autostart_switch.setChecked(False)
+        self.assertTrue(error.called)
+        self.assertTrue(window.autostart_switch.isChecked())
+
+    def test_sin_soporte_de_autoarranque_el_interruptor_se_deshabilita(self):
+        from ui.widgets import main_window
+
+        with mock.patch.object(main_window.autostart, "supported",
+                               return_value=False):
+            window = self._window()
+        self.assertFalse(window.autostart_switch.isEnabled())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -179,6 +179,21 @@ _TRANSLATIONS = {
             "Minimizar a la bandeja no está disponible en este escritorio.",
         "Restart BlenderManager to apply the change.":
             "Reinicia BlenderManager para aplicar el cambio.",
+        # Autoarranque y arranque minimizado.
+        "Start automatically at login": "Iniciar automáticamente al iniciar sesión",
+        "Open BlenderManager automatically when you sign in to your computer.":
+            "Abre BlenderManager automáticamente al iniciar sesión en el equipo.",
+        "Start minimized in the system tray":
+            "Iniciar minimizado en la bandeja del sistema",
+        "Start hidden in the system tray.\n"
+        "Recommended if it opens automatically at login.":
+            "Empieza oculto en la bandeja del sistema.\n"
+            "Recomendado si se abre automáticamente al iniciar sesión.",
+        "Automatic startup is not available on this system.":
+            "El arranque automático no está disponible en este sistema.",
+        "Automatic startup": "Arranque automático",
+        "Could not change the automatic startup.":
+            "No se pudo cambiar el arranque automático.",
         "Show": "Mostrar",
         "Bring the BlenderManager window back.":
             "Vuelve a mostrar la ventana de BlenderManager.",

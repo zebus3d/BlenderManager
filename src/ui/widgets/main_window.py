@@ -48,6 +48,7 @@ from i18n import tr
 from model.build import minor_of
 from services import (
     api,
+    autostart,
     detector,
     elevate,
     installed as installed_service,
@@ -251,6 +252,7 @@ class MainWindow(QWidget):
         # minimizar). ``_tray`` se crea perezosamente (solo si hace falta).
         self.close_to_tray = bool(self.settings.close_to_tray)
         self.minimize_to_tray = bool(self.settings.minimize_to_tray)
+        self.start_minimized = bool(self.settings.start_minimized)
         self._tray = None
         # Salidas de verdad (actualizar la app o reiniciar tras un git pull):
         # esas no pueden acabar escondidas en la bandeja.
@@ -563,7 +565,15 @@ class MainWindow(QWidget):
         columns.addWidget(self._settings_launch_card(), 1)
         outer.addLayout(columns)
         outer.addStretch()
-        return page
+
+        # La tarjeta de General ya no cabe a la altura mínima de la ventana (con
+        # las opciones de bandeja, autoarranque y arranque minimizado pide más
+        # de 400 px). Con scroll, a tamaños pequeños se desplaza en vez de
+        # recortar la última fila (el botón de restablecer el tamaño).
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(page)
+        return scroll
 
     def _settings_card(self, title: str) -> tuple[QFrame, QVBoxLayout]:
         card = QFrame()
@@ -647,6 +657,7 @@ class MainWindow(QWidget):
         # minimizar). Si el escritorio no la soporta se deshabilitan, porque
         # activarlas escondería la ventana sin un icono al que volver.
         tray_available = TrayIcon.available()
+        tray_unavailable = tr("The system tray is not available on this desktop.")
         row_tray_close = QHBoxLayout()
         row_tray_close.addWidget(QLabel(tr("Close to the system tray")))
         row_tray_close.addStretch()
@@ -675,16 +686,50 @@ class MainWindow(QWidget):
         row_tray_min.addWidget(self.minimize_tray_switch)
         lay.addLayout(row_tray_min)
         if not tray_available:
-            unavailable = tr("The system tray is not available on this desktop.")
             for switch in (self.close_tray_switch, self.minimize_tray_switch):
                 switch.setEnabled(False)
-                switch.setToolTip(unavailable)
+                switch.setToolTip(tray_unavailable)
         elif not detector.minimize_to_tray_supported():
             # Wayland sin XWayland: no hay forma de enterarse de que se ha
             # minimizado, así que la opción ni se ofrece.
             self.minimize_tray_switch.setEnabled(False)
             self.minimize_tray_switch.setToolTip(tr(
                 "Minimizing to the tray is not available on this desktop."))
+
+        # Autoarranque con la sesión y arranque oculto. OJO: el autoarranque no
+        # es un ajuste nuestro, vive en el sistema (XDG autostart, registro de
+        # Windows, LaunchAgent), así que su estado se lee del sistema y no del
+        # settings.json; lo que sí guardamos es si debe empezar en la bandeja.
+        self.autostart_switch = SwitchPill(autostart.is_enabled(), tooltip=tr(
+            "Open BlenderManager automatically when you sign in to your "
+            "computer."))
+        self.autostart_switch.toggled.connect(self._on_autostart_toggled)
+        row_autostart = QHBoxLayout()
+        row_autostart.addWidget(QLabel(tr("Start automatically at login")))
+        row_autostart.addStretch()
+        row_autostart.addWidget(self.autostart_switch)
+        lay.addLayout(row_autostart)
+
+        self.start_minimized_switch = SwitchPill(
+            self.start_minimized,
+            tooltip=tr("Start hidden in the system tray.\nRecommended if it "
+                       "opens automatically at login."))
+        self.start_minimized_switch.toggled.connect(
+            self._on_start_minimized_toggled)
+        row_start_min = QHBoxLayout()
+        row_start_min.addWidget(QLabel(tr("Start minimized in the system tray")))
+        row_start_min.addStretch()
+        row_start_min.addWidget(self.start_minimized_switch)
+        lay.addLayout(row_start_min)
+        if not autostart.supported():
+            self.autostart_switch.setEnabled(False)
+            self.autostart_switch.setToolTip(
+                tr("Automatic startup is not available on this system."))
+        if not tray_available:
+            # Sin bandeja no hay dónde arrancar oculta: se enseñaría la ventana
+            # igual, así que no se ofrece un ajuste que no haría nada.
+            self.start_minimized_switch.setEnabled(False)
+            self.start_minimized_switch.setToolTip(tray_unavailable)
 
         # Destino del "restablecer" (Ctrl+0 / Ctrl+clic en el slider del pie).
         # Es una preferencia, no el zoom actual: moverlo aquí NO cambia la
@@ -1573,6 +1618,27 @@ class MainWindow(QWidget):
             # desactivar esto no surte efecto hasta reiniciar.
             self._show_message(
                 tr("Restart BlenderManager to apply the change."), 8)
+
+    def _on_start_minimized_toggled(self, value: bool) -> None:
+        self.start_minimized = value
+        self.settings.start_minimized = value
+        self.settings.save()
+
+    def _on_autostart_toggled(self, value: bool) -> None:
+        """Registra (o quita) el autoarranque en el propio sistema.
+
+        No se guarda en ``settings.json``: el estado vive en el sistema, así
+        que si falla se relee y se deja el interruptor como estaba (si no, la
+        interfaz diría una cosa y el sistema otra).
+        """
+        ok = autostart.enable() if value else autostart.disable()
+        if ok:
+            return
+        show_error(self, tr("Automatic startup"),
+                   tr("Could not change the automatic startup."))
+        self.autostart_switch.blockSignals(True)
+        self.autostart_switch.setChecked(autostart.is_enabled())
+        self.autostart_switch.blockSignals(False)
 
     def _on_args_changed(self, text: str) -> None:
         self.launch_args = text
