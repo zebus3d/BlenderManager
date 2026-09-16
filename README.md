@@ -35,13 +35,26 @@ need to install anything.
 - **Installed versions**: launch or uninstall them from the app. The filters and
   search apply to them too, and they are highlighted in the store so you can tell
   at a glance what you already have.
+- **Rename an installed build**: double-click its name on the card to edit it in
+  place (Enter saves, Escape cancels). The **real folder on disk** is renamed, so
+  the file manager and the app always agree — the build is still recognised
+  through its marker file.
+- **LTS builds in their own folder** (optional): keep the Long Term Support
+  versions on another drive or folder (for example a fast SSD) while everything
+  else goes to the default destination. LTS builds already stored there keep
+  showing up even if you later turn the option off.
+- **Protected folders without drama** (Windows): if the destination is something
+  like `C:\Program Files`, the app offers to ask Windows for permission (a single
+  UAC prompt gives your user write access to that folder) or to pick another one,
+  and it says exactly what failed instead of a generic "download failed".
 - **Newer-version alerts**: if Blender publishes something newer than a build you
   already have, the app tells you. A **same-series patch** (5.2.0 → 5.2.2) shows
   an *Update* button on the installed card; a **new series** (5.2 → 5.3) is
-  offered in a dialog where you choose to **replace** the installed build or
-  download the new one **as a copy**. It does not nag about a version you already
-  have (even one you downloaded as a copy), and it stays quiet until something is
-  actually newer.
+  offered in a dialog where you choose to **replace** the installed build,
+  download the new one **as a copy**, or press **Never** to stop being asked about
+  that Blender series (reversible from Settings). It does not nag about a version
+  you already have (even one you downloaded as a copy), and it stays quiet until
+  something is actually newer.
 - **Blender runs detached**: closing the manager does **not** close the Blender
   instances you launched from it.
 - **Release notes one click away**: every build card has a small blue **i** that
@@ -49,9 +62,14 @@ need to install anything.
   `developer.blender.org/docs/release_notes/5.2/`) in your browser, so you can
   check what changed before downloading.
 - **Self-updating**: packaged builds (Linux AppImage, Windows) replace themselves
-  and restart; a source checkout runs `git pull` and restarts instead.
+  and restart; a source checkout runs `git pull` and restarts instead. The app
+  checks on start and **periodically** (every 1 minute to 3 hours, or never), and
+  the update dialog can **skip this version** or **skip the whole series**. An
+  automatic check never interrupts a running download and never repeats a version
+  you already dismissed; "Check now" always shows what is available.
 - **Interface in English and Spanish** with automatic language detection, plus
-  **tooltips** and a **portable mode** (settings live next to the executable).
+  **descriptive tooltips** (they explain what LTS, Daily or Experimental mean) and
+  a **portable mode** (settings live next to the executable).
 
 <p align="center">
   <img width="80%" alt="Store, grid view" src="docs/img/store_grid.png">
@@ -353,6 +371,9 @@ src/
     installed.py     # scans installed versions + detects newer builds
     launcher.py      # launches Blender (detached process)
     opener.py        # opens URLs/folders with a clean environment (AppImage)
+    sources.py       # picks the fastest download source (CDN vs. official release)
+    tls.py           # TLS context with a CA store that actually exists
+    elevate.py       # Windows UAC helper (write access to protected folders)
     updater.py       # checks and applies updates (binary or git pull)
   ui/
     qss.py           # the whole look: one Qt stylesheet

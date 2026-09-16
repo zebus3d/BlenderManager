@@ -773,18 +773,38 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
     def test_la_ventana_se_centra_en_la_pantalla(self):
         from PySide6.QtWidgets import QApplication
 
-        import main
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
         window.resize(1000, 700)
         window.show()
-        main._center_on_screen(window)
+        window.center_on_screen()
         screen = window.screen() or QApplication.primaryScreen()
         center = screen.availableGeometry().center()
         frame = window.frameGeometry().center()
         self.assertLessEqual(abs(frame.x() - center.x()), 2)
         self.assertLessEqual(abs(frame.y() - center.y()), 2)
+
+    def test_restablecer_el_tamano_de_la_ventana(self):
+        from ui.widgets.main_window import (
+            DEFAULT_WINDOW_HEIGHT,
+            DEFAULT_WINDOW_WIDTH,
+            MainWindow,
+        )
+
+        window = MainWindow()
+        window.show()
+        window.resize(1500, 900)
+        window.settings.window_width = 1500
+        window.settings.window_height = 900
+
+        window.reset_window_size()
+        self.assertEqual((window.width(), window.height()),
+                         (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT))
+        # En los ajustes vuelve a 0 para que la próxima apertura use el de
+        # fábrica.
+        self.assertEqual((window.settings.window_width,
+                          window.settings.window_height), (0, 0))
 
     def test_las_lts_van_a_su_carpeta_si_esta_configurada(self):
         from ui.widgets.main_window import MainWindow
