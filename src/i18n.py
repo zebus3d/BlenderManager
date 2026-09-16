@@ -276,8 +276,8 @@ _TRANSLATIONS = {
             "Muestra las versiones que ya tienes en este equipo.",
         "Show the builds you can download from Blender.":
             "Muestra las compilaciones que puedes descargar de Blender.",
-        "Change folders, language, zoom and updates.":
-            "Cambia carpetas, idioma, zoom y actualizaciones.",
+        "Settings.":
+            "Settings.",
         "Folder where the Blender versions you download are stored.\nEach "
         "version goes in its own subfolder.":
             "Carpeta donde se guardan las versiones de Blender que "
