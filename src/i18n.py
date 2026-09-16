@@ -277,7 +277,7 @@ _TRANSLATIONS = {
         "Show the builds you can download from Blender.":
             "Muestra las compilaciones que puedes descargar de Blender.",
         "Settings.":
-            "Settings.",
+            "Ajustes.",
         "Folder where the Blender versions you download are stored.\nEach "
         "version goes in its own subfolder.":
             "Carpeta donde se guardan las versiones de Blender que "
