@@ -64,9 +64,9 @@ need to install anything.
 - **Self-updating**: packaged builds (Linux AppImage, Windows) replace themselves
   and restart; a source checkout runs `git pull` and restarts instead. The app
   checks on start and **periodically** (every 1 minute to 3 hours, or never), and
-  the update dialog can **skip this version** or **skip the whole series**. An
-  automatic check never interrupts a running download and never repeats a version
-  you already dismissed; "Check now" always shows what is available.
+  the update dialog can **skip this version**. An automatic check never interrupts
+  a running download and never repeats a version you already dismissed; "Check
+  now" always shows what is available.
 - **Interface in English and Spanish** with automatic language detection, plus
   **descriptive tooltips** (they explain what LTS, Daily or Experimental mean) and
   a **portable mode** (settings live next to the executable).

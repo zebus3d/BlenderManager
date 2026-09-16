@@ -140,11 +140,6 @@ class Settings:
     # automáticas. Se guarda el tag exacto, así que un lanzamiento posterior no
     # queda tapado por haber saltado el anterior.
     skipped_version: str = ""
-    # Series (mayor.menor, p. ej. "1.20") de las que no se quiere volver a
-    # saber: al saltar una serie, cualquier versión nueva de esa misma serie
-    # deja de ofrecerse en los chequeos automáticos (el manual la muestra
-    # igual). Se guardan varias porque el usuario puede saltar más de una.
-    skipped_series: list[str] = field(default_factory=list)
     # Series de Blender (mayor.menor, p. ej. "5.2") para las que el usuario
     # pulsó "Nunca" en el aviso de actualización: no se le vuelve a ofrecer
     # actualizar esas instaladas. Se puede reactivar desde Ajustes.
@@ -200,7 +195,6 @@ class Settings:
             periodic_update=bool(data.get("periodic_update", True)),
             update_interval_min=interval,
             skipped_version=str(data.get("skipped_version") or ""),
-            skipped_series=_clean_string_list(data.get("skipped_series")),
             ignored_blender_series=_clean_string_list(
                 data.get("ignored_blender_series")),
             window_width=int(data.get("window_width") or 0),
