@@ -806,6 +806,39 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual((window.settings.window_width,
                           window.settings.window_height), (0, 0))
 
+    def test_el_tamano_por_defecto_muestra_tres_filas_al_80(self):
+        """Con el zoom al 80 % y 3 columnas, 3 filas tienen que caber enteras.
+
+        Con el alto por defecto anterior (680) la tercera fila quedaba cortada:
+        hacían falta ~741 px de ventana.
+        """
+        from model.build import Build
+        from ui.widgets.main_window import (
+            DEFAULT_WINDOW_HEIGHT,
+            DEFAULT_WINDOW_WIDTH,
+            MainWindow,
+        )
+
+        window = MainWindow()
+        window.builds = [
+            Build(version=f"5.{i}.0", branch=f"v5{i}", risk="stable",
+                  platform="linux", arch="x86_64", url="u",
+                  filename=f"b{i}.tar.xz", size=1, mtime=i)
+            for i in range(9)
+        ]
+        window.channel = "all"
+        window.layout_mode = "grid"
+        window.zoom = 0.8
+        window.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+        window.show()
+        for _ in range(5):
+            self.app.processEvents()
+        window._rebuild_store()
+        for _ in range(5):
+            self.app.processEvents()
+        # Sin barra de scroll: las 3 filas se ven enteras.
+        self.assertEqual(window.store_scroll.verticalScrollBar().maximum(), 0)
+
     def test_las_lts_van_a_su_carpeta_si_esta_configurada(self):
         from ui.widgets.main_window import MainWindow
 
