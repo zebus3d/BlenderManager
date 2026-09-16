@@ -1035,6 +1035,77 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(url, elegida.url)
         self.assertEqual(checksum, "hash-del-release")
 
+    def test_write_problem_detecta_carpeta_imposible(self):
+        import tempfile
+        from pathlib import Path as _Path
+
+        from ui.widgets.main_window import _write_problem
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # Una carpeta nueva se puede crear y escribir: no hay problema.
+            self.assertEqual(_write_problem(_Path(tmp) / "nueva"), "")
+            # Si el "padre" es un fichero, no se puede crear la carpeta.
+            blocker = _Path(tmp) / "archivo"
+            blocker.write_text("x", encoding="utf-8")
+            self.assertTrue(_write_problem(blocker / "sub"))
+
+    def test_no_descarga_si_no_se_puede_escribir(self):
+        from unittest import mock
+
+        from services.sources import Source
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        build = _build("4.2.23", "v42", "stable")
+        fuente = Source("Blender CDN", "https://x/f.zip")
+        with mock.patch.object(main_window, "_write_problem",
+                               return_value="[Errno 13] Permission denied"), \
+                mock.patch.object(window.downloader, "start") as arranque, \
+                mock.patch.object(main_window, "show_error") as error:
+            window._start_download(build, fuente)
+        # No se baja nada y se explica el motivo, con la carpeta incluida.
+        arranque.assert_not_called()
+        self.assertIn("Permission denied", error.call_args.args[2])
+
+    def test_el_error_de_descarga_muestra_el_motivo(self):
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with mock.patch.object(main_window, "show_error") as error:
+            window._on_download_error("[Errno 13] Permission denied: 'C:\\\\LTS'")
+        self.assertTrue(error.called)
+        self.assertIn("Permission denied", error.call_args.args[2])
+
+    def test_checksum_con_mensaje_claro(self):
+        from unittest import mock
+
+        from i18n import tr
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with mock.patch.object(main_window, "show_error") as error:
+            window._on_download_error("checksum")
+        self.assertEqual(error.call_args.args[2], tr("Checksum error"))
+
+    def test_cancelar_no_dice_fallo(self):
+        from unittest import mock
+
+        from i18n import tr
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.cancel_download()
+        with mock.patch.object(main_window, "show_error") as error:
+            window._on_download_error("cancelled")
+        self.assertEqual(window.status_label.text(), tr("Cancelled"))
+        error.assert_not_called()
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class ElideTests(SettingsIsolated, unittest.TestCase):
