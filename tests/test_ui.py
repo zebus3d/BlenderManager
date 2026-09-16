@@ -1691,42 +1691,6 @@ class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(window.settings.skipped_version, "v1.9.9")
         self.assertTrue(aviso.called)
 
-    def test_skip_serie_guarda_la_serie(self):
-        from unittest import mock
-
-        from ui.widgets.main_window import MainWindow
-
-        window = MainWindow()
-        with mock.patch.object(window, "_show_message") as aviso:
-            window.skip_update_series("v1.9.9")
-            window.skip_update_series("v1.9.9")   # no se repite
-        self.assertEqual(window.settings.skipped_series, ["1.9"])
-        self.assertTrue(aviso.called)
-
-    def test_saltar_una_serie_silencia_sus_versiones(self):
-        from unittest import mock
-
-        from ui.widgets import main_window
-        from ui.widgets.main_window import MainWindow
-
-        window = MainWindow()
-        window.current_version = "1.0.0"
-        window.settings.skipped_series = ["1.1"]
-        assets = [{"name": "BlenderManager-linux", "url": "u"}]
-        with mock.patch.object(sys, "frozen", True, create=True), \
-                mock.patch.object(main_window.updater, "asset_for",
-                                  return_value="BlenderManager-linux"), \
-                mock.patch.object(window, "_show_update_available") as avisar:
-            # Automático: toda la serie 1.1 está silenciada.
-            window._on_update_result("v1.1.0", assets, False)
-            avisar.assert_not_called()
-            # Otra serie sí avisa.
-            window._on_update_result("v1.2.0", assets, False)
-            self.assertEqual(avisar.call_count, 1)
-            # Y el chequeo manual muestra la serie saltada igual.
-            window._on_update_result("v1.1.0", assets, True)
-            self.assertEqual(avisar.call_count, 2)
-
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class TooltipTests(SettingsIsolated, unittest.TestCase):

@@ -162,27 +162,19 @@ class ProgressDialog(AppDialog):
             self.body_label.setText(text)
 
 
-def update_available(parent, tag: str, on_update, on_skip=None,
-                     on_skip_series=None) -> bool:
-    """Diálogo de actualización disponible.
+def update_available(parent, tag: str, on_update, on_skip=None) -> bool:
+    """Diálogo de actualización disponible (de BlenderManager).
 
     ``on_update`` se llama si acepta; ``on_skip`` si elige no volver a avisar de
-    esa versión concreta y ``on_skip_series`` si no quiere saber más de toda la
-    serie (mayor.menor). El aviso automático las silencia; el manual las sigue
-    mostrando. Devuelve True si se ha aceptado.
+    esa versión concreta. El aviso automático la silencia; "Buscar ahora" la
+    sigue mostrando. Devuelve True si se ha aceptado.
     """
     message = (tr("A new version is available: {version}", version=tag)
                + "\n\n" + tr("It will be installed and the app will restart automatically."))
     dialog = AppDialog(parent, tr("Update available"), message)
-    choice = {"skip": False, "series": False}
+    choice = {"skip": False}
     dialog.add_button(tr("Later"), on_click=dialog.reject,
                       tooltip=tr("Ask me again another time."))
-    if on_skip_series is not None:
-        dialog.add_button(
-            tr("Skip this series"),
-            on_click=lambda: (choice.update(series=True), dialog.reject()),
-            tooltip=tr('Do not offer any version of this series again.\n'
-                       '"Check now" still shows it.'))
     if on_skip is not None:
         dialog.add_button(
             tr("Skip this version"),
@@ -195,8 +187,6 @@ def update_available(parent, tag: str, on_update, on_skip=None,
     accepted = dialog.exec() == QDialog.Accepted
     if accepted:
         on_update()
-    elif choice["series"] and on_skip_series is not None:
-        on_skip_series()
     elif choice["skip"] and on_skip is not None:
         on_skip()
     return accepted

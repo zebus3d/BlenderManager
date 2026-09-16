@@ -36,14 +36,6 @@ class VersionCompareTests(unittest.TestCase):
         self.assertEqual(updater.asset_for("darwin"), "BlenderManager-macos.zip")
         self.assertIsNone(updater.asset_for("plan9"))
 
-    def test_version_series(self):
-        # "Saltar esta serie" usa mayor.menor: al saltar 1.20 se callan también
-        # sus parches (1.20.1), pero 1.21 sigue ofreciéndose.
-        self.assertEqual(updater.version_series("v1.20.0"), "1.20")
-        self.assertEqual(updater.version_series("v1.20.1"), "1.20")
-        self.assertEqual(updater.version_series("2.0"), "2.0")
-        self.assertEqual(updater.version_series(""), "0")
-
 
 class ParseReleaseTests(unittest.TestCase):
     def test_parse(self):

@@ -1931,12 +1931,9 @@ class MainWindow(QWidget):
                      f"ultima={tag} hay_nueva={nueva}")
         if nueva:
             self._update_assets = assets
-            # El usuario puede haber pedido no volver a saber de esta versión o
-            # de toda su serie: los chequeos automáticos las callan (el manual
-            # las muestra igual).
-            silenced = not manual and (
-                tag == self.settings.skipped_version
-                or updater.version_series(tag) in self.settings.skipped_series)
+            # El usuario puede haber pedido no volver a saber de esta versión:
+            # los chequeos automáticos la callan (el manual la muestra igual).
+            silenced = not manual and tag == self.settings.skipped_version
             # Un aviso por versión y sesión: el chequeo periódico comprueba a
             # menudo, pero no puede sacar el diálogo una y otra vez si le diste
             # a "Más tarde". Si sale una versión aún más nueva, sí se avisa.
@@ -2015,30 +2012,18 @@ class MainWindow(QWidget):
 
     def _show_update_available(self, tag: str, asset) -> None:
         update_available(self, tag, lambda: self._do_update(asset),
-                         on_skip=lambda: self.skip_update_version(tag),
-                         on_skip_series=lambda: self.skip_update_series(tag))
+                         on_skip=lambda: self.skip_update_version(tag))
 
     def skip_update_version(self, tag: str) -> None:
         """No volver a avisar de esta versión en los chequeos automáticos.
 
         El chequeo manual ("Buscar ahora") la muestra igual, y una versión más
-        nueva sí se ofrece: se guarda el tag exacto, no la serie entera.
+        nueva sí se ofrece: se guarda el tag exacto.
         """
         self.settings.skipped_version = tag
         self.settings.save()
         self._show_message(
             tr("You will not be reminded about {version}.", version=tag), 8)
-
-    def skip_update_series(self, tag: str) -> None:
-        """No volver a avisar de ninguna versión de esta serie (mayor.menor)."""
-        series = updater.version_series(tag)
-        if series and series not in self.settings.skipped_series:
-            self.settings.skipped_series = [
-                *self.settings.skipped_series, series]
-            self.settings.save()
-        self._show_message(
-            tr("You will not be reminded about the {series} series.",
-               series=series), 8)
 
     def _do_update(self, asset) -> None:
         self._set_status(tr("Downloading..."))

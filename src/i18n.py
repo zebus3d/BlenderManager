@@ -170,11 +170,8 @@ _TRANSLATIONS = {
         "Every hour": "Cada hora",
         "Every {count} hours": "Cada {count} horas",
         "Skip this version": "Saltar esta versión",
-        "Skip this series": "Saltar esta serie",
         "You will not be reminded about {version}.":
             "No se te volverá a avisar de {version}.",
-        "You will not be reminded about the {series} series.":
-            "No se te volverá a avisar de la serie {series}.",
         "You will not be reminded about Blender {series} updates.":
             "No se te volverá a avisar de actualizaciones de Blender {series}.",
         "Reactivate": "Reactivar",
@@ -325,10 +322,6 @@ _TRANSLATIONS = {
             "Ctrl + y Ctrl - lo cambian, Ctrl+0 lo restablece.",
         "Current zoom.": "Zoom actual.",
         "Ask me again another time.": "Pregúntame otra vez más tarde.",
-        'Do not offer any version of this series again.\n"Check now" still '
-        'shows it.':
-            'No vuelvas a ofrecer ninguna versión de esta serie.\n'
-            '"Buscar ahora" sí la muestra.',
         'Do not offer this exact version again.\n"Check now" still shows it.':
             'No vuelvas a ofrecer esta versión concreta.\n'
             '"Buscar ahora" sí la muestra.',

@@ -557,22 +557,13 @@ class SettingsTests(unittest.TestCase):
     def test_se_recuerda_la_version_saltada(self):
         settings = settings_module.Settings()
         self.assertEqual(settings.skipped_version, "")
-        self.assertEqual(settings.skipped_series, [])
+        self.assertEqual(settings.ignored_blender_series, [])
         settings.skipped_version = "v1.20.0"
-        settings.skipped_series = ["1.20", "1.22"]
+        settings.ignored_blender_series = ["5.2", "4.5"]
         settings.save()
         loaded = settings_module.Settings.load()
         self.assertEqual(loaded.skipped_version, "v1.20.0")
-        self.assertEqual(loaded.skipped_series, ["1.20", "1.22"])
-
-    def test_se_recuerdan_las_series_de_blender_silenciadas(self):
-        settings = settings_module.Settings()
-        self.assertEqual(settings.ignored_blender_series, [])
-        settings.ignored_blender_series = ["5.2", "4.5"]
-        settings.save()
-        self.assertEqual(
-            settings_module.Settings.load().ignored_blender_series,
-            ["5.2", "4.5"])
+        self.assertEqual(loaded.ignored_blender_series, ["5.2", "4.5"])
 
     def test_un_intervalo_inventado_cae_al_por_defecto(self):
         (Path(self.tmp.name) / "settings.json").write_text(
