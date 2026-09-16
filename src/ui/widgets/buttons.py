@@ -5,10 +5,12 @@ Kivy. El aspecto vive en ``ui/qss.py``; aquí está solo el comportamiento y los
 puntos de enganche (``objectName`` y propiedades dinámicas) que el QSS usa.
 """
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QPushButton
 
 from ui import icons
+from ui import theme as t
 
 
 class Pill(QPushButton):
@@ -108,26 +110,67 @@ class IconFlatButton(QPushButton):
 
 
 class SwitchPill(QPushButton):
-    """Interruptor de sí/no con el mismo aspecto que los botones.
+    """Interruptor de sí/no con forma de *toggle* (pista + bolita).
 
-    El texto ("Sí"/"No") se actualiza solo al cambiar de estado.
+    Qt no trae un interruptor y un ``QCheckBox`` con ``::indicator`` no deja
+    mover la bolita ni animarla desde el QSS, así que se pinta a mano. Sigue
+    siendo un botón *checkable*: emite ``toggled`` y responde a clic y a teclado
+    (Tab + Espacio) igual que antes, solo que ya no muestra "Sí"/"No" — el
+    estado se ve por la posición de la bolita y el color de la pista.
     """
 
-    toggled = Signal(bool)
+    WIDTH = 46
+    HEIGHT = 24
+    MARGIN = 3
 
-    def __init__(self, checked: bool = False, yes: str = "Yes", no: str = "No",
-                 tooltip: str = "", parent=None):
+    def __init__(self, checked: bool = False, tooltip: str = "", parent=None):
         super().__init__(parent)
         self.setObjectName("Switch")
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
-        self._yes, self._no = yes, no
+        self.setFixedSize(self.WIDTH, self.HEIGHT)
         self.setChecked(checked)
-        self._refresh_text()
         if tooltip:
             self.setToolTip(tooltip)
-        # QPushButton ya emite toggled; nos colgamos para refrescar el texto.
-        super().toggled.connect(self._refresh_text)
 
-    def _refresh_text(self, *_):
-        self.setText(self._yes if self.isChecked() else self._no)
+    def _track_color(self) -> QColor:
+        """Color de la pista según estado y hover."""
+        if not self.isEnabled():
+            # Apagado pero visible: no puede parecer que está encendido.
+            return QColor(t.FIELD)
+        if self.isChecked():
+            return QColor(t.ACCENT_DARK if self.underMouse() else t.ACCENT)
+        return QColor(t.BUTTON if self.underMouse() else t.SURFACE_ALT)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = rect.height() / 2
+        painter.setPen(QPen(QColor(t.BORDER), 1))
+        painter.setBrush(self._track_color())
+        painter.drawRoundedRect(rect, radius, radius)
+
+        diameter = self.HEIGHT - 2 * self.MARGIN
+        offset = (rect.width() - self.MARGIN - diameter) if self.isChecked() \
+            else self.MARGIN
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(t.TEXT_SEL if self.isEnabled() else t.MUTED))
+        painter.drawEllipse(QRectF(rect.x() + offset, rect.y() + self.MARGIN,
+                                   diameter, diameter))
+
+        if self.hasFocus():
+            # Aro de foco para quien navega con el teclado.
+            painter.setBrush(Qt.NoBrush)
+            painter.setPen(QPen(QColor(t.ACCENT), 2))
+            painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1),
+                                    radius - 1, radius - 1)
+        painter.end()
+
+    def enterEvent(self, event):
+        super().enterEvent(event)
+        self.update()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        self.update()

@@ -82,12 +82,23 @@ class AppDialog(QDialog):
                 etiqueta.setMinimumHeight(alto)
 
     def add_button(self, text: str, variant: str = "neutral",
-                   on_click=None) -> CardButton:
+                   on_click=None, tooltip: str = "") -> CardButton:
         """Añade un botón a la fila inferior y lo devuelve."""
-        button = CardButton(text, variant=variant)
+        button = CardButton(text, variant=variant, tooltip=tooltip)
         if on_click is not None:
             button.clicked.connect(on_click)
         self._buttons.addWidget(button)
+        # El texto de un botón no se puede partir en líneas, así que no se puede
+        # recortar: si la fila pide más ancho que el mínimo actual (y que el
+        # tope, pensado para el texto del mensaje, que sí se ajusta), se sube el
+        # ancho del diálogo. Sin esto, con muchos botones, Qt los encogía por
+        # debajo de su texto y salía cortado ("Descargar como copia" ->
+        # "argar como").
+        needed = self._buttons.sizeHint().width() + 36  # márgenes izq+der
+        if needed > self.minimumWidth():
+            self.setMinimumWidth(needed)
+        if needed > self.maximumWidth():
+            self.setMaximumWidth(needed)
         return button
 
 
@@ -100,17 +111,20 @@ def confirm(parent, title: str, message: str, confirm_text: str | None = None,
     "Aceptar" genérico.
     """
     dialog = AppDialog(parent, title, message)
-    dialog.add_button(tr("Cancel"), on_click=dialog.reject)
+    dialog.add_button(tr("Cancel"), on_click=dialog.reject,
+                      tooltip=tr("Do nothing."))
     dialog.add_button(accept_text or confirm_text or tr("Accept"),
                       variant="danger" if danger else "accent",
-                      on_click=dialog.accept)
+                      on_click=dialog.accept,
+                      tooltip=tr("This cannot be undone.") if danger else "")
     return dialog.exec() == QDialog.Accepted
 
 
 def show_error(parent, title: str, message: str) -> None:
     """Aviso de error (bloqueante)."""
     dialog = AppDialog(parent, title, message)
-    dialog.add_button(tr("Close"), variant="accent", on_click=dialog.accept)
+    dialog.add_button(tr("Close"), variant="accent", on_click=dialog.accept,
+                      tooltip=tr("Close this message."))
     dialog.exec()
 
 
@@ -148,14 +162,41 @@ class ProgressDialog(AppDialog):
             self.body_label.setText(text)
 
 
-def update_available(parent, tag: str, on_update) -> bool:
-    """Diálogo de actualización disponible. ``on_update`` se llama si acepta."""
+def update_available(parent, tag: str, on_update, on_skip=None,
+                     on_skip_series=None) -> bool:
+    """Diálogo de actualización disponible.
+
+    ``on_update`` se llama si acepta; ``on_skip`` si elige no volver a avisar de
+    esa versión concreta y ``on_skip_series`` si no quiere saber más de toda la
+    serie (mayor.menor). El aviso automático las silencia; el manual las sigue
+    mostrando. Devuelve True si se ha aceptado.
+    """
     message = (tr("A new version is available: {version}", version=tag)
                + "\n\n" + tr("It will be installed and the app will restart automatically."))
     dialog = AppDialog(parent, tr("Update available"), message)
-    dialog.add_button(tr("Later"), on_click=dialog.reject)
-    dialog.add_button(tr("Update"), variant="accent", on_click=dialog.accept)
+    choice = {"skip": False, "series": False}
+    dialog.add_button(tr("Later"), on_click=dialog.reject,
+                      tooltip=tr("Ask me again another time."))
+    if on_skip_series is not None:
+        dialog.add_button(
+            tr("Skip this series"),
+            on_click=lambda: (choice.update(series=True), dialog.reject()),
+            tooltip=tr('Do not offer any version of this series again.\n'
+                       '"Check now" still shows it.'))
+    if on_skip is not None:
+        dialog.add_button(
+            tr("Skip this version"),
+            on_click=lambda: (choice.update(skip=True), dialog.reject()),
+            tooltip=tr('Do not offer this exact version again.\n'
+                       '"Check now" still shows it.'))
+    dialog.add_button(tr("Update"), variant="accent", on_click=dialog.accept,
+                      tooltip=tr("Download and install it now.\n"
+                                 "The app restarts by itself."))
     accepted = dialog.exec() == QDialog.Accepted
     if accepted:
         on_update()
+    elif choice["series"] and on_skip_series is not None:
+        on_skip_series()
+    elif choice["skip"] and on_skip is not None:
+        on_skip()
     return accepted

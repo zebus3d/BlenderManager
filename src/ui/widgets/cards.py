@@ -20,7 +20,7 @@ from paths import ASSETS_DIR
 from ui import icons
 from ui import theme as t
 from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
-from ui.widgets.labels import ElidedLabel
+from ui.widgets.labels import EditableLabel, ElidedLabel
 
 _LOGO = ASSETS_DIR / "images" / "blender_logo.png"
 
@@ -395,6 +395,7 @@ class InstalledCard(_HoverCard, QFrame):
     notes_clicked = Signal(str)       # version
     favorite_toggled = Signal(object, bool)   # entry, marcada
     update_clicked = Signal(object, object)   # entry, build nueva
+    rename_requested = Signal(object, str)    # entry, nombre nuevo
 
     def __init__(self, entry, zebra: bool, marked: bool = False, parent=None,
                  update=None):
@@ -416,8 +417,10 @@ class InstalledCard(_HoverCard, QFrame):
 
         text_col = QVBoxLayout()
         text_col.setSpacing(3)
-        title = ElidedLabel(entry.name, Qt.ElideMiddle)
+        title = EditableLabel(entry.name, Qt.ElideMiddle)
         title.setObjectName("Title")
+        title.renamed.connect(
+            lambda name: self.rename_requested.emit(self.entry, name))
         text_col.addWidget(title)
         meta = ElidedLabel(f"Blender {entry.version}   ·   {entry.path}",
                            Qt.ElideRight)
@@ -465,6 +468,7 @@ class GridInstalledCard(_HoverCard, QFrame):
     notes_clicked = Signal(str)
     favorite_toggled = Signal(object, bool)   # entry, marcada
     update_clicked = Signal(object, object)   # entry, build nueva
+    rename_requested = Signal(object, str)    # entry, nombre nuevo
 
     def __init__(self, entry, zebra: bool, zoom: float = 1.0,
                  marked: bool = False, parent=None, update=None):
@@ -490,9 +494,11 @@ class GridInstalledCard(_HoverCard, QFrame):
         logo.setAlignment(Qt.AlignHCenter)
         lay.addWidget(logo)
 
-        title = ElidedLabel(entry.name, Qt.ElideMiddle)
+        title = EditableLabel(entry.name, Qt.ElideMiddle)
         title.setObjectName("Title")
         title.setAlignment(Qt.AlignHCenter)
+        title.renamed.connect(
+            lambda name: self.rename_requested.emit(self.entry, name))
         lay.addWidget(title)
 
         meta = ElidedLabel(f"Blender {entry.version}", Qt.ElideRight)

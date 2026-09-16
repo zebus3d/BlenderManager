@@ -79,6 +79,18 @@ def is_newer(current: str, latest: str) -> bool:
     return _version_key(latest) > _version_key(current)
 
 
+def version_series(tag: str) -> str:
+    """Serie mayor.menor de una versión ('v1.20.0' -> '1.20').
+
+    Es lo que se salta con "no avisar de esta serie": las versiones nuevas de
+    la misma serie (parches incluidos) dejan de ofrecerse.
+    """
+    key = _version_key(tag)
+    if len(key) >= 2:
+        return f"{key[0]}.{key[1]}"
+    return ".".join(str(part) for part in key)
+
+
 def asset_for(system) -> str:
     """Nombre del asset que corresponde a esta plataforma (o None)."""
     os_name = getattr(system, "os_name", system) or ""

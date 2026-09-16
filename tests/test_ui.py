@@ -756,6 +756,36 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertGreaterEqual(wide, narrow)
         self.assertGreaterEqual(narrow, 1)
 
+    def test_el_interruptor_es_un_toggle_pintado(self):
+        from ui.widgets.buttons import SwitchPill
+
+        switch = SwitchPill(False)
+        self.assertTrue(switch.isCheckable())
+        # Ya no muestra "Sí"/"No": el estado se ve por la bolita.
+        self.assertEqual(switch.text(), "")
+        self.assertEqual((switch.width(), switch.height()),
+                         (SwitchPill.WIDTH, SwitchPill.HEIGHT))
+        recibidos = []
+        switch.toggled.connect(recibidos.append)
+        switch.setChecked(True)
+        self.assertEqual(recibidos, [True])
+
+    def test_la_ventana_se_centra_en_la_pantalla(self):
+        from PySide6.QtWidgets import QApplication
+
+        import main
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(1000, 700)
+        window.show()
+        main._center_on_screen(window)
+        screen = window.screen() or QApplication.primaryScreen()
+        center = screen.availableGeometry().center()
+        frame = window.frameGeometry().center()
+        self.assertLessEqual(abs(frame.x() - center.x()), 2)
+        self.assertLessEqual(abs(frame.y() - center.y()), 2)
+
     def test_las_lts_van_a_su_carpeta_si_esta_configurada(self):
         from ui.widgets.main_window import MainWindow
 
@@ -875,6 +905,37 @@ class BlenderUpdateTests(SettingsIsolated, unittest.TestCase):
             self.assertFalse(vieja.exists())
             self.assertIsNone(window._replace_entry)
             self.assertTrue(aviso.called)
+
+    def test_nunca_silencia_la_serie_de_blender(self):
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.builds = [_build("5.2.2", "v52", "stable")]
+        window.installed = [self._entrada("5.2.0")]
+        window._recompute_updates()
+        self.assertTrue(window.updates_by_path)
+
+        with mock.patch.object(window, "_show_message"):
+            window.mute_blender_series(window.installed[0])
+        self.assertEqual(window.settings.ignored_blender_series, ["5.2"])
+        # Sin actualizaciones para esa serie: ni parche ni salto.
+        self.assertEqual(window.updates_by_path, {})
+
+    def test_reactivar_vuelve_a_ofrecer_las_series(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.builds = [_build("5.2.2", "v52", "stable")]
+        window.installed = [self._entrada("5.2.0")]
+        window.settings.ignored_blender_series = ["5.2"]
+        window._recompute_updates()
+        self.assertEqual(window.updates_by_path, {})
+
+        window.reset_blender_series()
+        self.assertEqual(window.settings.ignored_blender_series, [])
+        self.assertTrue(window.updates_by_path)
 
     def test_la_serie_solo_se_ofrece_una_vez(self):
         from unittest import mock
@@ -1439,6 +1500,317 @@ class DialogTests(unittest.TestCase):
 
         QTimer.singleShot(200, close)
         self.assertTrue(dialogs.confirm(None, "Uninstall", "¿Borrar?"))
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
+    """El chequeo de la propia app se repite solo cada X minutos."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_se_programa_segun_los_ajustes(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        self.assertTrue(window._update_timer.isActive())
+        self.assertEqual(window._update_timer.interval(),
+                         window.settings.update_interval_min * 60 * 1000)
+
+    def test_el_combo_cambia_el_intervalo(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        combo = window.update_interval_combo
+        index = combo.findData(60)
+        combo.setCurrentIndex(index)
+        self.assertEqual(window.settings.update_interval_min, 60)
+        self.assertEqual(window._update_timer.interval(), 60 * 60 * 1000)
+
+    def test_apagar_auto_update_para_el_temporizador(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.update_switch.setChecked(False)
+        self.assertFalse(window._update_timer.isActive())
+        self.assertFalse(window.update_interval_combo.isEnabled())
+        self.assertFalse(window.periodic_switch.isEnabled())
+
+    def test_apagar_el_periodico_no_para_el_de_arranque(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.periodic_switch.setChecked(False)
+        self.assertFalse(window.settings.periodic_update)
+        self.assertFalse(window._update_timer.isActive())
+        self.assertFalse(window.update_interval_combo.isEnabled())
+        # El interruptor maestro sigue encendido (se comprueba al arrancar).
+        self.assertTrue(window.auto_update)
+        self.assertTrue(window.update_switch.isChecked())
+
+    def test_chequea_cuando_toca(self):
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.downloader = mock.Mock(running=False)
+        window.update_downloader = mock.Mock(running=False)
+        with mock.patch.object(window, "check_updates") as check:
+            window._periodic_update_check()
+        check.assert_called_once_with(manual=False)
+
+    def test_no_interrumpe_si_hay_descarga(self):
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.downloader = mock.Mock(running=True)
+        window.update_downloader = mock.Mock(running=False)
+        with mock.patch.object(window, "check_updates") as check:
+            window._periodic_update_check()
+        check.assert_not_called()
+
+    def test_no_repite_el_aviso_de_la_misma_version(self):
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window._offered_update_tag = "v9.9.9"
+        window.downloader = mock.Mock(running=False)
+        window.update_downloader = mock.Mock(running=False)
+        with mock.patch.object(window, "check_updates") as check:
+            window._periodic_update_check()
+        check.assert_not_called()
+
+    def test_el_aviso_no_se_muestra_dos_veces(self):
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.current_version = "1.0.0"
+        assets = [{"name": "BlenderManager-linux", "url": "u"}]
+        with mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(main_window.updater, "asset_for",
+                                  return_value="BlenderManager-linux"), \
+                mock.patch.object(window, "_show_update_available") as avisar:
+            window._on_update_result("v1.1.0", assets, False)
+            window._on_update_result("v1.1.0", assets, False)
+            self.assertEqual(avisar.call_count, 1)
+            # Una versión más nueva sí vuelve a avisar.
+            window._on_update_result("v1.2.0", assets, False)
+            self.assertEqual(avisar.call_count, 2)
+
+    def test_saltar_una_version_la_silencia(self):
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.current_version = "1.0.0"
+        window.settings.skipped_version = "v1.1.0"
+        assets = [{"name": "BlenderManager-linux", "url": "u"}]
+        with mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(main_window.updater, "asset_for",
+                                  return_value="BlenderManager-linux"), \
+                mock.patch.object(window, "_show_update_available") as avisar:
+            # Automático: la versión saltada no se ofrece.
+            window._on_update_result("v1.1.0", assets, False)
+            avisar.assert_not_called()
+            # Manual: se muestra igual (el usuario la pidió a propósito).
+            window._on_update_result("v1.1.0", assets, True)
+            self.assertEqual(avisar.call_count, 1)
+
+    def test_skip_guarda_la_version(self):
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with mock.patch.object(window, "_show_message") as aviso:
+            window.skip_update_version("v1.9.9")
+        self.assertEqual(window.settings.skipped_version, "v1.9.9")
+        self.assertTrue(aviso.called)
+
+    def test_skip_serie_guarda_la_serie(self):
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with mock.patch.object(window, "_show_message") as aviso:
+            window.skip_update_series("v1.9.9")
+            window.skip_update_series("v1.9.9")   # no se repite
+        self.assertEqual(window.settings.skipped_series, ["1.9"])
+        self.assertTrue(aviso.called)
+
+    def test_saltar_una_serie_silencia_sus_versiones(self):
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.current_version = "1.0.0"
+        window.settings.skipped_series = ["1.1"]
+        assets = [{"name": "BlenderManager-linux", "url": "u"}]
+        with mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(main_window.updater, "asset_for",
+                                  return_value="BlenderManager-linux"), \
+                mock.patch.object(window, "_show_update_available") as avisar:
+            # Automático: toda la serie 1.1 está silenciada.
+            window._on_update_result("v1.1.0", assets, False)
+            avisar.assert_not_called()
+            # Otra serie sí avisa.
+            window._on_update_result("v1.2.0", assets, False)
+            self.assertEqual(avisar.call_count, 1)
+            # Y el chequeo manual muestra la serie saltada igual.
+            window._on_update_result("v1.1.0", assets, True)
+            self.assertEqual(avisar.call_count, 2)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class TooltipTests(SettingsIsolated, unittest.TestCase):
+    """Todo control interactivo tiene que explicarse en un tooltip."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_los_filtros_tienen_tooltip_y_explican_la_lts(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        for key, button in window._channel_buttons.items():
+            self.assertTrue(button.toolTip(), key)
+        lts = window._channel_buttons["lts"].toolTip()
+        self.assertIn("LTS", lts)
+        # Multi-línea: el tooltip explica, no es una etiqueta de dos palabras.
+        self.assertIn("\n", lts)
+
+    def test_los_controles_principales_tienen_tooltip(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        controles = [
+            window.grid_btn, window.list_btn, window.search_input,
+            window.platform_combo, window.arch_combo,
+            window.zoom_slider, window.reset_zoom_slider,
+            window.dest_input, window.lts_input, window.lts_switch,
+            window.archive_switch, window.language_combo,
+            window.args_input, window.update_switch, window.periodic_switch,
+            window.update_interval_combo,
+        ]
+        for control in controles:
+            self.assertTrue(control.toolTip(), type(control).__name__)
+
+    def test_los_botones_de_las_tarjetas_tienen_tooltip(self):
+        from pathlib import Path
+
+        from model.build import InstalledBuild
+        from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
+        from ui.widgets.cards import GridInstalledCard, InstalledCard
+
+        entry = InstalledBuild(name="blender-5.2.1", path=Path("/tmp/b"),
+                               version="5.2.1", branch="v52")
+        for card in (InstalledCard(entry, False),
+                     GridInstalledCard(entry, False, 1.0)):
+            for clase in (CardButton, IconLinkButton, StarButton):
+                for widget in card.findChildren(clase):
+                    self.assertTrue(widget.toolTip(), (type(card).__name__,
+                                                       type(widget).__name__))
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class RenameTests(SettingsIsolated, unittest.TestCase):
+    """Renombrar una instalada con doble clic (cambia la carpeta real)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def test_la_etiqueta_editable_emite_el_nombre(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        from ui.widgets.labels import EditableLabel
+
+        label = EditableLabel("viejo")
+        recibidos = []
+        label.renamed.connect(recibidos.append)
+        label.start_editing()
+        label._editor.setText("nuevo")
+        QTest.keyClick(label._editor, Qt.Key_Return)
+        self.assertEqual(recibidos, ["nuevo"])
+
+    def test_escape_cancela_la_edicion(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        from ui.widgets.labels import EditableLabel
+
+        label = EditableLabel("viejo")
+        recibidos = []
+        label.renamed.connect(recibidos.append)
+        label.start_editing()
+        label._editor.setText("nuevo")
+        QTest.keyClick(label._editor, Qt.Key_Escape)
+        self.assertEqual(recibidos, [])
+        self.assertEqual(label.text(), "viejo")
+
+    def test_renombrar_cambia_la_carpeta_real(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from services.installed import InstalledBuild
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as tmp:
+            carpeta = Path(tmp) / "blender-5.2.1-linux-x64"
+            carpeta.mkdir()
+            (carpeta / "blender").write_text("bin", encoding="utf-8")
+            entry = InstalledBuild(name=carpeta.name, path=carpeta,
+                                   version="5.2.1", branch="v52")
+            with mock.patch.object(window, "refresh_installed") as refresco, \
+                    mock.patch.object(window, "_show_message"):
+                window.rename_installed(entry, "Mi Blender")
+            self.assertTrue((Path(tmp) / "Mi Blender").is_dir())
+            self.assertFalse(carpeta.exists())
+            self.assertTrue(refresco.called)
+
+    def test_un_nombre_invalido_avisa_y_no_toca_nada(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from services.installed import InstalledBuild
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as tmp:
+            carpeta = Path(tmp) / "blender-5.2.1-linux-x64"
+            carpeta.mkdir()
+            entry = InstalledBuild(name=carpeta.name, path=carpeta,
+                                   version="5.2.1", branch="v52")
+            with mock.patch.object(main_window, "show_error") as error, \
+                    mock.patch.object(window, "refresh_installed") as refresco:
+                window.rename_installed(entry, "a/b")
+            self.assertTrue(error.called)
+            self.assertTrue(carpeta.exists())
+            self.assertFalse(refresco.called)
 
 
 if __name__ == "__main__":
