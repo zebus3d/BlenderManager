@@ -769,6 +769,10 @@ class MainWindow(QWidget):
         self._set_view(view)
         if view == "installed":
             self.refresh_installed()
+        elif view == "store":
+            # El zoom en vivo solo reconstruye la vista visible, así que la
+            # tienda puede haberse quedado con el tamaño viejo.
+            self._rebuild_store()
 
     def _set_view(self, view: str, animate: bool = True) -> None:
         index = {"store": 0, "installed": 1, "settings": 2}.get(view, 0)
@@ -803,13 +807,23 @@ class MainWindow(QWidget):
         self._zoom_settle.start()
 
     def _rebuild_zoom_views(self) -> None:
-        self._rebuild_store()
-        self._rebuild_installed()
+        """Refresco en vivo del zoom: solo la vista que se está viendo.
+
+        Reconstruir la otra pestaña (que no se ve) no aporta nada y, con muchas
+        tarjetas, suma a que la interfaz se quede sin responder un momento —en
+        Windows eso termina sacando la ventana fantasma de "no responde" encima
+        de la app. Al soltar el slider se reconstruyen las dos (``_commit_zoom``).
+        """
+        if self.view == "installed":
+            self._rebuild_installed()
+        elif self.view == "store":
+            self._rebuild_store()
 
     def _commit_zoom(self) -> None:
         """El slider lleva quieto: paramos y guardamos el ajuste una sola vez."""
         self._zoom_tick.stop()
-        self._rebuild_zoom_views()
+        self._rebuild_store()
+        self._rebuild_installed()
         self.settings.zoom = self.zoom
         self.settings.save()
 
