@@ -18,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -72,6 +72,7 @@ from ui.widgets.cards import (
     logo_shadow,
 )
 from ui.widgets.dialogs import AppDialog, confirm, show_error, update_available
+from ui.widgets.tray import TrayIcon
 
 PLATFORMS = {"GNU/Linux": "linux", "Windows": "windows", "macOS": "darwin"}
 PLATFORM_LABELS = {value: key for key, value in PLATFORMS.items()}
@@ -246,6 +247,14 @@ class MainWindow(QWidget):
         self.separate_lts = bool(self.settings.separate_lts)
         self.launch_args = self.settings.launch_args
         self.delete_archive = bool(self.settings.delete_archive)
+        # Bandeja del sistema: dos decisiones independientes (cerrar y
+        # minimizar). ``_tray`` se crea perezosamente (solo si hace falta).
+        self.close_to_tray = bool(self.settings.close_to_tray)
+        self.minimize_to_tray = bool(self.settings.minimize_to_tray)
+        self._tray = None
+        # Salidas de verdad (actualizar la app o reiniciar tras un git pull):
+        # esas no pueden acabar escondidas en la bandeja.
+        self._force_quit = False
         self.auto_update = bool(self.settings.auto_update)
         self.periodic_update = bool(self.settings.periodic_update)
         self.layout_mode = (self.settings.layout_mode
@@ -633,6 +642,49 @@ class MainWindow(QWidget):
         self.language_combo.currentTextChanged.connect(self._on_language_changed)
         row3.addWidget(self.language_combo)
         lay.addLayout(row3)
+
+        # Bandeja del sistema: dos decisiones independientes (cerrar y
+        # minimizar). Si el escritorio no la soporta se deshabilitan, porque
+        # activarlas escondería la ventana sin un icono al que volver.
+        tray_available = TrayIcon.available()
+        row_tray_close = QHBoxLayout()
+        row_tray_close.addWidget(QLabel(tr("Close to the system tray")))
+        row_tray_close.addStretch()
+        self.close_tray_switch = SwitchPill(self.close_to_tray, tooltip=tr(
+            "Keep BlenderManager running in the system tray when you close the "
+            "window.\nClick the tray icon to open it again."))
+        self.close_tray_switch.toggled.connect(self._on_close_to_tray_toggled)
+        row_tray_close.addWidget(self.close_tray_switch)
+        lay.addLayout(row_tray_close)
+
+        minimize_tip = tr("Hide the window in the system tray when you minimize "
+                          "it.\nClick the tray icon to bring it back.")
+        if detector.session_is_wayland():
+            # En Wayland el minimizado lo gestiona el compositor y no se puede
+            # detectar salvo en modo X11 (XWayland). Avisamos antes de activarlo.
+            minimize_tip = minimize_tip + "\n\n" + tr(
+                "On Wayland this needs X11 compatibility mode (XWayland); "
+                "restart the app to apply it.")
+        row_tray_min = QHBoxLayout()
+        row_tray_min.addWidget(QLabel(tr("Minimize to the system tray")))
+        row_tray_min.addStretch()
+        self.minimize_tray_switch = SwitchPill(self.minimize_to_tray,
+                                               tooltip=minimize_tip)
+        self.minimize_tray_switch.toggled.connect(
+            self._on_minimize_to_tray_toggled)
+        row_tray_min.addWidget(self.minimize_tray_switch)
+        lay.addLayout(row_tray_min)
+        if not tray_available:
+            unavailable = tr("The system tray is not available on this desktop.")
+            for switch in (self.close_tray_switch, self.minimize_tray_switch):
+                switch.setEnabled(False)
+                switch.setToolTip(unavailable)
+        elif not detector.minimize_to_tray_supported():
+            # Wayland sin XWayland: no hay forma de enterarse de que se ha
+            # minimizado, así que la opción ni se ofrece.
+            self.minimize_tray_switch.setEnabled(False)
+            self.minimize_tray_switch.setToolTip(tr(
+                "Minimizing to the tray is not available on this desktop."))
 
         # Destino del "restablecer" (Ctrl+0 / Ctrl+clic en el slider del pie).
         # Es una preferencia, no el zoom actual: moverlo aquí NO cambia la
@@ -1065,6 +1117,81 @@ class MainWindow(QWidget):
             self._resize_timer.timeout.connect(self._reflow)
         self._resize_timer.start(200)
 
+    def changeEvent(self, event):
+        """Minimizar a la bandeja, si el usuario lo pidió.
+
+        El evento llega **antes** de que el gestor de ventanas termine de
+        minimizar, así que el ocultado se difiere al siguiente ciclo: esconder
+        la ventana en el acto hacía que algunos escritorios volvieran a
+        mostrarla. Si la bandeja no está disponible no se hace nada: minimizar
+        sin un icono al que volver dejaría la app inaccesible.
+        """
+        super().changeEvent(event)
+        # ``getattr`` por si un cambio de estado llega durante el propio
+        # ``__init__`` de QWidget, antes de que existan los atributos.
+        if (event.type() == QEvent.WindowStateChange and self.isMinimized()
+                and getattr(self, "minimize_to_tray", False)
+                and not getattr(self, "_force_quit", False)
+                and TrayIcon.available()):
+            QTimer.singleShot(0, self._hide_to_tray)
+
+    # ------------------------------------------------------------- bandeja
+    def _ensure_tray(self) -> TrayIcon:
+        """Crea el icono de la bandeja la primera vez que se necesita.
+
+        El objeto se reutiliza entre ocultados: crear y destruir el icono en
+        cada uno era el camino a más de un fantasma en la bandeja.
+        """
+        if self._tray is None:
+            self._tray = TrayIcon(self)
+            self._tray.restore_requested.connect(self._restore_from_tray)
+            self._tray.quit_requested.connect(self._quit_from_tray)
+        return self._tray
+
+    def _hide_to_tray(self) -> None:
+        """Oculta la ventana y deja el icono en la bandeja.
+
+        El aviso de "sigue en la bandeja" se enseña **una sola vez** (y se
+        recuerda en los ajustes): sin él, esconder la ventana es indistinguible
+        de que la app se haya cerrado.
+        """
+        tray = self._ensure_tray()
+        tray.show()
+        self.hide()
+        if not self.settings.tray_hint_shown:
+            tray.notify(
+                tr("Still running in the system tray"),
+                tr("BlenderManager keeps running in the tray. Click its icon to "
+                   "bring the window back."))
+            self.settings.tray_hint_shown = True
+            self.settings.save()
+
+    def _restore_from_tray(self) -> None:
+        """Vuelve a mostrar la ventana y retira el icono (solo está mientras
+        está oculta)."""
+        if self._tray is not None:
+            self._tray.hide()
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _quit_from_tray(self) -> None:
+        """Salir de verdad desde el menú de la bandeja."""
+        self._force_quit = True
+        self._quit_app()
+
+    def _quit_app(self) -> None:
+        """Cierra la ventana saltándose el "cerrar a la bandeja".
+
+        Lo usan el menú de la bandeja y los reinicios internos (tras aplicar una
+        actualización o un ``git pull``), que sin esto se quedarían escondidos
+        en la bandeja en vez de terminar.
+        """
+        if self._tray is not None:
+            self._tray.hide()
+        self.close()
+        QApplication.quit()
+
     def closeEvent(self, event):
         """Vuelca el zoom pendiente y el tamaño de la ventana.
 
@@ -1072,6 +1199,10 @@ class MainWindow(QWidget):
         el guardado aún no ha corrido. El tamaño de la ventana se guarda aquí
         (y no en cada ``resizeEvent``) para no escribir el JSON a cada tirón del
         borde; la próxima vez ``main.py`` arranca con estas medidas.
+
+        Si el usuario activó "cerrar a la bandeja", la X **no** cierra: se
+        ignora el evento y la ventana se oculta (los ajustes ya se han guardado
+        arriba). Solo se hace si la bandeja existe; si no, cerrar cierra.
         """
         self._zoom_settle.stop()
         self._zoom_tick.stop()
@@ -1087,6 +1218,11 @@ class MainWindow(QWidget):
             changed = True
         if changed:
             self.settings.save()
+        if (self.close_to_tray and not self._force_quit
+                and TrayIcon.available()):
+            event.ignore()
+            self._hide_to_tray()
+            return
         super().closeEvent(event)
 
     def _normal_size(self):
@@ -1422,6 +1558,21 @@ class MainWindow(QWidget):
         self.delete_archive = value
         self.settings.delete_archive = value
         self.settings.save()
+
+    def _on_close_to_tray_toggled(self, value: bool) -> None:
+        self.close_to_tray = value
+        self.settings.close_to_tray = value
+        self.settings.save()
+
+    def _on_minimize_to_tray_toggled(self, value: bool) -> None:
+        self.minimize_to_tray = value
+        self.settings.minimize_to_tray = value
+        self.settings.save()
+        if detector.session_is_wayland():
+            # El backend (Wayland o XWayland) se elige al arrancar: activar o
+            # desactivar esto no surte efecto hasta reiniciar.
+            self._show_message(
+                tr("Restart BlenderManager to apply the change."), 8)
 
     def _on_args_changed(self, text: str) -> None:
         self.launch_args = text
@@ -2007,6 +2158,8 @@ class MainWindow(QWidget):
             return
         if dialog is not None:
             dialog.accept()
+        # Reiniciar es salir de verdad: no puede quedarse en la bandeja.
+        self._force_quit = True
         self.close()
 
     def _show_update_available(self, tag: str, asset) -> None:
@@ -2051,4 +2204,5 @@ class MainWindow(QWidget):
 
     def _on_update_applied(self, path: str) -> None:
         self._set_status(tr("Restarting to install the update..."))
-        QTimer.singleShot(1000, self.close)
+        # Salida de verdad: no puede acabar escondida en la bandeja.
+        QTimer.singleShot(1000, self._quit_app)

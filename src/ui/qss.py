@@ -326,4 +326,27 @@ def build_qss() -> str:
     /* --- Diálogos --- */
     QDialog {{ background-color: {t.SURFACE}; }}
     QDialog QLabel#DialogTitle {{ color: {t.TEXT}; font-size: 15px; font-weight: bold; }}
+
+    /* --- Menú de la bandeja del sistema --- */
+    /* Sin esto el QMenu sale con el estilo claro del escritorio y desentona
+       con el tema oscuro (mismo motivo por el que los diálogos son propios). */
+    QMenu#TrayMenu {{
+        background-color: {t.SURFACE};
+        color: {t.TEXT};
+        border: 1px solid {t.BORDER};
+        padding: 4px;
+    }}
+    QMenu#TrayMenu::item {{
+        padding: 6px 18px;
+        border-radius: 4px;
+    }}
+    QMenu#TrayMenu::item:selected {{
+        background-color: {t.ACCENT};
+        color: {t.TEXT_SEL};
+    }}
+    QMenu#TrayMenu::separator {{
+        height: 1px;
+        background: {t.BORDER};
+        margin: 4px 8px;
+    }}
     """

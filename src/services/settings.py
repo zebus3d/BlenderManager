@@ -146,6 +146,15 @@ class Settings:
     ignored_blender_series: list[str] = field(default_factory=list)
     window_width: int = 0
     window_height: int = 0
+    # Bandeja del sistema. Son dos decisiones independientes: cerrar la ventana
+    # (la X) es lo que más molesta si la app se cierra sin querer, así que viene
+    # activado; minimizar a la bandeja es más agresivo y viene apagado (muchos
+    # usuarios esperan que minimizar mande a la barra de tareas).
+    close_to_tray: bool = True
+    minimize_to_tray: bool = False
+    # Si ya se enseñó el aviso "sigue en la bandeja" la primera vez que se
+    # ocultó. Se guarda para no repetirlo en cada apertura.
+    tray_hint_shown: bool = False
     # Plataforma y arquitectura de destino elegidas en la barra de filtros.
     # Vacías = usar las del propio equipo (lo detecta ``detector``). Se guardan
     # para poder descargar builds de otra plataforma de forma repetida, por
@@ -197,6 +206,9 @@ class Settings:
             skipped_version=str(data.get("skipped_version") or ""),
             ignored_blender_series=_clean_string_list(
                 data.get("ignored_blender_series")),
+            close_to_tray=bool(data.get("close_to_tray", True)),
+            minimize_to_tray=bool(data.get("minimize_to_tray", False)),
+            tray_hint_shown=bool(data.get("tray_hint_shown", False)),
             window_width=int(data.get("window_width") or 0),
             window_height=int(data.get("window_height") or 0),
             platform=str(data.get("platform") or ""),

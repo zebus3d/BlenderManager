@@ -9,6 +9,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 # El plugin offscreen tiene que estar fijado ANTES de crear QApplication.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -1828,6 +1829,176 @@ class RenameTests(SettingsIsolated, unittest.TestCase):
             self.assertTrue(error.called)
             self.assertTrue(carpeta.exists())
             self.assertFalse(refresco.called)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class TrayTests(SettingsIsolated, unittest.TestCase):
+    """Bandeja del sistema: cerrar/minimizar a la bandeja, restaurar y salir.
+
+    En el plugin *offscreen* la bandeja nunca está disponible, así que la
+    disponibilidad se mockea: es la única forma de probar el camino "sí hay
+    bandeja" sin un escritorio de verdad.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def _window(self, available=True):
+        from ui.widgets.main_window import MainWindow
+        from ui.widgets.tray import TrayIcon
+
+        patch = mock.patch.object(TrayIcon, "available", return_value=available)
+        patch.start()
+        self.addCleanup(patch.stop)
+        # No se destruye la ventana en el cleanup: lleva un QTimer a 100 ms que
+        # llama a ``refresh``; si se borra antes de dispararse, el temporizador
+        # revienta al procesar eventos en OTRO test. Las demás clases de tests
+        # tampoco la destruyen.
+        return MainWindow()
+
+    def test_el_menu_ofrece_mostrar_y_salir(self):
+        from i18n import tr
+        from ui.widgets.tray import TrayIcon
+
+        tray = TrayIcon()
+        self.assertEqual(tray.show_action.text(), tr("Show"))
+        self.assertEqual(tray.quit_action.text(), tr("Quit"))
+        restaurar, salir = [], []
+        tray.restore_requested.connect(lambda: restaurar.append(1))
+        tray.quit_requested.connect(lambda: salir.append(1))
+        tray.show_action.trigger()
+        tray.quit_action.trigger()
+        self.assertEqual((len(restaurar), len(salir)), (1, 1))
+
+    def test_cerrar_va_a_la_bandeja_si_esta_activado(self):
+        window = self._window()
+        self.assertTrue(window.close_to_tray)
+        window.show()
+        self.app.processEvents()
+        window.close()
+        self.assertFalse(window.isVisible())
+        self.assertIsNotNone(window._tray)
+        self.assertTrue(window._tray.is_visible())
+
+    def test_cerrar_cierra_si_esta_apagado(self):
+        window = self._window()
+        window.close_to_tray = False
+        window.show()
+        self.app.processEvents()
+        window.close()
+        self.assertIsNone(window._tray)
+
+    def test_sin_bandeja_cerrar_cierra(self):
+        """El fallback: sin bandeja, esconder la ventana la dejaría perdida."""
+        window = self._window(available=False)
+        window.show()
+        self.app.processEvents()
+        window.close()
+        self.assertIsNone(window._tray)
+
+    def test_minimizar_va_a_la_bandeja_si_esta_activado(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.minimize_to_tray = True
+        window.show()
+        self.app.processEvents()
+        window.setWindowState(Qt.WindowMinimized)
+        QTest.qWait(30)
+        self.assertIsNotNone(window._tray)
+        self.assertTrue(window._tray.is_visible())
+        self.assertFalse(window.isVisible())
+
+    def test_minimizar_no_va_a_la_bandeja_si_esta_apagado(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.show()
+        self.app.processEvents()
+        window.setWindowState(Qt.WindowMinimized)
+        QTest.qWait(30)
+        self.assertIsNone(window._tray)
+
+    def test_el_aviso_de_la_bandeja_solo_sale_una_vez(self):
+        from ui.widgets import main_window
+
+        window = self._window()
+        window._ensure_tray()
+        with mock.patch.object(main_window.TrayIcon, "notify") as notify:
+            window._hide_to_tray()
+            window._hide_to_tray()
+        self.assertEqual(notify.call_count, 1)
+        self.assertTrue(window.settings.tray_hint_shown)
+
+    def test_restaurar_vuelve_a_mostrar_la_ventana(self):
+        window = self._window()
+        window.show()
+        self.app.processEvents()
+        window._hide_to_tray()
+        self.assertTrue(window._tray.is_visible())
+        window._restore_from_tray()
+        self.assertTrue(window.isVisible())
+        self.assertFalse(window._tray.is_visible())
+
+    def test_salir_desde_la_bandeja_es_una_salida_de_verdad(self):
+        window = self._window()
+        window._quit_from_tray()
+        self.assertTrue(window._force_quit)
+
+    def test_el_reinicio_del_fuente_no_se_queda_en_la_bandeja(self):
+        from ui.widgets import main_window
+
+        window = self._window()
+        with mock.patch.object(main_window.updater, "relaunch_source",
+                               return_value=True):
+            window._restart_from_source()
+        self.assertTrue(window._force_quit)
+
+    def test_los_interruptores_guardan_el_ajuste(self):
+        from services.settings import Settings
+
+        window = self._window()
+        window.close_tray_switch.setChecked(False)
+        self.assertFalse(window.settings.close_to_tray)
+        window.minimize_tray_switch.setChecked(True)
+        self.assertTrue(window.settings.minimize_to_tray)
+        loaded = Settings.load()
+        self.assertFalse(loaded.close_to_tray)
+        self.assertTrue(loaded.minimize_to_tray)
+
+    def test_sin_bandeja_los_interruptores_se_deshabilitan(self):
+        window = self._window(available=False)
+        self.assertFalse(window.close_tray_switch.isEnabled())
+        self.assertFalse(window.minimize_tray_switch.isEnabled())
+
+    def test_sin_xwayland_no_se_ofrece_minimizar_a_la_bandeja(self):
+        """Wayland sin XWayland: el minimizado no se puede detectar siquiera."""
+        from ui.widgets import main_window
+
+        with mock.patch.object(main_window.detector,
+                               "minimize_to_tray_supported", return_value=False):
+            window = self._window()
+        # Cerrar a la bandeja sí sigue disponible; minimizar no.
+        self.assertTrue(window.close_tray_switch.isEnabled())
+        self.assertFalse(window.minimize_tray_switch.isEnabled())
+
+    def test_activar_minimizar_en_wayland_pide_reinicio(self):
+        from ui.widgets import main_window
+
+        with mock.patch.object(main_window.detector, "session_is_wayland",
+                               return_value=True):
+            window = self._window()
+            with mock.patch.object(window, "_show_message") as aviso:
+                window.minimize_tray_switch.setChecked(True)
+        self.assertTrue(window.settings.minimize_to_tray)
+        self.assertTrue(aviso.called)
 
 
 if __name__ == "__main__":

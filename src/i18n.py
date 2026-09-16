@@ -158,6 +158,38 @@ _TRANSLATIONS = {
         "Reset zoom": "Zoom al restablecer",
         "Zoom the grid returns to (Ctrl+0 or Ctrl+click on the slider)":
             "Zoom al que vuelve la rejilla (Ctrl+0 o Ctrl+clic en el deslizador)",
+        # Bandeja del sistema (system tray).
+        "Close to the system tray": "Cerrar a la bandeja del sistema",
+        "Keep BlenderManager running in the system tray when you close the "
+        "window.\nClick the tray icon to open it again.":
+            "Mantén BlenderManager en la bandeja del sistema al cerrar la "
+            "ventana.\nHaz clic en el icono de la bandeja para volver a abrirlo.",
+        "Minimize to the system tray": "Minimizar a la bandeja del sistema",
+        "Hide the window in the system tray when you minimize it.\n"
+        "Click the tray icon to bring it back.":
+            "Oculta la ventana en la bandeja del sistema al minimizarla.\n"
+            "Haz clic en el icono de la bandeja para recuperarla.",
+        "The system tray is not available on this desktop.":
+            "La bandeja del sistema no está disponible en este escritorio.",
+        "On Wayland this needs X11 compatibility mode (XWayland); "
+        "restart the app to apply it.":
+            "En Wayland esto necesita el modo de compatibilidad X11 "
+            "(XWayland); reinicia la aplicación para aplicarlo.",
+        "Minimizing to the tray is not available on this desktop.":
+            "Minimizar a la bandeja no está disponible en este escritorio.",
+        "Restart BlenderManager to apply the change.":
+            "Reinicia BlenderManager para aplicar el cambio.",
+        "Show": "Mostrar",
+        "Bring the BlenderManager window back.":
+            "Vuelve a mostrar la ventana de BlenderManager.",
+        "Quit": "Salir",
+        "Close BlenderManager completely.": "Cierra BlenderManager por completo.",
+        "Still running in the system tray":
+            "Sigue ejecutándose en la bandeja del sistema",
+        "BlenderManager keeps running in the tray. Click its icon to "
+        "bring the window back.":
+            "BlenderManager sigue ejecutándose en la bandeja. Haz clic en su "
+            "icono para recuperar la ventana.",
         "Updates": "Actualizaciones",
         "Check for updates automatically": "Buscar actualizaciones automáticamente",
         "Check for updates periodically": "Buscar actualizaciones periódicamente",
