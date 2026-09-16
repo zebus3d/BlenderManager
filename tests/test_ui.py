@@ -1049,7 +1049,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
             blocker.write_text("x", encoding="utf-8")
             self.assertTrue(_write_problem(blocker / "sub"))
 
-    def test_no_descarga_si_no_se_puede_escribir(self):
+    def test_no_descarga_si_no_se_puede_escribir_y_no_elige_otra(self):
         from unittest import mock
 
         from services.sources import Source
@@ -1061,12 +1061,74 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         fuente = Source("Blender CDN", "https://x/f.zip")
         with mock.patch.object(main_window, "_write_problem",
                                return_value="[Errno 13] Permission denied"), \
-                mock.patch.object(window.downloader, "start") as arranque, \
-                mock.patch.object(main_window, "show_error") as error:
+                mock.patch.object(window, "_ask_other_folder",
+                                  return_value=False) as preguntar, \
+                mock.patch.object(window.downloader, "start") as arranque:
             window._start_download(build, fuente)
-        # No se baja nada y se explica el motivo, con la carpeta incluida.
+        # Se ofrece cambiar de carpeta y, si dice que no, no se baja nada.
+        preguntar.assert_called_once()
         arranque.assert_not_called()
-        self.assertIn("Permission denied", error.call_args.args[2])
+
+    def test_reintenta_con_la_carpeta_nueva(self):
+        from unittest import mock
+
+        from services.sources import Source
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        build = _build("4.2.23", "v42", "stable")
+        fuente = Source("Blender CDN", "https://x/f.zip")
+        problemas = {"n": 0}
+
+        def problema(folder):
+            problemas["n"] += 1
+            # La primera carpeta no deja; la que elige el usuario, sí.
+            return "denied" if problemas["n"] == 1 else ""
+
+        with mock.patch.object(main_window, "_write_problem",
+                               side_effect=problema), \
+                mock.patch.object(window, "_ask_other_folder",
+                                  return_value=True), \
+                mock.patch.object(window.downloader, "start") as arranque:
+            window._start_download(build, fuente)
+        # Tras elegir otra carpeta, la descarga arranca sola.
+        self.assertTrue(arranque.called)
+        self.assertEqual(problemas["n"], 2)
+
+    def test_pide_permiso_de_administrador(self):
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with mock.patch.object(main_window.elevate, "available",
+                               return_value=True), \
+                mock.patch.object(main_window.elevate, "relaunch_elevated",
+                                  return_value=True) as relanzar, \
+                mock.patch.object(main_window, "_write_problem",
+                                  return_value=""):
+            self.assertTrue(window._grant_permission("C:\\Program Files\\X"))
+        # Se pide el UAC con el argumento interno que da el permiso.
+        self.assertEqual(relanzar.call_args.args[0][0], "--grant-access")
+
+    def test_si_cancela_el_uac_lo_dice(self):
+        from unittest import mock
+
+        from i18n import tr
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with mock.patch.object(main_window.elevate, "available",
+                               return_value=True), \
+                mock.patch.object(main_window.elevate, "relaunch_elevated",
+                                  return_value=False), \
+                mock.patch.object(window, "_show_message") as aviso:
+            self.assertFalse(window._grant_permission("C:\\Program Files\\X"))
+        self.assertEqual(aviso.call_args.args[0],
+                         tr("The permission request was cancelled."))
 
     def test_el_error_de_descarga_muestra_el_motivo(self):
         from unittest import mock

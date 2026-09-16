@@ -56,6 +56,17 @@ _TRANSLATIONS = {
             "Elige la carpeta donde se guardarán las versiones LTS",
         "Could not write to the destination folder:":
             "No se pudo escribir en la carpeta de destino:",
+        "Choose another folder": "Elegir otra carpeta",
+        "Windows protects folders like Program Files. Pick a folder you can "
+        "write to, such as Documents or another drive.":
+            "Windows protege carpetas como Archivos de programa y solo deja "
+            "escribir en ellas a un administrador. Elige una en la que puedas "
+            "escribir, por ejemplo Documentos u otro disco.",
+        "Grant permission (admin)": "Dar permiso (administrador)",
+        "The permission request was cancelled.":
+            "Se canceló la petición de permiso.",
+        "The folder still could not be made writable.":
+            "No se pudo dar permiso de escritura a esa carpeta.",
         "General": "General",
         "Downloads": "Descargas",
         "Language": "Idioma",

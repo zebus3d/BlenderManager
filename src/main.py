@@ -169,7 +169,17 @@ def main() -> None:
                         help="Save a screenshot after startup and quit")
     parser.add_argument("--apply-update", nargs=2, metavar=("APP_DIR", "PID"),
                         help="Uso interno: aplica una actualizacion ya descargada")
+    parser.add_argument("--grant-access", metavar="FOLDER",
+                        help="Uso interno: crea la carpeta y da permiso de "
+                             "escritura (Windows, con UAC)")
     args = parser.parse_args()
+
+    if args.grant_access:
+        # Segundo proceso, ya elevado: concede permiso y termina sin abrir la
+        # interfaz (lo lanza services.elevate desde la app normal).
+        from services import elevate
+
+        sys.exit(0 if elevate.grant_write(args.grant_access) else 1)
 
     if args.apply_update:
         from services import updater as updater_service
