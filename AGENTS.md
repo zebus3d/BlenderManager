@@ -170,11 +170,13 @@ minor** (`v1.3.0`).
   (solo cuando no cabe) y no pide ancho. Para nombres de fichero, `ElideMiddle`.
 - **Tienda e instaladas comparten medidas de tarjeta.** `GridBuildCard` y
   `GridInstalledCard` usan el mismo `_grid_height(zoom)` y el mismo logo
-  (`68·zoom`); `BuildCard` e `InstalledCard`, 78 px de alto y logo de 44. Si una
+  (`60·zoom`); `BuildCard` e `InstalledCard`, 68 px de alto y logo de 44. Si una
   crece y la otra no, al cambiar de pestaña las tarjetas bailan de tamaño y el
   logo cambia. La fila de la etiqueta (insignia "LTS"/"Instalada" en la tienda,
   aviso de actualización en instaladas) se reserva siempre, aunque vaya vacía.
-  Lo vigila `test_las_instaladas_miden_como_las_de_la_tienda`.
+  Lo vigila `test_las_instaladas_miden_como_las_de_la_tienda`. Son deliberadamente
+  **compactas** (unos 6 px de holgura sobre el contenido): para verlas grandes
+  está el zoom, no conviene engordarlas.
 - **El "look" va en `ui/qss.py`, no en el código.** Un widget nuevo se estiliza
   dándole un `objectName` (o una propiedad dinámica, p. ej. `variant` en
   `CardButton`) y añadiendo la regla al QSS. Ojo con la especificidad: en QSS

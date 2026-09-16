@@ -55,6 +55,9 @@ def main() -> None:
         window.zoom_slider.setValue(100)
         window.zoom_slider.blockSignals(False)
         window._update_zoom_label()
+        # El aviso de salto de serie es un diálogo modal: si salta en mitad de
+        # la captura la bloquea y las fotos no se guardan. Aquí no interesa.
+        window._offer_series_update = lambda: None
         window.show()
 
         def capture_store_grid():
