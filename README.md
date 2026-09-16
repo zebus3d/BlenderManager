@@ -7,16 +7,11 @@ Windows and macOS) and designed to be **portable**: once packaged, users don't
 need to install anything.
 
 <p align="center">
-  <img width="49%" alt="Store, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/store_grid.png">
-  <img width="49%" alt="Store, list view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/store_list.png">
-</p>
-<p align="center">
-  <img width="49%" alt="Installed builds, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/installed_grid.png">
-  <img width="49%" alt="Installed builds, list view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/installed_list.png">
+  <img width="80%" alt="Store, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/store_grid.png">
 </p>
 
-<sub>Store and installed builds, in grid and list view (Spanish UI shown; English
-is detected from your locale).</sub>
+<sub>The build store, in grid view (Spanish UI shown; English is detected from
+your locale).</sub>
 
 ## Features
 
@@ -58,7 +53,12 @@ is detected from your locale).</sub>
 - **Interface in English and Spanish** with automatic language detection, plus
   **tooltips** and a **portable mode** (settings live next to the executable).
 
-![Update dialog](https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/update_dialog.png)
+<p align="center">
+  <img width="80%" alt="Installed builds, grid view" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/installed_grid.png">
+</p>
+
+<sub>The Installed tab: launch, uninstall or update what you already have. The
+same builds can also be shown as a list.</sub>
 
 ## A small, readable codebase
 
@@ -235,6 +235,12 @@ packaging/build.sh --appimage  # also produces dist/BlenderManager-x86_64.AppIma
 
 The binaries are **not** committed to the repository; they are downloadable from
 the Release (or from the workflow run).
+
+<p align="center">
+  <img width="60%" alt="Update dialog" src="https://cdn.jsdelivr.net/gh/zebus3d/BlenderManager@main/docs/img/update_dialog.png">
+</p>
+
+<sub>The in-app update dialog: packaged builds replace themselves and restart.</sub>
 
 #### Why the Linux build is a plain Ubuntu 22.04 job
 
