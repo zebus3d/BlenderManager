@@ -145,6 +145,13 @@ and run.
   this app manages **official Blender builds only**, and that is exactly why it
   is this small and this simple.
 
+<p align="center">
+  <img width="80%" alt="Store, list view" src="docs/img/store_list.png">
+</p>
+
+<sub>The same store in list view: channel, size and branch readable at a glance,
+with the builds you already have marked as installed.</sub>
+
 ## Running from source
 
 Requirements: **Python 3.12 or newer**. The only dependency is **PySide6**, which
