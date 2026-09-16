@@ -106,6 +106,13 @@ class Settings:
     portable).
     """
     dest_folder: str = ""
+    # Carpeta opcional solo para las versiones LTS. Mucha gente tiene el disco
+    # de trabajo (a menudo un SSD, "C:") separado del de datos ("D:"), y le
+    # interesa tener ahí las versiones de soporte largo sin mover el resto.
+    # ``separate_lts`` es el interruptor: la carpeta se recuerda aunque lo
+    # apagues, para no perder la ruta elegida.
+    lts_folder: str = ""
+    separate_lts: bool = False
     language: str = "auto"
     delete_archive: bool = True
     launch_args: str = ""
@@ -150,6 +157,8 @@ class Settings:
                 data = {}
         settings = cls(
             dest_folder=str(data.get("dest_folder") or ""),
+            lts_folder=str(data.get("lts_folder") or ""),
+            separate_lts=bool(data.get("separate_lts", False)),
             language=str(data.get("language") or "auto"),
             delete_archive=bool(data.get("delete_archive", True)),
             launch_args=str(data.get("launch_args") or ""),
@@ -170,6 +179,32 @@ class Settings:
             # Ajustes editados a mano (o de una versión con otros filtros).
             settings.channel = "all"
         return settings
+
+    def destination_for(self, is_lts: bool) -> str:
+        """Carpeta donde se instala una compilación, según sea LTS o no.
+
+        Si el usuario separó las LTS en otra carpeta, ahí van; todo lo demás (y
+        todo si la opción está apagada o la carpeta está vacía) a la de siempre.
+        La decisión vive aquí, y no en la interfaz, para poder probarla sin Qt.
+        """
+        lts = self.lts_folder.strip()
+        if is_lts and self.separate_lts and lts:
+            return lts
+        return self.dest_folder
+
+    def folders(self) -> list[str]:
+        """Todas las carpetas donde puede haber versiones instaladas.
+
+        Si las LTS viven aparte hay que escanear las dos. La carpeta LTS se
+        incluye aunque el interruptor esté apagado: si se desactiva, las LTS ya
+        instaladas ahí no deben desaparecer de la lista, solo se dejan de
+        mandar las nuevas. Cuando coincide con la de destino no se repite.
+        """
+        folders = [self.dest_folder]
+        lts = self.lts_folder.strip()
+        if lts and lts != self.dest_folder:
+            folders.append(lts)
+        return folders
 
     def set_favorite(self, key: str, marked: bool) -> bool:
         """Marca o desmarca una serie y devuelve si ha cambiado algo.

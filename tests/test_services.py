@@ -75,6 +75,22 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(api._to_build(entry, experimental=True).experimental)
         self.assertFalse(api._to_build(entry).experimental)
 
+    def test_windows_amd64_se_normaliza_y_coincide_con_el_filtro(self):
+        # La API llama "amd64" a la arquitectura de Windows; la barra de filtros
+        # pide "x86_64". Sin normalizar, elegir Windows dejaba la tienda vacía.
+        entry = {
+            "version": "5.2.1", "branch": "v52", "risk_id": "stable",
+            "platform": "windows", "architecture": "amd64", "url": "u",
+            "file_name": "blender-5.2.1-windows-x64.zip",
+            "file_extension": "zip",
+        }
+        build = api._to_build(entry)
+        self.assertEqual(build.arch, "x86_64")
+        self.assertEqual(len(api.available_for([build], "windows", "x86_64")), 1)
+        # Y el nombre sin normalizar (el que pedía el filtro antes) no encuentra
+        # nada: eso era el bug.
+        self.assertEqual(api.available_for([build], "windows", "amd64"), [])
+
     def test_available_prefers_dmg_on_darwin(self):
         # En macOS la API solo publica .dmg; que quede claro en los tests,
         # porque de ahí viene que no se pueda extraer.
@@ -194,6 +210,27 @@ class InstalledTests(unittest.TestCase):
 
     def test_scan_missing_folder(self):
         self.assertEqual(installed.scan("/nonexistent/path/xyz", "linux"), [])
+
+    def test_scan_folders_une_las_dos_carpetas(self):
+        # Las LTS pueden vivir en otra carpeta: hay que ver las dos.
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            principal = base / "principal"
+            lts = base / "lts"
+            (principal / "blender-5.1.2-linux-x64").mkdir(parents=True)
+            (lts / "blender-4.5.13-linux-x64").mkdir(parents=True)
+            results = installed.scan_folders([principal, lts], "linux")
+            self.assertEqual([entry.version for entry in results],
+                             ["5.1.2", "4.5.13"])
+
+    def test_scan_folders_no_repite_la_misma_carpeta(self):
+        # Si el usuario pone la misma ruta en las dos (o la LTS coincide con la
+        # de destino), no puede salir la instalación por duplicado.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "blender-5.2.1-linux-x64").mkdir()
+            results = installed.scan_folders([root, str(root), ""], "linux")
+            self.assertEqual(len(results), 1)
 
     def test_is_version_installed(self):
         entry = installed.InstalledBuild("b", Path("/tmp/b"), "5.2.0")
@@ -356,6 +393,8 @@ class SettingsTests(unittest.TestCase):
     def test_roundtrip(self):
         settings = settings_module.Settings(
             dest_folder="/tmp/blenders",
+            lts_folder="/tmp/blenders-lts",
+            separate_lts=True,
             language="es",
             delete_archive=False,
             launch_args="--background",
@@ -371,6 +410,8 @@ class SettingsTests(unittest.TestCase):
         settings.save()
         loaded = settings_module.Settings.load()
         self.assertEqual(loaded.dest_folder, "/tmp/blenders")
+        self.assertEqual(loaded.lts_folder, "/tmp/blenders-lts")
+        self.assertTrue(loaded.separate_lts)
         self.assertEqual(loaded.language, "es")
         self.assertFalse(loaded.delete_archive)
         self.assertEqual(loaded.layout_mode, "list")
@@ -396,6 +437,36 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(loaded.layout_mode, "grid")
         self.assertTrue(loaded.auto_update)
         self.assertEqual(loaded.favorites, [])
+        # Sin configurar, las LTS van con el resto.
+        self.assertEqual(loaded.lts_folder, "")
+        self.assertFalse(loaded.separate_lts)
+
+    def test_las_lts_pueden_ir_a_otra_carpeta(self):
+        settings = settings_module.Settings(
+            dest_folder="/tmp/datos", lts_folder="/tmp/ssd", separate_lts=True)
+        # Solo las LTS se desvían; el resto sigue en la carpeta de siempre.
+        self.assertEqual(settings.destination_for(True), "/tmp/ssd")
+        self.assertEqual(settings.destination_for(False), "/tmp/datos")
+        self.assertEqual(settings.folders(), ["/tmp/datos", "/tmp/ssd"])
+
+    def test_sin_separar_las_lts_todo_va_al_destino(self):
+        settings = settings_module.Settings(
+            dest_folder="/tmp/datos", lts_folder="/tmp/ssd")
+        # Apagado: la carpeta elegida se recuerda, pero no se usa para instalar.
+        self.assertEqual(settings.destination_for(True), "/tmp/datos")
+        # Aun así se escanea, para no perder las LTS ya instaladas ahí.
+        self.assertEqual(settings.folders(), ["/tmp/datos", "/tmp/ssd"])
+
+    def test_carpeta_lts_vacia_no_cambia_nada(self):
+        settings = settings_module.Settings(
+            dest_folder="/tmp/datos", lts_folder="  ", separate_lts=True)
+        self.assertEqual(settings.destination_for(True), "/tmp/datos")
+        self.assertEqual(settings.folders(), ["/tmp/datos"])
+
+    def test_carpeta_lts_igual_al_destino_no_se_repite(self):
+        settings = settings_module.Settings(
+            dest_folder="/tmp/datos", lts_folder="/tmp/datos", separate_lts=True)
+        self.assertEqual(settings.folders(), ["/tmp/datos"])
 
     def test_favoritos_se_marcan_y_se_guardan(self):
         settings = settings_module.Settings()

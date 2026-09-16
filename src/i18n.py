@@ -46,6 +46,14 @@ _TRANSLATIONS = {
         "Loading...": "Cargando...",
         "Ready": "Listo",
         "Destination folder": "Carpeta de destino",
+        "Install LTS versions in a separate folder":
+            "Instalar las versiones LTS en otra carpeta",
+        "Keep LTS versions on another drive or folder (for example an SSD)":
+            "Guarda las versiones LTS (soporte a largo plazo) en otro disco o carpeta "
+            "(por ejemplo un SSD)",
+        "Same as destination folder": "Igual que la carpeta de destino",
+        "Choose the folder for LTS builds":
+            "Elige la carpeta donde se guardarán las versiones LTS",
         "General": "General",
         "Downloads": "Descargas",
         "Language": "Idioma",

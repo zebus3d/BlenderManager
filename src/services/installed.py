@@ -98,9 +98,8 @@ def _executable_for(directory: Path, platform: str, depth: int = 1):
     return None
 
 
-def scan(dest_folder, platform: str):
-    """Devuelve las versiones instaladas, ordenadas de más nueva a más antigua."""
-    root = Path(dest_folder).expanduser()
+def _scan_root(root: Path, platform: str):
+    """Escanea una sola carpeta y devuelve sus instalaciones sin ordenar."""
     results = []
     if not root.is_dir():
         return results
@@ -123,8 +122,43 @@ def scan(dest_folder, platform: str):
                 branch=str(marker.get("branch") or ""),
             )
         )
+    return results
+
+
+def scan_folders(folders, platform: str):
+    """Escanea varias carpetas y devuelve todo junto, de más nueva a más antigua.
+
+    Se usa cuando las versiones LTS viven en otra carpeta: hay que mirar las
+    dos. Si dos rutas apuntan al mismo directorio (o una está repetida) se
+    escanea una sola vez, para no listar la misma instalación por duplicado.
+    """
+    results = []
+    seen = set()
+    for folder in folders:
+        if not folder:
+            continue
+        root = Path(folder).expanduser()
+        try:
+            # ``resolve`` puede fallar con enlaces rotos o permisos: en ese caso
+            # nos quedamos con la ruta tal cual y listo.
+            key = root.resolve()
+        except OSError:
+            key = root
+        if key in seen:
+            continue
+        seen.add(key)
+        results.extend(_scan_root(root, platform))
     results.sort(key=lambda build: version_tuple(build.version), reverse=True)
     return results
+
+
+def scan(dest_folder, platform: str):
+    """Devuelve las versiones instaladas en una sola carpeta.
+
+    Se mantiene por comodidad (y porque es lo que usan los tests); para varias
+    carpetas está ``scan_folders``.
+    """
+    return scan_folders([dest_folder], platform)
 
 
 def find_installed(installed, build):
