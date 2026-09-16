@@ -818,14 +818,41 @@ class MainWindow(QWidget):
         self._resize_timer.start(200)
 
     def closeEvent(self, event):
-        """Vuelca el zoom pendiente: si se cierra mientras el slider se mueve,
-        el guardado (que va con retardo) aún no ha corrido."""
+        """Vuelca el zoom pendiente y el tamaño de la ventana.
+
+        El zoom va con retardo, así que si se cierra mientras el slider se mueve
+        el guardado aún no ha corrido. El tamaño de la ventana se guarda aquí
+        (y no en cada ``resizeEvent``) para no escribir el JSON a cada tirón del
+        borde; la próxima vez ``main.py`` arranca con estas medidas.
+        """
         self._zoom_settle.stop()
         self._zoom_tick.stop()
+        changed = False
         if self.zoom != self.settings.zoom:
             self.settings.zoom = self.zoom
+            changed = True
+        width, height = self._normal_size()
+        if (width, height) != (self.settings.window_width,
+                               self.settings.window_height):
+            self.settings.window_width = width
+            self.settings.window_height = height
+            changed = True
+        if changed:
             self.settings.save()
         super().closeEvent(event)
+
+    def _normal_size(self):
+        """Tamaño con el que reabrir: el de la ventana, no el de maximizada.
+
+        Si se cierra maximizada (o a pantalla completa) se guarda el tamaño
+        "normal" anterior, para no arrancar siempre con la ventana a pantalla
+        completa sin estarlo de verdad.
+        """
+        if self.isMaximized() or self.isFullScreen():
+            geometry = self.normalGeometry()
+        else:
+            geometry = self.geometry()
+        return geometry.width(), geometry.height()
 
     def _reflow(self) -> None:
         if self.layout_mode == "grid":

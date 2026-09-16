@@ -259,6 +259,25 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertFalse(window._zoom_settle.isActive())
         self.assertEqual(window.settings.zoom, 1.4)
 
+    def test_guarda_el_tamano_de_la_ventana(self):
+        """Al cerrar se guarda el tamaño, y la próxima apertura lo reutiliza.
+
+        ``main.py`` ya leía ``window_width``/``window_height``, pero nadie los
+        escribía: la ventana arrancaba siempre con el tamaño por defecto.
+        """
+        from services.settings import Settings
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.resize(1234, 777)
+        self.app.processEvents()
+        window.close()
+
+        saved = Settings.load()
+        self.assertEqual((saved.window_width, saved.window_height),
+                         (1234, 777))
+
     def test_atajos_registrados(self):
         from PySide6.QtGui import QShortcut
 
