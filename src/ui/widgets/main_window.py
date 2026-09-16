@@ -509,8 +509,7 @@ class MainWindow(QWidget):
             lay.addWidget(btn)
             self.side_buttons[key] = btn
         lay.addStretch()
-        settings_btn = SideButton(icons.SETTINGS, tr(
-            "Change folders, language, zoom and updates."))
+        settings_btn = SideButton(icons.SETTINGS, tr("Settings."))
         settings_btn.setFont(icon_font(20))
         self.side_group.addButton(settings_btn)
         settings_btn.clicked.connect(lambda: self.set_view("settings"))
