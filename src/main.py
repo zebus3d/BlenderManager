@@ -44,7 +44,10 @@ def smoke() -> int:
         return 1
     print("system:", info)
     print("total builds:", len(builds))
-    for build in api.available_for(builds, info.os_name, info.arch)[:12]:
+    # El filtro usa el nombre normalizado (Windows es "amd64" en la API): si no,
+    # en Windows este listado saldría vacío aunque hubiera compilaciones.
+    for build in api.available_for(builds, info.os_name,
+                                   api.normalize_arch(info.arch))[:12]:
         tag = "LTS" if build.is_lts else build.risk
         print(f"  {build.version:<8} {tag:<7} {build.branch:<5} "
               f"{build.human_size:>10}  {build.filename}")
@@ -62,7 +65,10 @@ def _clean_previous_session(settings) -> None:
     quedaba en el caché para siempre. Hay un test que comprueba que se llaman.
     """
     updater.cleanup_staging()
-    updater.cleanup_partials(settings.dest_folder)
+    # Puede haber descargas a medias en la carpeta de destino y, si las LTS se
+    # guardan aparte, también en la suya.
+    for folder in settings.folders():
+        updater.cleanup_partials(folder)
 
 
 def _install_exception_hook() -> None:

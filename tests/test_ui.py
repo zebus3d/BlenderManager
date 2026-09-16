@@ -58,6 +58,17 @@ class SettingsIsolated:
         patch.start()
         self.addCleanup(patch.stop)
 
+        # La carga del listado va a la red en un hilo. En los tests no debe
+        # depender de ella: además, un listado real podía programar el diálogo
+        # modal de "serie nueva" a mitad de un ``QTest.qWait`` de OTRO test (el
+        # temporizador vive en la ventana vieja), y la suite se quedaba colgada
+        # esperando a que alguien pulsara un botón. Cada test inyecta sus builds.
+        from ui.widgets import main_window
+
+        network = mock.patch.object(main_window.api, "get_builds", return_value=[])
+        network.start()
+        self.addCleanup(network.stop)
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class MainWindowTests(SettingsIsolated, unittest.TestCase):
@@ -148,14 +159,34 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         window.search = "5.2"
         self.assertEqual([b.version for b in window._filtered()], ["5.2.1"])
 
-    def test_arch_no_se_traduce_en_linux(self):
-        # En Linux la API usa x86_64; solo Windows la llama amd64.
+    def test_la_arquitectura_del_filtro_es_la_normalizada(self):
+        # La API llama "amd64" a la arquitectura de Windows, pero las builds se
+        # normalizan a "x86_64" (api.normalize_arch). Si el filtro pidiera
+        # "amd64", la tienda de Windows salía vacía.
         window = self._window()
         window.platform_label = "GNU/Linux"
         window.arch_label = "x86_64"
         self.assertEqual(window.arch, "x86_64")
         window.platform_label = "Windows"
-        self.assertEqual(window.arch, "amd64")
+        self.assertEqual(window.arch, "x86_64")
+        window.arch_label = "arm64"
+        self.assertEqual(window.arch, "arm64")
+
+    def test_la_tienda_de_windows_no_sale_vacia(self):
+        # Regresión: el filtro pedía "amd64" pero las builds ya venían
+        # normalizadas a "x86_64" (api.normalize_arch), así que no coincidía
+        # ninguna y la tienda decía "No se encontraron compilaciones".
+        from model.build import Build
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.platform_label = "Windows"
+        window.arch_label = "x86_64"
+        window.builds = [Build(
+            version="5.2.1", branch="v52", risk="stable", platform="windows",
+            arch="x86_64", url="u", filename="blender-5.2.1-windows-x64.zip")]
+        window.channel = "all"
+        self.assertEqual([b.version for b in window._filtered()], ["5.2.1"])
 
     def test_el_icono_de_info_usa_la_url_de_la_api(self):
         """El port la había sustituido por una URL a mano que no existe.
@@ -724,6 +755,57 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         wide = window._columns_for(window.store_scroll, 300)
         self.assertGreaterEqual(wide, narrow)
         self.assertGreaterEqual(narrow, 1)
+
+    def test_las_lts_van_a_su_carpeta_si_esta_configurada(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.settings.dest_folder = "/tmp/datos"
+        window.settings.lts_folder = "/tmp/ssd"
+        window.settings.separate_lts = True
+        lts = _build("4.5.13", "v45", "stable")
+        otra = _build("5.1.2", "v51", "stable")
+        self.assertEqual(window._destination_for(lts), "/tmp/ssd")
+        self.assertEqual(window._destination_for(otra), "/tmp/datos")
+
+    def test_el_interruptor_activa_la_carpeta_lts(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        # Arranca apagado: la carpeta de las LTS ni se enseña.
+        self.assertTrue(window.lts_row.isHidden())
+
+        window.lts_input.setText("/tmp/ssd-lts")
+        window.lts_switch.setChecked(True)
+        self.assertTrue(window.settings.separate_lts)
+        self.assertEqual(window.settings.lts_folder, "/tmp/ssd-lts")
+        self.assertFalse(window.lts_row.isHidden())
+
+        window.lts_switch.setChecked(False)
+        self.assertFalse(window.settings.separate_lts)
+        self.assertTrue(window.lts_row.isHidden())
+        # La ruta no se pierde al apagarlo.
+        self.assertEqual(window.settings.lts_folder, "/tmp/ssd-lts")
+
+    def test_escanea_las_dos_carpetas(self):
+        import tempfile
+        from pathlib import Path
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            principal = base / "principal"
+            lts = base / "lts"
+            (principal / "blender-5.1.2-linux-x64").mkdir(parents=True)
+            (lts / "blender-4.5.13-linux-x64").mkdir(parents=True)
+            window.settings.dest_folder = str(principal)
+            window.settings.lts_folder = str(lts)
+            window.settings.separate_lts = True
+            window.refresh_installed()
+            self.assertEqual([e.version for e in window.installed],
+                             ["5.1.2", "4.5.13"])
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")

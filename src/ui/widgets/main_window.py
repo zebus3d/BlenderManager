@@ -188,6 +188,11 @@ class MainWindow(QWidget):
         )
         self.language_label = tr(LANGUAGE_IDS.get(self.settings.language, "auto"))
         self.dest_folder = self.settings.dest_folder
+        # Carpeta opcional solo para las LTS (por ejemplo un SSD distinto del
+        # disco de datos). La decisión de a dónde va cada build la toma
+        # ``Settings.destination_for``; aquí solo se recuerda para la interfaz.
+        self.lts_folder = self.settings.lts_folder
+        self.separate_lts = bool(self.settings.separate_lts)
         self.launch_args = self.settings.launch_args
         self.delete_archive = bool(self.settings.delete_archive)
         self.auto_update = bool(self.settings.auto_update)
@@ -219,7 +224,8 @@ class MainWindow(QWidget):
         self.launcher = Launcher()
 
         self.builds = []
-        self.installed = installed_service.scan(self.settings.dest_folder, self.platform)
+        self.installed = installed_service.scan_folders(self.settings.folders(),
+                                                        self.platform)
         self.view = "installed" if self.installed else "store"
         # Actualizaciones de Blender detectadas para lo que ya tienes instalado:
         # un parche de la misma serie (botón en la tarjeta) o una serie nueva
@@ -502,6 +508,33 @@ class MainWindow(QWidget):
         row.addWidget(browse)
         lay.addLayout(row)
 
+        # Versiones LTS en otra carpeta (opcional). La fila de la carpeta solo
+        # se enseña con el interruptor en "Sí"; en "No" no aparece.
+        row_lts = QHBoxLayout()
+        row_lts.addWidget(QLabel(tr("Install LTS versions in a separate folder")))
+        row_lts.addStretch()
+        self.lts_switch = SwitchPill(self.separate_lts, tr("Yes"), tr("No"))
+        self.lts_switch.setToolTip(
+            tr("Keep LTS versions on another drive or folder (for example an SSD)"))
+        self.lts_switch.toggled.connect(self._on_separate_lts_toggled)
+        row_lts.addWidget(self.lts_switch)
+        lay.addLayout(row_lts)
+
+        self.lts_row = QWidget()
+        lts_lay = QHBoxLayout(self.lts_row)
+        lts_lay.setContentsMargins(0, 0, 0, 0)
+        lts_lay.setSpacing(6)
+        self.lts_input = QLineEdit(self.lts_folder)
+        self.lts_input.setPlaceholderText(tr("Same as destination folder"))
+        self.lts_input.textChanged.connect(self._on_lts_folder_changed)
+        lts_lay.addWidget(self.lts_input, 1)
+        lts_browse = CardButton(tr("Browse..."),
+                                tooltip=tr("Choose the folder for LTS builds"))
+        lts_browse.clicked.connect(self.browse_lts)
+        lts_lay.addWidget(lts_browse)
+        self.lts_row.setVisible(self.separate_lts)
+        lay.addWidget(self.lts_row)
+
         row2 = QHBoxLayout()
         row2.addWidget(QLabel(tr("Delete archive after extraction")))
         row2.addStretch()
@@ -663,12 +696,14 @@ class MainWindow(QWidget):
 
     @property
     def arch(self) -> str:
-        """Arquitectura tal y como la espera la API de Blender.
+        """Arquitectura de destino, tal y como la comparan las compilaciones.
 
-        En Linux/macOS la API usa ``x86_64``; solo Windows la llama ``amd64``.
+        La barra ofrece ``x86_64``/``arm64`` y ``api.normalize_arch`` guarda las
+        compilaciones con esos mismos nombres (Blender llama ``amd64`` a la de
+        Windows), así que aquí se devuelve la etiqueta tal cual. Antes se
+        traducía a ``amd64`` para Windows y la tienda salía **vacía**: las
+        builds ya venían normalizadas a ``x86_64`` y no coincidían con el filtro.
         """
-        if self.platform == "windows" and self.arch_label == "x86_64":
-            return "amd64"
         return self.arch_label
 
     # ------------------------------------------------------------- filtros
@@ -997,8 +1032,9 @@ class MainWindow(QWidget):
         self._fill_grid(self.store_grid, cards, columns)
 
     def refresh_installed(self) -> None:
-        """Vuelve a escanear la carpeta y repinta las instaladas."""
-        self.installed = installed_service.scan(self.settings.dest_folder, self.platform)
+        """Vuelve a escanear las carpetas y repinta las instaladas."""
+        self.installed = installed_service.scan_folders(self.settings.folders(),
+                                                        self.platform)
         self._recompute_updates()
         self._rebuild_installed()
 
@@ -1116,12 +1152,31 @@ class MainWindow(QWidget):
         if not opened:
             self._show_message(tr("Could not open the browser"))
 
+    def _choose_folder(self, current: str, title: str) -> str:
+        """Abre el diálogo de carpetas del sistema y devuelve la elegida (o "")."""
+        return QFileDialog.getExistingDirectory(self, title,
+                                                current or str(Path.home()))
+
     def browse_dest(self) -> None:
         """Pide la carpeta de descargas con el diálogo del sistema."""
-        folder = QFileDialog.getExistingDirectory(self, tr("Choose destination folder"),
-                                                  self.dest_folder or str(Path.home()))
+        folder = self._choose_folder(self.dest_folder, tr("Choose destination folder"))
         if folder:
             self.dest_input.setText(folder)
+
+    def browse_lts(self) -> None:
+        """Pide la carpeta opcional de las versiones LTS."""
+        folder = self._choose_folder(self.lts_folder,
+                                     tr("Choose the folder for LTS builds"))
+        if folder:
+            self.lts_input.setText(folder)
+
+    def _destination_for(self, build) -> str:
+        """Carpeta donde va esta compilación: las LTS pueden ir aparte.
+
+        Se delega en ``Settings.destination_for`` para que la regla viva con
+        los ajustes (y se pueda probar sin montar la ventana).
+        """
+        return self.settings.destination_for(getattr(build, "is_lts", False))
 
     # ------------------------------------------------------- auto-guardado
     def _on_dest_changed(self, text: str) -> None:
@@ -1129,6 +1184,24 @@ class MainWindow(QWidget):
         self.settings.dest_folder = text
         self.settings.save()
         self.refresh_installed()
+        self._rebuild_store()
+
+    def _on_lts_folder_changed(self, text: str) -> None:
+        self.lts_folder = text
+        self.settings.lts_folder = text
+        self.settings.save()
+        self.refresh_installed()
+        self._rebuild_store()
+
+    def _on_separate_lts_toggled(self, value: bool) -> None:
+        """Separa (o vuelve a juntar) las LTS en su carpeta."""
+        self.separate_lts = value
+        self.settings.separate_lts = value
+        self.settings.save()
+        # Solo se enseña la carpeta cuando está activado; la ruta se guarda.
+        self.lts_row.setVisible(value)
+        self.refresh_installed()
+        self._rebuild_store()
 
     def _on_archive_toggled(self, value: bool) -> None:
         self.delete_archive = value
@@ -1202,7 +1275,7 @@ class MainWindow(QWidget):
         self._bridge.done.connect(lambda path: self._on_download_done(path, build))
         self._bridge.error.connect(self._on_download_error)
         self.downloader.start(
-            source.url, str(Path(self.settings.dest_folder).expanduser()),
+            source.url, str(Path(self._destination_for(build)).expanduser()),
             build.filename, source.checksum,
             on_progress=lambda done, total: self._bridge.progress.emit(done, total),
             on_done=lambda path: self._bridge.done.emit(str(path)),
@@ -1227,7 +1300,7 @@ class MainWindow(QWidget):
 
         def worker():
             try:
-                target = extract(path, Path(self.settings.dest_folder).expanduser())
+                target = extract(path, Path(self._destination_for(build)).expanduser())
                 # Borrar el archivo comprimido solo si el usuario lo pidió.
                 if self.delete_archive:
                     try:

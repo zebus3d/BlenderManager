@@ -161,12 +161,28 @@ class StartupCleanupTests(unittest.TestCase):
         from unittest import mock
 
         import main
+        from services import settings as settings_service
 
+        settings = settings_service.Settings(dest_folder="/tmp/blenders")
         with mock.patch.object(main.updater, "cleanup_staging") as restos, \
                 mock.patch.object(main.updater, "cleanup_partials") as partes:
-            main._clean_previous_session(mock.Mock(dest_folder="/tmp/blenders"))
+            main._clean_previous_session(settings)
         self.assertTrue(restos.called)
         partes.assert_called_once_with("/tmp/blenders")
+
+    def test_el_arranque_limpia_tambien_la_carpeta_lts(self):
+        from unittest import mock
+
+        import main
+        from services import settings as settings_service
+
+        settings = settings_service.Settings(
+            dest_folder="/tmp/blenders", lts_folder="/tmp/lts", separate_lts=True)
+        with mock.patch.object(main.updater, "cleanup_staging"), \
+                mock.patch.object(main.updater, "cleanup_partials") as partes:
+            main._clean_previous_session(settings)
+        self.assertEqual([call.args[0] for call in partes.call_args_list],
+                         ["/tmp/blenders", "/tmp/lts"])
 
 
 class AppImageApplyTests(unittest.TestCase):
