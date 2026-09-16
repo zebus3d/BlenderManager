@@ -40,6 +40,13 @@ is detected from your locale).</sub>
 - **Installed versions**: launch or uninstall them from the app. The filters and
   search apply to them too, and they are highlighted in the store so you can tell
   at a glance what you already have.
+- **Newer-version alerts**: if Blender publishes something newer than a build you
+  already have, the app tells you. A **same-series patch** (5.2.0 → 5.2.2) shows
+  an *Update* button on the installed card; a **new series** (5.2 → 5.3) is
+  offered in a dialog where you choose to **replace** the installed build or
+  download the new one **as a copy**. It does not nag about a version you already
+  have (even one you downloaded as a copy), and it stays quiet until something is
+  actually newer.
 - **Blender runs detached**: closing the manager does **not** close the Blender
   instances you launched from it.
 - **Release notes one click away**: every build card has a small blue **i** that
@@ -331,8 +338,9 @@ src/
     settings.py      # persistent settings and portable mode
     downloader.py    # threaded download with progress and SHA-256
     extractor.py     # safe tar/zip extraction
-    installed.py     # scans installed versions
+    installed.py     # scans installed versions + detects newer builds
     launcher.py      # launches Blender (detached process)
+    opener.py        # opens URLs/folders with a clean environment (AppImage)
     updater.py       # checks and applies updates (binary or git pull)
   ui/
     qss.py           # the whole look: one Qt stylesheet

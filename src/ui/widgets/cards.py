@@ -240,9 +240,9 @@ class BuildCard(BaseBuildCard):
     def __init__(self, build, installed: bool, zebra: bool,
                  marked: bool = False, parent=None):
         super().__init__(build, installed, zebra, marked=marked, parent=parent)
-        self.setFixedHeight(78)
+        self.setFixedHeight(68)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 11, 12, 11)
+        lay.setContentsMargins(16, 9, 12, 9)
         lay.setSpacing(12)
         lay.addWidget(_logo_label(44, dim=not installed))
 
@@ -287,15 +287,15 @@ def _grid_height(zoom: float) -> int:
 
     No es ``196 * zoom``: las etiquetas (título, meta, "Instalada"...) NO
     escalan con el zoom, así que con poca ampliación se recortaban. Medido:
-    el contenido mide ~120·zoom + 110 px, y usamos un poco de holgura para que
-    nunca se corte.
+    el contenido mide ~104·zoom + 90 px, y dejamos ~6 px de holgura para que
+    nunca se corte (para verlo más grande está el zoom).
 
     Lo usan las dos rejillas (tienda e instaladas): son la misma estructura
     (logo, título, meta, fila de etiqueta y fila de botones) y tienen que medir
     igual al cambiar de pestaña. La fila de la etiqueta se reserva siempre
     aunque esté vacía, que es lo que fija este alto.
     """
-    return int(120 * zoom + 118)
+    return int(104 * zoom + 96)
 
 
 class GridBuildCard(BaseBuildCard):
@@ -312,11 +312,11 @@ class GridBuildCard(BaseBuildCard):
         # que las instaladas y la rejilla quedaba desigual.
         self.setFixedHeight(_grid_height(zoom))
         lay = QVBoxLayout(self)
-        m = int(14 * zoom)
+        m = int(12 * zoom)
         lay.setContentsMargins(m, m, m, m)
-        lay.setSpacing(int(6 * zoom))
+        lay.setSpacing(int(5 * zoom))
 
-        logo = _logo_label(int(68 * zoom), dim=not installed)
+        logo = _logo_label(int(60 * zoom), dim=not installed)
         logo.setAlignment(Qt.AlignHCenter)
         lay.addWidget(logo)
 
@@ -341,7 +341,7 @@ class GridBuildCard(BaseBuildCard):
         lay.addStretch()
 
         row = QHBoxLayout()
-        row.setSpacing(int(6 * zoom))
+        row.setSpacing(int(5 * zoom))
         row.addStretch()
         row.addWidget(self._star(marked))
         row.addWidget(self._info())
@@ -378,10 +378,10 @@ class InstalledCard(_HoverCard, QFrame):
         card_shadow(self)
         # Mismas medidas que ``BuildCard`` (la fila de la tienda): al cambiar de
         # pestaña las tarjetas no pueden medir distinto.
-        self.setFixedHeight(78)
+        self.setFixedHeight(68)
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 11, 12, 11)
+        lay.setContentsMargins(16, 9, 12, 9)
         lay.setSpacing(12)
         lay.addWidget(_logo_label(44, dim=False))
 
@@ -453,11 +453,11 @@ class GridInstalledCard(_HoverCard, QFrame):
         self.setFixedHeight(_grid_height(zoom))
 
         lay = QVBoxLayout(self)
-        m = int(14 * zoom)
+        m = int(12 * zoom)
         lay.setContentsMargins(m, m, m, m)
-        lay.setSpacing(int(6 * zoom))
+        lay.setSpacing(int(5 * zoom))
 
-        logo = _logo_label(int(68 * zoom), dim=False)
+        logo = _logo_label(int(60 * zoom), dim=False)
         logo.setAlignment(Qt.AlignHCenter)
         lay.addWidget(logo)
 
@@ -483,7 +483,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         lay.addStretch()
 
         row = QHBoxLayout()
-        row.setSpacing(int(6 * zoom))
+        row.setSpacing(int(5 * zoom))
         row.addWidget(_favorite_star(
             marked, lambda on: self.favorite_toggled.emit(entry, on)))
         info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
