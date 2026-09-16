@@ -109,24 +109,6 @@ def _install_exception_hook() -> None:
     sys.excepthook = hook
 
 
-def _center_on_screen(window) -> None:
-    """Centra la ventana en la pantalla, sea cual sea su tamaño.
-
-    Se centra el **marco** (``frameGeometry``) y no solo el área de cliente, y
-    se hace **después** de ``show()`` porque hasta entonces no se conocen los
-    bordes que añade el gestor de ventanas. Así da igual el ancho/alto que se
-    restauró de la sesión anterior: siempre arranca en el centro.
-    """
-    from PySide6.QtWidgets import QApplication
-
-    screen = window.screen() or QApplication.primaryScreen()
-    if screen is None:
-        return
-    frame = window.frameGeometry()
-    frame.moveCenter(screen.availableGeometry().center())
-    window.move(frame.topLeft())
-
-
 def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     """Arranca la aplicación Qt."""
     from PySide6.QtCore import QTimer
@@ -134,7 +116,13 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
 
     from services import settings as settings_service
     from ui import fonts, qss
-    from ui.widgets.main_window import MainWindow
+    from ui.widgets.main_window import (
+        DEFAULT_WINDOW_HEIGHT,
+        DEFAULT_WINDOW_WIDTH,
+        MIN_WINDOW_HEIGHT,
+        MIN_WINDOW_WIDTH,
+        MainWindow,
+    )
 
     _install_exception_hook()
 
@@ -161,10 +149,10 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     app.setStyleSheet(qss.build_qss())
 
     window = MainWindow()
-    window.resize(max(880, settings.window_width or 1060),
-                  max(540, settings.window_height or 680))
+    window.resize(max(MIN_WINDOW_WIDTH, settings.window_width or DEFAULT_WINDOW_WIDTH),
+                  max(MIN_WINDOW_HEIGHT, settings.window_height or DEFAULT_WINDOW_HEIGHT))
     window.show()
-    _center_on_screen(window)
+    window.center_on_screen()
 
     # Restos de la sesión anterior, con retardo para no retrasar el arranque.
     QTimer.singleShot(600, lambda: _clean_previous_session(settings))

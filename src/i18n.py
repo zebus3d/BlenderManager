@@ -297,6 +297,11 @@ _TRANSLATIONS = {
             "Idioma de la interfaz.\nCambia al reiniciar la aplicación.",
         "Size the grid returns to when you reset the zoom.":
             "Tamaño al que vuelve la rejilla cuando restableces el zoom.",
+        "Window size": "Tamaño de la ventana",
+        "Reset": "Restablecer",
+        "Return the window to its default size and center it on the screen.":
+            "Devuelve la ventana a su tamaño por defecto y la centra en la "
+            "pantalla.",
         "Extra arguments Blender receives when you launch it.\nExample: "
         "--background to start without the interface.":
             "Argumentos extra que recibe Blender al lanzarlo.\n"

@@ -81,6 +81,11 @@ MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
 # Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
 ZOOM_STEP = 0.1
 
+# Tamaño con el que se abre la ventana la primera vez y al restablecerla, y el
+# mínimo por debajo del cual la interfaz se recorta.
+DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT = 1060, 680
+MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT = 880, 540
+
 # Tooltips de los filtros de canal. Se explican para quien no sabe qué es una
 # LTS o una compilación diaria; las claves de i18n son estos textos en inglés.
 # Los saltos de línea (\n) se ven en el tooltip, así que pueden ser varias
@@ -651,6 +656,18 @@ class MainWindow(QWidget):
         self.reset_zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         row4.addWidget(self.reset_zoom_label)
         lay.addLayout(row4)
+
+        # Tamaño de la ventana: vuelve al de fábrica y se centra. Útil si una
+        # sesión la dejó enorme o en una esquina.
+        row5 = QHBoxLayout()
+        row5.addWidget(QLabel(tr("Window size")))
+        row5.addStretch()
+        reset_window = CardButton(
+            tr("Reset"), tooltip=tr("Return the window to its default size and "
+                                    "center it on the screen."))
+        reset_window.clicked.connect(self.reset_window_size)
+        row5.addWidget(reset_window)
+        lay.addLayout(row5)
         return card
 
     def _settings_launch_card(self) -> QFrame:
@@ -1081,6 +1098,33 @@ class MainWindow(QWidget):
         else:
             geometry = self.geometry()
         return geometry.width(), geometry.height()
+
+    def center_on_screen(self) -> None:
+        """Centra la ventana en el monitor, sea cual sea su tamaño.
+
+        Se centra el **marco** (``frameGeometry``), no solo el área de cliente,
+        para que quede bien con la barra de título y los bordes del gestor de
+        ventanas.
+        """
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is None:
+            return
+        frame = self.frameGeometry()
+        frame.moveCenter(screen.availableGeometry().center())
+        self.move(frame.topLeft())
+
+    def reset_window_size(self) -> None:
+        """Devuelve la ventana al tamaño por defecto y la centra.
+
+        Se pone a ``0`` en los ajustes para que, al volver a abrir, se use otra
+        vez el tamaño de fábrica (es lo mismo que hace ``main.py``).
+        """
+        self.settings.window_width = 0
+        self.settings.window_height = 0
+        self.settings.save()
+        self.showNormal()
+        self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+        self.center_on_screen()
 
     def _reflow(self) -> None:
         if self.layout_mode == "grid":
