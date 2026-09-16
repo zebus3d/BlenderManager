@@ -32,6 +32,7 @@ from ui.widgets.dialogs import (
     update_available,
 )
 from ui.widgets.main_window import MainWindow
+from ui.widgets.tray import TrayIcon
 
 __all__ = [
     "AppDialog",
@@ -49,6 +50,7 @@ __all__ = [
     "SideButton",
     "StarButton",
     "SwitchPill",
+    "TrayIcon",
     "confirm",
     "show_error",
     "show_info",

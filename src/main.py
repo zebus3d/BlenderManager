@@ -13,6 +13,7 @@ en todas las distros, sin depender del Mesa del sistema.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -109,12 +110,35 @@ def _install_exception_hook() -> None:
     sys.excepthook = hook
 
 
+def _prefer_xwayland_for_tray(settings) -> None:
+    """Fuerza el backend X11 de Qt cuando "minimizar a la bandeja" lo exige.
+
+    En Wayland no existe el estado "ventana minimizada" en ``xdg-shell``: si el
+    botón de minimizar lo dibuja el compositor (KWin, decoraciones del servidor)
+    la aplicación no recibe ningún aviso, así que la ventana se queda en la
+    barra de tareas. La única forma de interceptarlo es correr bajo XWayland.
+    Como el backend de Qt se elige **antes** de crear ``QApplication``, esto se
+    decide aquí, al arrancar, y solo si el usuario activó esa opción (el resto
+    sigue en Wayland nativo). Es el equivalente a ``--ozone-platform=x11`` que
+    usan las apps Electron.
+    """
+    if detector.should_use_xwayland(settings.minimize_to_tray):
+        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+
+
 def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     """Arranca la aplicación Qt."""
+    from services import settings as settings_service
+
+    # Los ajustes se leen (y el backend se decide) ANTES de importar la
+    # interfaz: Wayland o X11 tiene que quedar fijado antes de QApplication.
+    settings = settings_service.Settings.load()
+    i18n.set_language(settings.language)
+    _prefer_xwayland_for_tray(settings)
+
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
 
-    from services import settings as settings_service
     from ui import fonts, qss
     from ui.widgets.main_window import (
         DEFAULT_WINDOW_HEIGHT,
@@ -141,9 +165,6 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     icon = QIcon(str(ASSETS_DIR / "images" / "app_icon.png"))
     if not icon.isNull():
         app.setWindowIcon(icon)
-
-    settings = settings_service.Settings.load()
-    i18n.set_language(settings.language)
 
     fonts.load()
     app.setStyleSheet(qss.build_qss())
