@@ -572,14 +572,17 @@ class SettingsTests(unittest.TestCase):
         # barra de tareas es lo que espera la mayoria).
         self.assertTrue(settings.close_to_tray)
         self.assertFalse(settings.minimize_to_tray)
+        self.assertFalse(settings.start_minimized)
         self.assertFalse(settings.tray_hint_shown)
         settings.close_to_tray = False
         settings.minimize_to_tray = True
+        settings.start_minimized = True
         settings.tray_hint_shown = True
         settings.save()
         loaded = settings_module.Settings.load()
         self.assertFalse(loaded.close_to_tray)
         self.assertTrue(loaded.minimize_to_tray)
+        self.assertTrue(loaded.start_minimized)
         self.assertTrue(loaded.tray_hint_shown)
 
     def test_un_intervalo_inventado_cae_al_por_defecto(self):
@@ -705,6 +708,96 @@ class DetectorTests(unittest.TestCase):
             True, {"XDG_SESSION_TYPE": "wayland"}))
         # En X11, Windows o macOS no se cambia nada.
         self.assertFalse(detector.should_use_xwayland(True, {"DISPLAY": ":0"}))
+
+
+class AutostartTests(unittest.TestCase):
+    """Autoarranque con la sesión (Linux: XDG autostart)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        patcher = mock.patch.dict(os.environ, {
+            "XDG_CONFIG_HOME": self.tmp.name,
+            "HOME": self.tmp.name,
+        })
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_activar_y_desactivar_en_linux(self):
+        if not sys.platform.startswith("linux"):
+            self.skipTest("el fichero .desktop es solo de Linux")
+        from services import autostart
+
+        self.assertFalse(autostart.is_enabled())
+        self.assertTrue(autostart.enable())
+        self.assertTrue(autostart.is_enabled())
+        path = Path(self.tmp.name) / "autostart" / autostart.DESKTOP_FILE
+        self.assertTrue(path.is_file())
+        # Volver a activarlo no falla (idempotente).
+        self.assertTrue(autostart.enable())
+        self.assertTrue(autostart.disable())
+        self.assertFalse(autostart.is_enabled())
+        self.assertFalse(path.exists())
+        # Desactivar dos veces tampoco falla.
+        self.assertTrue(autostart.disable())
+
+    def test_el_desktop_entrecomilla_rutas_con_espacios(self):
+        from services import autostart
+
+        entry = autostart._desktop_entry(["/ruta/con espacios/BlenderManager"])
+        self.assertIn('Exec="/ruta/con espacios/BlenderManager"', entry)
+        self.assertIn("Type=Application", entry)
+        self.assertIn("X-GNOME-Autostart-enabled=true", entry)
+
+    def test_el_plist_de_macos_es_valido(self):
+        import plistlib
+
+        from services import autostart
+
+        data = plistlib.loads(autostart._launch_agent_bytes(["/opt/BM"]))
+        self.assertEqual(data["Label"], autostart.MACOS_LABEL)
+        self.assertEqual(data["ProgramArguments"], ["/opt/BM"])
+        self.assertTrue(data["RunAtLoad"])
+
+    def test_macos_si_launchctl_falla_no_deja_el_plist(self):
+        if not hasattr(os, "getuid"):
+            self.skipTest("getuid es de Unix")
+        from services import autostart
+
+        agent = (Path(self.tmp.name) / "LaunchAgents"
+                 / f"{autostart.MACOS_LABEL}.plist")
+        common = (
+            mock.patch.object(autostart, "_launch_agent_path",
+                              return_value=agent),
+            mock.patch.object(autostart, "_exec_command",
+                              return_value=["/opt/BM"]),
+            mock.patch.object(autostart.os, "getuid", return_value=1000),
+        )
+        with common[0], common[1], common[2], \
+                mock.patch.object(autostart, "_run_launchctl",
+                                  return_value=False):
+            self.assertFalse(autostart._macos_apply(True))
+        self.assertFalse(agent.exists())
+
+        with common[0], common[1], common[2], \
+                mock.patch.object(autostart, "_run_launchctl",
+                                  return_value=True):
+            self.assertTrue(autostart._macos_apply(True))
+        self.assertTrue(agent.exists())
+
+    def test_en_appimage_usa_la_variable_appimage(self):
+        from services import autostart
+
+        with mock.patch.object(autostart.sys, "frozen", True, create=True), \
+                mock.patch.dict(os.environ, {"APPIMAGE": "/tmp/BM.AppImage"}):
+            self.assertEqual(autostart._exec_command(), ["/tmp/BM.AppImage"])
+
+    def test_en_modo_fuente_el_comando_es_python_mas_main(self):
+        from services import autostart
+
+        command = autostart._exec_command()
+        self.assertEqual(command[0], sys.executable)
+        self.assertTrue(command[1].endswith("main.py"))
 
 
 class XwaylandStartupTests(unittest.TestCase):
