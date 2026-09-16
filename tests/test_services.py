@@ -561,6 +561,25 @@ class AvailableUpdatesTests(unittest.TestCase):
         entry = self._entry("5.3.0-alpha", branch="main")
         self.assertEqual(installed.available_updates([entry], builds), [])
 
+    def test_no_avisa_si_ya_bajaste_la_nueva_como_copia(self):
+        # Tienes 5.2.0 y 5.2.2: la 5.2.0 ya no debe seguir pidiendo la 5.2.2.
+        builds = [make_build("5.2.2", "stable", "v52", "b.tar.xz")]
+        entries = [self._entry("5.2.0"), self._entry("5.2.2")]
+        self.assertEqual(installed.available_updates(entries, builds), [])
+
+    def test_avisa_solo_en_la_instalada_mas_nueva_de_la_serie(self):
+        # Con 5.2.0 y 5.2.1 instaladas, el aviso va en la 5.2.1 (no en las dos).
+        builds = [make_build("5.2.2", "stable", "v52", "b.tar.xz")]
+        entries = [self._entry("5.2.0"), self._entry("5.2.1")]
+        result = installed.available_updates(entries, builds)
+        self.assertEqual([(u.entry.version, u.build.version) for u in result],
+                         [("5.2.1", "5.2.2")])
+
+    def test_el_salto_no_se_ofrece_si_la_serie_ya_esta_instalada(self):
+        builds = [make_build("5.3.0", "stable", "v53", "c.tar.xz")]
+        entries = [self._entry("5.2.0"), self._entry("5.3.0", branch="v53")]
+        self.assertEqual(installed.available_updates(entries, builds), [])
+
 
 class OpenerTests(unittest.TestCase):
     """Abrir cosas fuera del binario sin heredar el entorno de PyInstaller.

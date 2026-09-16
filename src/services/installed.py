@@ -235,29 +235,44 @@ def available_updates(installed, builds):
     plataforma. Solo se miran instaladas estables y compilaciones ``stable``;
     las diarias/alfa se renumeran solas y aquí serían ruido.
 
+    El aviso es **por serie**, no por cada carpeta: se coge la instalada más
+    nueva de cada serie, porque avisar en la 5.2.0 después de bajarte la 5.2.2
+    como copia es ruido. Y si esa versión nueva ya está instalada, tampoco se
+    ofrece (de ahí ``installed_versions``).
+
     Devuelve una lista de ``Update(entry, build, kind)`` donde ``kind`` es
     ``"patch"`` (misma serie, número mayor) o ``"series"`` (serie superior). Una
     misma instalada puede salir dos veces si hay parche *y* salto de serie; son
     dos avisos distintos (el botón de la tarjeta y el diálogo de salto).
     """
     stable_builds = [build for build in builds if build.risk == "stable"]
-    updates = []
-    for entry in installed:
-        if not _is_stable_install(entry):
-            continue
-        entry_version = version_tuple(entry.version)
-        entry_minor = _minor_tuple(entry.version)
+    entries = [entry for entry in installed if _is_stable_install(entry)]
+    installed_versions = {version_tuple(entry.version) for entry in entries}
 
+    # La instalada más nueva de cada serie: sobre esa se avisa.
+    newest_in_series = {}
+    for entry in entries:
+        key = _minor_tuple(entry.version)
+        current = newest_in_series.get(key)
+        if current is None or version_tuple(entry.version) > version_tuple(current.version):
+            newest_in_series[key] = entry
+
+    updates = []
+    for series_key, entry in newest_in_series.items():
+        entry_version = version_tuple(entry.version)
         patch = None
         series = None
         for build in stable_builds:
             build_version = version_tuple(build.version)
+            if build_version in installed_versions:
+                # Ya la tienes (p. ej. bajada como copia): no hay nada que avisar.
+                continue
             build_minor = _minor_tuple(build.version)
-            if build_minor == entry_minor:
+            if build_minor == series_key:
                 if build_version > entry_version and (
                         patch is None or build.sort_key > patch.sort_key):
                     patch = build
-            elif build_minor > entry_minor:
+            elif build_minor > series_key:
                 if series is None or build.sort_key > series.sort_key:
                     series = build
         if patch is not None:
