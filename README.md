@@ -87,22 +87,22 @@ the reasoning behind the code.
 ## How is it different from Blender Launcher V2?
 
 [Blender Launcher V2](https://github.com/Victor-IX/Blender-Launcher-V2) is the
-de-facto tool for this job and the reason this project exists: it proved that
-Blender's official JSON API is all you need to manage builds reliably. It is
-also **more complete** than Blender Manager, especially on Windows — forks
-(Bforartists, UPBGE), favorites, templates, a tray icon, a running-instance
-counter and `.blend` association.
+mature reference for this job, and this project borrows from it: the idea of
+using Blender's official JSON API and the LTS version map comes from it, which
+avoids the fragile scraping of the first tools.
 
-Blender Manager deliberately does **less**: find a build, download it, launch it.
-The bet is that most people only need the official builds and want that one flow
-to have as little friction as possible — so the whole app is built around one
-screen you can read at a glance, and a single file you can drop anywhere on Linux
-and run.
+They are two different answers to the same problem. Blender Launcher V2 goes for
+**breadth** — official builds, third-party forks (Bforartists, UPBGE), templates,
+a tray icon, a running-instance counter and `.blend` association. Blender Manager
+goes for **one flow**: find a build, download it, launch it. The bet is that most
+people only need the official builds and want that flow to have as little friction
+as possible — so the whole app is built around one screen you can read at a
+glance, and a single file you can drop anywhere on Linux and run.
 
 | | **Blender Manager** | **Blender Launcher V2** |
 |---|---|---|
 | UI toolkit | Qt Widgets (PySide6) | Qt-based |
-| Focus | Official builds only | Official builds, forks and experimental branches |
+| Scope | Official Blender builds | Official builds, forks and experimental branches |
 | Finding a build | One filter bar, grid **or** list with a zoom slider, favorites, installed builds highlighted | Library / downloads pages |
 | Languages | English and Spanish | English |
 | Linux install | One AppImage (~73 MB): download and run | Two zips (~99 and ~112 MB), pick the right one ([AUR](https://aur.archlinux.org/packages/blender-launcher-v2-bin) on Arch) |
@@ -114,7 +114,7 @@ and run.
 > normally empty in both. Here it stays implemented and lights itself up if a
 > branch ever appears.
 
-### Why it may suit you better on Linux
+### What Blender Manager brings on Linux
 
 - **One file, no install.** `BlenderManager-x86_64.AppImage` (~73 MB) is the whole
   app: download it, mark it executable, double click. Nothing to unpack and
