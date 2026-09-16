@@ -361,8 +361,10 @@ class InstalledCard(_HoverCard, QFrame):
     delete_clicked = Signal(object)   # entry
     notes_clicked = Signal(str)       # version
     favorite_toggled = Signal(object, bool)   # entry, marcada
+    update_clicked = Signal(object, object)   # entry, build nueva
 
-    def __init__(self, entry, zebra: bool, marked: bool = False, parent=None):
+    def __init__(self, entry, zebra: bool, marked: bool = False, parent=None,
+                 update=None):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -395,6 +397,16 @@ class InstalledCard(_HoverCard, QFrame):
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
         lay.addWidget(info)
 
+        if update is not None:
+            update_btn = CardButton(
+                tr("Update to {version}", version=update.version),
+                variant="accent",
+                tooltip=tr("Download and install this version"),
+            )
+            update_btn.clicked.connect(
+                lambda: self.update_clicked.emit(entry, update))
+            lay.addWidget(update_btn)
+
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())
@@ -417,9 +429,10 @@ class GridInstalledCard(_HoverCard, QFrame):
     delete_clicked = Signal(object)
     notes_clicked = Signal(str)
     favorite_toggled = Signal(object, bool)   # entry, marcada
+    update_clicked = Signal(object, object)   # entry, build nueva
 
     def __init__(self, entry, zebra: bool, zoom: float = 1.0,
-                 marked: bool = False, parent=None):
+                 marked: bool = False, parent=None, update=None):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -458,6 +471,20 @@ class GridInstalledCard(_HoverCard, QFrame):
         info.setFont(_icon_font())
         info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
         row.addWidget(info)
+        if update is not None:
+            # En rejilla el aviso va sin texto: un botón ancho pediría más
+            # ancho mínimo y ensancharía su columna (justo lo que arreglamos
+            # con ElidedLabel). El texto va en el tooltip.
+            update_btn = CardButton(
+                "", variant="accent",
+                tooltip=tr("Update to {version}", version=update.version))
+            update_btn.setIcon(_download_icon())
+            _icon_only(update_btn)
+            update_btn.setFixedWidth(max(int(42 * zoom),
+                                         MIN_ICON_BUTTON_WIDTH))
+            update_btn.clicked.connect(
+                lambda: self.update_clicked.emit(entry, update))
+            row.addWidget(update_btn)
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())

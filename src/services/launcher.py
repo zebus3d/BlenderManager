@@ -13,6 +13,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from services.opener import clean_env
+
 
 class Launcher:
     """Lanza Blender como proceso aparte.
@@ -37,6 +39,10 @@ class Launcher:
             "stdin": subprocess.DEVNULL,
             "stdout": subprocess.DEVNULL,
             "stderr": subprocess.DEVNULL,
+            # Entorno limpio: sin el LD_LIBRARY_PATH que PyInstaller mete para
+            # el AppImage, o Blender cargaría las librerías del gestor en vez
+            # de las suyas (mismo fallo que al abrir el navegador).
+            "env": clean_env(),
         }
         if sys.platform.startswith("win"):
             # Grupo de procesos propio y sin consola asociada.

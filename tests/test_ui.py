@@ -121,6 +121,7 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
                 self.path = "/tmp/" + name
                 self.is_lts = lts
                 self.can_launch = True
+                self.favorite_key = f"{branch}|{version}"
 
         window = self._window()
         window.installed = [
@@ -173,7 +174,7 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
 
         window = MainWindow()
         abiertas = []
-        with mock.patch.object(main_window.webbrowser, "open",
+        with mock.patch.object(main_window.opener, "open_url",
                                side_effect=lambda url: abiertas.append(url) or True):
             window.open_release_notes("5.2.1")
             QTest.qWait(200)
@@ -195,7 +196,7 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         with mock.patch.object(main_window.api, "get_builds", return_value=[]):
             window = MainWindow()
             QTest.qWait(300)
-            with mock.patch.object(main_window.webbrowser, "open",
+            with mock.patch.object(main_window.opener, "open_url",
                                    return_value=False):
                 window.open_release_notes("5.2.1")
                 QTest.qWait(200)
@@ -641,6 +642,91 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         wide = window._columns_for(window.store_scroll, 300)
         self.assertGreaterEqual(wide, narrow)
         self.assertGreaterEqual(narrow, 1)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class BlenderUpdateTests(SettingsIsolated, unittest.TestCase):
+    """Aviso de Blender más nuevos que los instalados."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def _entrada(self, version="5.2.0", carpeta=None):
+        from services.installed import InstalledBuild
+
+        path = Path(carpeta) if carpeta else Path("/tmp") / f"blender-{version}"
+        return InstalledBuild(name=f"blender-{version}-linux-x64", path=path,
+                              version=version, branch="v52")
+
+    def test_recalcula_parche_y_serie(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.builds = [_build("5.2.2", "v52", "stable"),
+                         _build("5.3.0", "v53", "stable")]
+        window.installed = [self._entrada("5.2.0")]
+        window._recompute_updates()
+
+        self.assertEqual(window.updates_by_path[str(window.installed[0].path)].version,
+                         "5.2.2")
+        self.assertEqual([u.build.version for u in window.series_updates], ["5.3.0"])
+
+    def test_la_tarjeta_ofrece_actualizar(self):
+        from ui.widgets.buttons import CardButton
+        from ui.widgets.cards import InstalledCard
+
+        entry = self._entrada("5.2.0")
+        build = _build("5.2.2", "v52", "stable")
+        card = InstalledCard(entry, False, update=build)
+        boton = next(b for b in card.findChildren(CardButton)
+                     if "5.2.2" in b.text())
+        recibidos = []
+        card.update_clicked.connect(lambda e, b: recibidos.append((e, b)))
+        boton.click()
+        self.assertEqual(recibidos, [(entry, build)])
+
+    def test_reemplazar_borra_la_instalada_vieja(self):
+        import tempfile
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as temp:
+            vieja = Path(temp) / "blender-5.2.0-linux-x64"
+            vieja.mkdir()
+            (vieja / "blender").write_text("binario", encoding="utf-8")
+            window._replace_entry = self._entrada("5.2.0", carpeta=vieja)
+            with mock.patch.object(window, "refresh_installed"), \
+                    mock.patch.object(window, "_rebuild_store"), \
+                    mock.patch.object(window, "_show_message") as aviso:
+                window._on_extract_done(str(Path(temp) / "nueva"))
+            self.assertFalse(vieja.exists())
+            self.assertIsNone(window._replace_entry)
+            self.assertTrue(aviso.called)
+
+    def test_la_serie_solo_se_ofrece_una_vez(self):
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        entry = self._entrada("5.2.0")
+        build = _build("5.3.0", "v53", "stable")
+        from services.installed import Update
+
+        window.series_updates = [Update(entry, build, "series")]
+        with mock.patch.object(window, "offer_blender_update") as ofrecer:
+            window._offer_series_update()
+            window._offer_series_update()
+        ofrecer.assert_called_once_with(entry, build)
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
