@@ -1,4 +1,5 @@
 import json
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from pathlib import Path
 
 import services.settings as settings_module
 from model.build import Build, favorite_key
-from services import api, detector, installed, tls
+from services import api, detector, elevate, installed, tls
 from services.extractor import extract, is_archive
 
 
@@ -569,6 +570,44 @@ class DetectorTests(unittest.TestCase):
     def test_detect_returns_known_arch(self):
         info = detector.detect()
         self.assertIn(info.arch, ("x86_64", "amd64", "arm64", "x86", ""))
+
+
+class ElevateTests(unittest.TestCase):
+    """Pedir permisos de administrador (Windows/UAC). Solo Windows los usa."""
+
+    def test_solo_esta_disponible_en_windows(self):
+        if not sys.platform.startswith("win"):
+            self.assertFalse(elevate.available())
+            # Sin Windows, pedir elevación no hace nada (ni revienta).
+            self.assertFalse(elevate.relaunch_elevated(["--grant-access", "/tmp/x"]))
+
+    def test_el_comando_relanza_esta_app(self):
+        with mock.patch.object(elevate.sys, "frozen", True, create=True):
+            self.assertEqual(
+                elevate._command(["--grant-access", "C:\\x"]),
+                [elevate.sys.executable, "--grant-access", "C:\\x"])
+        # En modo fuente va también el main.py.
+        self.assertEqual(
+            elevate._command(["--grant-access", "C:\\x"]),
+            [elevate.sys.executable, elevate.sys.argv[0],
+             "--grant-access", "C:\\x"])
+
+    def test_grant_write_usa_icacls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            carpeta = Path(tmp) / "nueva"
+            with mock.patch.object(elevate.subprocess, "run") as run:
+                run.return_value = mock.Mock(returncode=0, stdout="", stderr="")
+                self.assertTrue(elevate.grant_write(carpeta))
+            self.assertTrue(carpeta.is_dir())
+            comando = run.call_args.args[0]
+            self.assertEqual(comando[0], "icacls")
+            self.assertIn("/grant", comando)
+
+    def test_grant_write_falla_si_icacls_falla(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(elevate.subprocess, "run") as run:
+                run.return_value = mock.Mock(returncode=1, stdout="", stderr="no")
+                self.assertFalse(elevate.grant_write(Path(tmp) / "x"))
 
 
 if __name__ == "__main__":

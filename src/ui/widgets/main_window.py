@@ -15,11 +15,13 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QComboBox,
     QFileDialog,
@@ -46,6 +48,7 @@ from i18n import tr
 from services import (
     api,
     detector,
+    elevate,
     installed as installed_service,
     opener,
     settings as settings_service,
@@ -1295,11 +1298,14 @@ class MainWindow(QWidget):
         # cientos de MB para nada y, sobre todo, explica el motivo.
         problem = _write_problem(destination)
         if problem:
+            # En vez de rendirnos, ofrecemos elegir otra carpeta y reintentar:
+            # carpetas como "C:\Program Files" solo dejan escribir a un
+            # administrador, y eso el usuario no lo puede cambiar desde aquí.
+            if self._ask_other_folder(build, destination, problem):
+                self._start_download(build, source)
+                return
             self._set_downloading(False)
             self._set_status(tr("Download failed"), 6)
-            show_error(self, tr("Download failed"),
-                       tr("Could not write to the destination folder:")
-                       + "\n\n" + destination + "\n\n" + problem)
             return
         self._set_status(tr("Downloading..."))
         download_log(f"downloading {build.filename} from {source.label}")
@@ -1314,6 +1320,78 @@ class MainWindow(QWidget):
             on_done=lambda path: self._bridge.done.emit(str(path)),
             on_error=lambda msg: self._bridge.error.emit(msg),
         )
+
+    def _ask_other_folder(self, build, destination: str, problem: str) -> bool:
+        """Ofrece arreglar la carpeta cuando no se puede escribir en ella.
+
+        Devuelve True si al final se puede escribir ahí (porque el usuario ha
+        elegido otra carpeta o ha dado permiso de administrador), para que la
+        descarga se reintente sola. Edita la carpeta de las LTS o la de destino
+        según cuál fuera la que iba a usarse.
+        """
+        message = (tr("Could not write to the destination folder:")
+                   + "\n\n" + destination + "\n\n" + problem
+                   + "\n\n" + tr("Windows protects folders like Program Files. "
+                                 "Pick a folder you can write to, such as "
+                                 "Documents or another drive."))
+        dialog = AppDialog(self, tr("Download failed"), message)
+        choice = {"other": False, "admin": False}
+        dialog.add_button(tr("Close"), on_click=dialog.reject)
+        dialog.add_button(
+            tr("Choose another folder"), variant="accent",
+            on_click=lambda: (choice.update(other=True), dialog.accept()))
+        if elevate.available():
+            dialog.add_button(
+                tr("Grant permission (admin)"),
+                on_click=lambda: (choice.update(admin=True), dialog.accept()))
+        dialog.exec()
+
+        if choice["admin"]:
+            # Windows: pedir el UAC una vez para dar permiso de escritura sobre
+            # esta carpeta al usuario, en vez de cambiar de sitio.
+            if self._grant_permission(destination):
+                return True
+            show_error(self, tr("Download failed"),
+                       tr("The folder still could not be made writable."))
+            return False
+        if not choice["other"]:
+            return False
+        using_lts = (self.separate_lts
+                     and str(Path(self.lts_folder).expanduser()) == destination)
+        if using_lts:
+            folder = self._choose_folder(self.lts_folder,
+                                         tr("Choose the folder for LTS builds"))
+            if folder:
+                self.lts_input.setText(folder)
+                return True
+            return False
+        folder = self._choose_folder(self.dest_folder, tr("Choose destination folder"))
+        if folder:
+            self.dest_input.setText(folder)
+            return True
+        return False
+
+    def _grant_permission(self, destination: str) -> bool:
+        """Pide el UAC y espera a poder escribir en ``destination``.
+
+        Lanza este mismo binario elevado con ``--grant-access`` (ver
+        ``services.elevate``). El proceso elevado es rápido, así que se espera
+        un poco comprobando si la carpeta ya deja escribir; mientras, se
+        procesan eventos para que la ventana no se quede congelada.
+        """
+        if not elevate.available():
+            return False
+        if not elevate.relaunch_elevated(["--grant-access", destination]):
+            # El usuario ha cancelado el UAC.
+            self._show_message(tr("The permission request was cancelled."), 5)
+            return False
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            if not _write_problem(destination):
+                return True
+            QApplication.processEvents()
+            time.sleep(0.2)
+        return False
 
     def _set_progress(self, downloaded: int, total: int) -> None:
         value = int(downloaded * 100 / total) if total else 0
