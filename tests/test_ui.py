@@ -1283,6 +1283,75 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(window.status_label.text(), tr("Cancelled"))
         error.assert_not_called()
 
+    def test_un_dmg_no_se_intenta_extraer(self):
+        """macOS: el .dmg no es un comprimido; se revela y se avisa, sin extraer.
+
+        Fallo real: ``_on_download_done`` llamaba a ``extract()`` siempre, y
+        ``tarfile.open('r:*')`` sobre un .dmg daba "file could not be opened
+        successfully" como si la descarga hubiera fallado.
+        """
+        import tempfile
+        from pathlib import Path as _Path
+
+        from i18n import tr
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as tmp:
+            dmg = _Path(tmp) / "blender-5.2.1-macos-arm64.dmg"
+            dmg.write_bytes(b"esto no es un tar")
+            with mock.patch.object(main_window, "extract") as extraer, \
+                    mock.patch.object(main_window.opener, "reveal",
+                                      return_value=True) as revelar, \
+                    mock.patch.object(window, "_show_message") as aviso:
+                window._on_download_done(str(dmg), _build("5.2.1", "v52", "stable"))
+            # El .dmg es el único artefacto útil: no se borra aunque
+            # ``delete_archive`` esté activo.
+            self.assertTrue(dmg.exists())
+        extraer.assert_not_called()
+        revelar.assert_called_once()
+        self.assertIn(tr("Downloaded to {folder}", folder=dmg.parent),
+                      aviso.call_args.args[0])
+        self.assertIn(tr("Open it to install Blender manually."),
+                      aviso.call_args.args[0])
+
+    def test_extraer_anota_el_marcador(self):
+        """Al extraer se escribe ``.blendermanager.json`` (se perdió en el port).
+
+        Sin marcador no se distinguen dos diarias de la misma versión ni se
+        reconocen las ramas experimentales (ver ``services/installed.py``).
+        """
+        import tempfile
+        from pathlib import Path as _Path
+
+        from PySide6.QtTest import QTest
+
+        from services import installed
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        build = _build("5.2.1", "v52", "stable")
+        build.build_hash = "abc123"
+        with tempfile.TemporaryDirectory() as tmp:
+            destino = _Path(tmp)
+            # La extracción crea una carpeta nueva dentro del destino.
+            carpeta = destino / "blender-5.2.1-linux-x64"
+            carpeta.mkdir()
+            archivo = destino / "blender-5.2.1-linux-x64.tar.xz"
+            archivo.write_bytes(b"x")
+            with mock.patch.object(window, "_destination_for",
+                                   return_value=str(destino)), \
+                    mock.patch.object(main_window, "extract",
+                                      return_value=carpeta):
+                window._on_download_done(str(archivo), build)
+                # La extracción va en un hilo: hay que dejarle terminar.
+                QTest.qWait(300)
+            marcador = installed.read_marker(carpeta)
+        self.assertEqual(marcador.get("version"), "5.2.1")
+        self.assertEqual(marcador.get("hash"), "abc123")
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class ElideTests(SettingsIsolated, unittest.TestCase):
@@ -1849,12 +1918,21 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         cls.app.setStyleSheet(qss.build_qss())
 
     def _window(self, available=True):
+        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
         from ui.widgets.tray import TrayIcon
 
         patch = mock.patch.object(TrayIcon, "available", return_value=available)
         patch.start()
         self.addCleanup(patch.stop)
+        # El estado del autoarranque se lee del sistema al construir la ventana:
+        # en un equipo con el autoarranque ya activado el interruptor nace
+        # marcado y el test del toggle no vería ningún cambio (en CI no existe
+        # el fichero y sí lo vería). Lo fijamos para no depender de la máquina.
+        autostart = mock.patch.object(main_window.autostart, "is_enabled",
+                                      return_value=False)
+        autostart.start()
+        self.addCleanup(autostart.stop)
         # No se destruye la ventana en el cleanup: lleva un QTimer a 100 ms que
         # llama a ``refresh``; si se borra antes de dispararse, el temporizador
         # revienta al procesar eventos en OTRO test. Las demás clases de tests
