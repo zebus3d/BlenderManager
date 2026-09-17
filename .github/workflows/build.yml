@@ -164,6 +164,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
           pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+      # Firma autofirmada, copiada de hurricane_solver. NO evita el aviso de
+      # SmartScreen (no lo avala una CA) y cada build genera un certificado
+      # distinto, asi que no da reputacion; pero malware rara vez va firmado y
+      # puede suavizar heuristicos de algunos antivirus. Es best-effort: si el
+      # runner no deja firmar, el release sigue con el .exe sin firmar.
+      - name: Firmar el ejecutable (autofirmado)
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=BlenderManager" -CertStoreLocation Cert:\CurrentUser\My
+          Set-AuthenticodeSignature -FilePath dist\BlenderManager.exe -Certificate $cert
+          Get-AuthenticodeSignature dist\BlenderManager.exe | Format-List
+      - name: Empaquetar el .exe
+        run: |
           # En Windows el spec genera onefile: un unico BlenderManager.exe, sin
           # carpeta _internal que el usuario pueda borrar por error.
           Compress-Archive -Path dist/BlenderManager.exe -DestinationPath BlenderManager-windows-x86_64.zip
