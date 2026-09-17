@@ -264,6 +264,11 @@ _TRANSLATIONS = {
             "Actualización descargada. Reinicia la aplicación.",
         "Open it to install the new version.":
             "Ábrelo para instalar la versión nueva.",
+        "Could not download the update automatically:":
+            "No se pudo descargar la actualización automáticamente:",
+        "You can download it from the releases page and install it manually.":
+            "Puedes descargarla desde la página de releases e instalarla a mano.",
+        "Open the releases page": "Abrir la página de releases",
         "Update to {version}": "Actualizar a {version}",
         "You have Blender {current} installed. Blender {new} is available.":
             "Tienes Blender {current} instalado. Hay una versión nueva: Blender {new}.",
