@@ -386,20 +386,29 @@ lo elegimos a propósito para que no exista `_internal` que borrar (ver arriba).
    SHA-256 y abre el portal.
 2. **Mantener PyInstaller al día**: cada release recompila el bootloader y suele
    tardar en estar en las listas negras. `requirements-build.txt` pide `>=6.6`.
-3. **Documentar y verificar**: el README lleva el SHA-256 de cada asset
+3. **Publicar en winget** (`.github/workflows/winget.yml`, a mano tras promover):
+   `winget install Zebus3d.BlenderManager` evita el popup azul de SmartScreen
+   porque no hay descarga del navegador (ni Mark-of-the-Web). Es la única vía
+   **sin certificado**. Necesita un PAT propio como secreto `WINGET_ACC_TOKEN`
+   (permiso para forkear `microsoft/winget-pkgs` y abrir el PR). La primera
+   publicación puede requerir retoques del manifiesto; el asset es un zip con un
+   único `.exe`.
+4. **Documentar y verificar**: el README lleva el SHA-256 de cada asset
    (`checksums.txt`); quien quiera puede confirmar que el fichero es el nuestro.
 
 Blender Launcher V2 (el proyecto hermano, 700+ estrellas) está **igual**: su zip
 de Windows es un único `.exe` con `--onefile --windowed --noupx`, **sin firmar**,
 y lo que hace con los falsos positivos es enviarlos a Microsoft (issue #87) y
-publicar en **winget** (`winget install VictorIX.BlenderLauncher`), que evita el
-"bájate un .exe de Internet" y el popup de SmartScreen. No hay poción mágica.
+publicar en **winget** (`winget install VictorIX.BlenderLauncher`). No hay poción
+mágica.
 
-**Si algún día se quiere quitar el popup de SmartScreen** ("editor desconocido",
-que solo sale al bajar de Internet): hace falta un certificado de una CA. El
-único gratis para open source es **SignPath** (registro + GitHub Action; la clave
-vive en su HSM, no en el repo). Winget no firma nada, solo cambia el canal de
-instalación.
+**El popup azul de SmartScreen** ("Windows protegió tu PC") solo lo quita un
+certificado de una CA: es reputación de editor + hash, y el Mark-of-the-Web del
+navegador lo dispara siempre. Para un usuario que baja el `.zip` de Releases,
+**no hay forma de evitarlo** sin firmar. Alternativas: **winget** (no hay
+descarga del navegador) o **SignPath** (gratis para open source; registro +
+GitHub Action, la clave vive en su HSM, no en el repo). Winget no firma nada,
+solo cambia el canal de instalación.
 
 ### Verificación antes de tocar el job
 

@@ -1,0 +1,52 @@
+name: winget
+
+# Publica el .exe de Windows en winget (Windows Package Manager) para que se
+# pueda instalar con `winget install Zebus3d.BlenderManager`.
+#
+# Es la UNICA forma de evitar el aviso azul de SmartScreen sin firmar con una CA:
+# el usuario no baja un .exe de Internet, asi que no hay Mark-of-the-Web ni
+# reputacion que valga, y winget lo instala sin ese popup (ver AGENTS.md ->
+# "Avisos falsos de antivirus en Windows").
+#
+# Se lanza a MANO despues de promover una release (no en cada push, para no
+# publicar pre-releases). Necesita un PAT de tu cuenta de GitHub con permiso para
+# hacer fork de microsoft/winget-pkgs y abrir el PR, guardado como el secreto
+# WINGET_ACC_TOKEN. Sin ese secreto el job falla y no publica nada.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de la release a publicar (p. ej. v1.30.0). Vacio = la ultima."
+        required: false
+        type: string
+
+jobs:
+  winget:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolver el tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          if [[ -z "${TAG}" ]]; then
+            TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          fi
+          if [[ -z "${TAG}" || "${TAG}" == "null" ]]; then
+            echo "No se pudo resolver el tag." >&2
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Publicando ${TAG}"
+      - name: Publicar en winget
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Zebus3d.BlenderManager
+          # El asset de Windows es un zip con un unico BlenderManager.exe.
+          installers-regex: '^BlenderManager-windows-x86_64\.zip$'
+          version: ${{ steps.tag.outputs.version }}
+          release-tag: ${{ steps.tag.outputs.tag }}
+          token: ${{ secrets.WINGET_ACC_TOKEN }}
