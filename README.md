@@ -404,6 +404,14 @@ for that reason alone (see "Why the Linux build is a plain Ubuntu 22.04 job").
 The Blender logo is a trademark of the [Blender Foundation](https://www.blender.org/).
 Icons are from [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate
+by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [@zebus3d](https://github.com/zebus3d) (repository owner)
+- Approvers: [@zebus3d](https://github.com/zebus3d) (repository owner)
+
 ## Privacy
 
 Blender Manager has no accounts, no telemetry and no analytics. See
