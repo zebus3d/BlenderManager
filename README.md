@@ -403,3 +403,8 @@ for that reason alone (see "Why the Linux build is a plain Ubuntu 22.04 job").
 
 The Blender logo is a trademark of the [Blender Foundation](https://www.blender.org/).
 Icons are from [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
+
+## Privacy
+
+Blender Manager has no accounts, no telemetry and no analytics. See
+[PRIVACY.md](PRIVACY.md) for what it stores locally and which servers it talks to.
