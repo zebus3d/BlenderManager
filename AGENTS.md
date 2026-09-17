@@ -428,6 +428,12 @@ acción firma a partir de un **artifact de GitHub** (por eso se sube el `.exe`
 con `archive: false` antes), no de un fichero local; el Artifact Configuration de
 SignPath tiene que describir un único fichero PE. Puesta en marcha:
 
+0. Cumplir sus condiciones (<https://signpath.org/terms>): licencia OSI (GPL-3.0),
+   sin malware ni componentes propietarios, MFA en GitHub y una sección
+   **"Code signing policy"** en la home y en las páginas de descarga (está en el
+   README y `promote.yml` la añade al cuerpo de la release final). Ojo: exigen
+   "cierta reputación verificable" para programas ejecutables y **aprobación
+   manual por release** para firmar.
 1. Pedir el certificado en <https://signpath.org/apply> (vincular el repo de
    GitHub; para OSS es gratis y la clave vive en su HSM, no en el repo).
 2. En SignPath.io: Trusted Build System **GitHub.com** → proyecto → signing

@@ -37,6 +37,10 @@ jobs:
           # final anterior. Si generate-notes falla, se promueve igual.
           NOTES="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
                      -f tag_name="${TAG}" --jq .body 2>/dev/null || true)"
+          # La "Code signing policy" tiene que estar tambien en la pagina de
+          # descarga (signpath.org/terms): se anade al final de las notas.
+          POLICY="$(printf '\n\n---\n**Code signing policy**: free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).\nPrivacy policy: [PRIVACY.md](https://github.com/%s/blob/main/PRIVACY.md).' "${GITHUB_REPOSITORY}")"
+          NOTES="${NOTES}${POLICY}"
           ARGS=(--prerelease=false --latest --title "${TAG}")
           [[ -n "${NOTES}" ]] && ARGS+=(--notes "${NOTES}")
           # -R es obligatorio: este job no hace checkout, y sin el, gh intenta
