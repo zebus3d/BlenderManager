@@ -19,6 +19,15 @@ on:
       - "v*"
   workflow_dispatch:
 
+# Un solo build por ref a la vez. Sin esto, dos push seguidos lanzan dos runs
+# concurrentes que mueven el MISMO tag del pre-release y uno falla con
+# "failed to push some refs". Al llegar un push nuevo se cancela el anterior
+# (solo interesa el ultimo commit); el run cancelado se puede descartar sin
+# problema porque el nuevo rehace los binarios y reemplaza los assets.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Calcula la version que se inyecta en los binarios y el tag de la release.
   #
@@ -304,8 +313,19 @@ jobs:
       - name: Mover el tag del pre-release
         if: github.ref == 'refs/heads/main'
         run: |
-          git tag -f "${{ needs.version.outputs.tag }}" "$GITHUB_SHA"
-          git push -f origin "refs/tags/${{ needs.version.outputs.tag }}"
+          TAG="${{ needs.version.outputs.tag }}"
+          git tag -f "$TAG" "$GITHUB_SHA"
+          # -f permite el non-fast-forward (el tag se mueve a proposito). El
+          # reintento cubre una carrera puntual con otro run o con promote: el
+          # tag es un ref compartido y dos updates a la vez pueden chocar.
+          for intento in 1 2 3; do
+            if git push -f origin "refs/tags/${TAG}"; then
+              exit 0
+            fi
+            echo "push del tag fallo (intento ${intento}); reintentando..."
+            sleep 5
+          done
+          exit 1
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
