@@ -70,6 +70,9 @@ class Downloader:
             dest = Path(dest_folder).expanduser()
             dest.mkdir(parents=True, exist_ok=True)
             final_path = dest / filename
+            # La URL va al log: un fallo de red (handshake TLS, host bloqueado)
+            # es indistinguible de otro sin saber a qué host iba.
+            log(f"downloading {url} -> {final_path}")
             request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             # Con contexto explicito: si no, en Arch no encuentra las CAs y no
             # se puede descargar nada (ver services/tls.py).
@@ -115,11 +118,11 @@ class Downloader:
             if str(error) == "cancelled":
                 part_path.unlink(missing_ok=True)
             else:
-                log(f"download error: {error}")
+                log(f"download error ({url}): {error}")
             if on_error:
                 on_error(str(error))
         except Exception as error:
             part_path.unlink(missing_ok=True)
-            log(f"download error: {error}")
+            log(f"download error ({url}): {error}")
             if on_error:
                 on_error(str(error))

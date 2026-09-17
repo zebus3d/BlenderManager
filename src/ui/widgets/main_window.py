@@ -217,6 +217,7 @@ class MainWindow(QWidget):
     extract_done = Signal(str)
     update_result = Signal(str, object, bool)
     update_applied = Signal(str)
+    update_manual = Signal()   # descargada, pero hay que instalarla a mano
     source_chosen = Signal(object, object)   # build, Source
     source_update_done = Signal(bool, str)
     release_notes_result = Signal(bool)   # abierta o no
@@ -338,6 +339,7 @@ class MainWindow(QWidget):
         self.extract_done.connect(self._on_extract_done)
         self.update_result.connect(self._on_update_result)
         self.update_applied.connect(self._on_update_applied)
+        self.update_manual.connect(self._on_update_manual)
         self.source_update_done.connect(self._on_source_update_done)
         self.release_notes_result.connect(self._on_release_notes_result)
         self.source_chosen.connect(self._start_download)
@@ -2279,7 +2281,9 @@ class MainWindow(QWidget):
         bridge = _Bridge()
         bridge.progress.connect(self._set_progress)
         bridge.done.connect(self._apply_update)
-        bridge.error.connect(self._on_download_error)
+        # El error de la actualización no es el de una descarga de Blender: aquí
+        # hay que ofrecer la salida manual, no un "Download failed" a secas.
+        bridge.error.connect(self._on_update_download_error)
         self._bridge = bridge
         self.update_downloader.start(
             asset["url"], str(updater.updates_dir()), asset["name"],
@@ -2288,6 +2292,33 @@ class MainWindow(QWidget):
             on_error=lambda msg: bridge.error.emit(msg),
         )
 
+    def _on_update_download_error(self, message: str) -> None:
+        """No se pudo bajar la actualización: ofrecer instalarla a mano.
+
+        Un "Download failed" genérico deja al usuario sin salida. En macOS hay
+        que sustituir el ``.app`` a mano de todos modos, y si lo que falla es el
+        CDN de GitHub (handshake TLS, red que lo bloquea...) el navegador sigue
+        siendo una vía. En vez de rendirnos, abrimos la página de releases.
+        """
+        self._set_downloading(False)
+        self.progress.setValue(0)
+        self.percent.setText("")
+        if message == "cancelled":
+            self._set_status(tr("Cancelled"), 5)
+            return
+        download_log(f"update download failed: {message}")
+        self._set_status(tr("Download failed"), 8)
+        dialog = AppDialog(
+            self, tr("Download failed"),
+            tr("Could not download the update automatically:")
+            + "\n\n" + message + "\n\n"
+            + tr("You can download it from the releases page and install it manually."))
+        dialog.add_button(tr("Close"), on_click=dialog.reject)
+        dialog.add_button(
+            tr("Open the releases page"), variant="accent",
+            on_click=lambda: (dialog.accept(), updater.open_releases()))
+        dialog.exec()
+
     def _apply_update(self, path: str) -> None:
         self._set_downloading(False)
 
@@ -2295,8 +2326,15 @@ class MainWindow(QWidget):
             quit_app = updater.apply(path)
             if quit_app:
                 self.update_applied.emit(path)
+            else:
+                # macOS (y cualquier caso en el que no haya reemplazo en
+                # caliente): ``apply`` ya reveló el fichero; solo falta decirlo.
+                self.update_manual.emit()
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _on_update_manual(self) -> None:
+        self._show_message(tr("Update downloaded. Install it manually."), 8)
 
     def _on_update_applied(self, path: str) -> None:
         self._set_status(tr("Restarting to install the update..."))

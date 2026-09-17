@@ -1352,6 +1352,33 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(marcador.get("version"), "5.2.1")
         self.assertEqual(marcador.get("hash"), "abc123")
 
+    def test_si_falla_bajar_la_actualizacion_ofrece_los_releases(self):
+        """Un fallo de red al actualizar no puede ser un callejón sin salida.
+
+        Caso real (macOS): ``urlopen error _ssl.c:993: The handshake operation
+        timed out`` al bajar ``BlenderManager-macos.zip``. El navegador sigue
+        siendo una vía, así que se ofrece la página de releases.
+        """
+        from i18n import tr
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        motivo = ("<urlopen error _ssl.c:993: "
+                  "The handshake operation timed out>")
+        with mock.patch.object(main_window, "AppDialog") as dialogo, \
+                mock.patch.object(main_window.updater, "open_releases") as abrir:
+            window._on_update_download_error(motivo)
+            # El motivo real va en el cuerpo del diálogo.
+            self.assertIn(motivo, dialogo.call_args.args[2])
+            botones = dialogo.return_value.add_button.call_args_list
+            abridor = next(c for c in botones
+                           if c.args[0] == tr("Open the releases page"))
+            # El botón accent es el que abre la página; al pulsarlo, se llama.
+            self.assertEqual(abridor.kwargs.get("variant"), "accent")
+            abridor.kwargs["on_click"]()
+        abrir.assert_called_once()
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class ElideTests(SettingsIsolated, unittest.TestCase):

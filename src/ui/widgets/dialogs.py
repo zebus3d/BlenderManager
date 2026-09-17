@@ -6,6 +6,8 @@ desentonan con el tema oscuro; aquí heredamos de ``QDialog`` y los montamos con
 nuestros propios botones (``CardButton``), que ya llevan el QSS de la app.
 """
 
+import sys
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
@@ -169,8 +171,14 @@ def update_available(parent, tag: str, on_update, on_skip=None) -> bool:
     esa versión concreta. El aviso automático la silencia; "Buscar ahora" la
     sigue mostrando. Devuelve True si se ha aceptado.
     """
+    # En macOS no hay reemplazo en caliente del .app: prometer que se instala y
+    # se reinicia sola sería mentir (``updater.apply`` solo revela el zip).
+    if sys.platform == "darwin":
+        note = tr("It will be downloaded. You will have to install it manually.")
+    else:
+        note = tr("It will be installed and the app will restart automatically.")
     message = (tr("A new version is available: {version}", version=tag)
-               + "\n\n" + tr("It will be installed and the app will restart automatically."))
+               + "\n\n" + note)
     dialog = AppDialog(parent, tr("Update available"), message)
     choice = {"skip": False}
     dialog.add_button(tr("Later"), on_click=dialog.reject,
