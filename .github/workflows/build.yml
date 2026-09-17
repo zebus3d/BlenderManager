@@ -313,5 +313,13 @@ jobs:
           prerelease: ${{ github.ref == 'refs/heads/main' }}
           make_latest: ${{ github.ref != 'refs/heads/main' }}
           generate_release_notes: ${{ github.ref != 'refs/heads/main' }}
+          # La "Code signing policy" es obligatoria tambien en las paginas de
+          # descarga (no solo en el README): ver signpath.org/terms.
+          append_body: |
+            ---
+            **Code signing policy**: free code signing provided by
+            [SignPath.io](https://about.signpath.io), certificate by
+            [SignPath Foundation](https://signpath.org).
+            Privacy policy: [PRIVACY.md](https://github.com/${{ github.repository }}/blob/main/PRIVACY.md).
           overwrite_files: true
           files: release-assets/**/*
