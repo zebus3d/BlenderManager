@@ -164,7 +164,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
           pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
-          Compress-Archive -Path dist/BlenderManager -DestinationPath BlenderManager-windows-x86_64.zip
+          # En Windows el spec genera onefile: un unico BlenderManager.exe, sin
+          # carpeta _internal que el usuario pueda borrar por error.
+          Compress-Archive -Path dist/BlenderManager.exe -DestinationPath BlenderManager-windows-x86_64.zip
       # Que el .exe arranque de verdad. Sin esto, un Windows roto se descubre
       # cuando lo baja un usuario: no tenemos ninguna maquina Windows a mano.
       - name: Comprobar que el binario arranca (GUI incluida)
@@ -172,8 +174,8 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          ./dist/BlenderManager/BlenderManager.exe --smoke
-          ./dist/BlenderManager/BlenderManager.exe --screenshot shot.png
+          ./dist/BlenderManager.exe --smoke
+          ./dist/BlenderManager.exe --screenshot shot.png
           ls -l shot.png
           test "$(stat -c%s shot.png)" -gt 5000
       - uses: actions/upload-artifact@v4

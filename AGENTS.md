@@ -306,6 +306,16 @@ entorno o el fallo vuelve.
 
 ### El spec (`packaging/blendermanager.spec`)
 
+- **Windows se empaqueta `--onefile`, Linux/macOS one-folder.** El spec ramifica
+  por `sys.platform`: en Windows la `EXE` se lleva `a.binaries`/`a.datas` y no hay
+  `COLLECT`, así que el asset es un **único `BlenderManager.exe`** (sin
+  `_internal`). Se hizo así porque el reparto Windows es un `.zip` manual y el
+  error clásico del usuario era descomprimir solo el `.exe` (o borrar `_internal`)
+  y encontrarse con `Failed to load Python DLL ... python312.dll`. El precio es un
+  arranque más lento (descomprime ~100 MB en `%TEMP%` cada vez) y más ruido con
+  antivirus heurísticos. Linux/macOS siguen one-folder (arranque instantáneo); el
+  updater funciona en ambos layouts (`_apply_windows` busca el `.exe` y copia su
+  carpeta, que en onefile es solo el ejecutable).
 - `datas` solo lleva `src/assets` (ya no hay `views/`).
 - **Iconos**: `packaging/icons/blendermanager.ico` (Windows) y `.icns` (macOS)
   los genera `packaging/make_icons.py` a partir de
