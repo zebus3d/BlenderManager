@@ -151,6 +151,10 @@ jobs:
   windows:
     needs: version
     runs-on: windows-latest
+    # El token es un secreto y en los `if` no se pueden usar secretos
+    # directamente: se pasan por entorno y el paso comprueba el entorno.
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -164,12 +168,41 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
           pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
-      # Firma autofirmada, copiada de hurricane_solver. NO evita el aviso de
-      # SmartScreen (no lo avala una CA) y cada build genera un certificado
-      # distinto, asi que no da reputacion; pero malware rara vez va firmado y
-      # puede suavizar heuristicos de algunos antivirus. Es best-effort: si el
-      # runner no deja firmar, el release sigue con el .exe sin firmar.
-      - name: Firmar el ejecutable (autofirmado)
+      # Firma con SignPath (gratis para open source). La accion firma a partir
+      # de un artifact de GitHub, no de un fichero local, asi que hay que subir
+      # el .exe sin firmar antes. Sin el secreto SIGNPATH_API_TOKEN todo esto se
+      # salta y el .exe queda sin firmar (o con la autofirmada de abajo).
+      - name: Subir el .exe sin firmar (para SignPath)
+        id: unsigned
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlenderManager-windows-unsigned
+          path: dist/BlenderManager.exe
+          # Sin zip: asi SignPath recibe el .exe tal cual.
+          archive: false
+          retention-days: 1
+      - name: Firmar con SignPath
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # El artifact no es un zip (archive: false): no descomprimir.
+          skip-decompress: true
+          output-artifact-directory: dist
+      # Plan B: firma autofirmada, copiada de hurricane_solver, SOLO si no hay
+      # SignPath. NO evita el aviso de SmartScreen (no lo avala una CA) y cada
+      # build genera un certificado distinto, asi que no da reputacion; pero
+      # malware rara vez va firmado y puede suavizar heuristicos. Best-effort:
+      # si el runner no deja firmar, el release sigue con el .exe sin firmar.
+      - name: Firmar el ejecutable (autofirmado, sin SignPath)
+        if: ${{ env.SIGNPATH_API_TOKEN == '' }}
         continue-on-error: true
         shell: powershell
         run: |
