@@ -386,29 +386,27 @@ lo elegimos a propósito para que no exista `_internal` que borrar (ver arriba).
    SHA-256 y abre el portal.
 2. **Mantener PyInstaller al día**: cada release recompila el bootloader y suele
    tardar en estar en las listas negras. `requirements-build.txt` pide `>=6.6`.
-3. **Publicar en winget** (`.github/workflows/winget.yml`, a mano tras promover):
-   `winget install Zebus3d.BlenderManager` evita el popup azul de SmartScreen
-   porque no hay descarga del navegador (ni Mark-of-the-Web). Es la única vía
-   **sin certificado**. Necesita un PAT propio como secreto `WINGET_ACC_TOKEN`
-   (permiso para forkear `microsoft/winget-pkgs` y abrir el PR). La primera
-   publicación puede requerir retoques del manifiesto; el asset es un zip con un
-   único `.exe`.
-4. **Documentar y verificar**: el README lleva el SHA-256 de cada asset
+3. **Documentar y verificar**: el README lleva el SHA-256 de cada asset
    (`checksums.txt`); quien quiera puede confirmar que el fichero es el nuestro.
 
 Blender Launcher V2 (el proyecto hermano, 700+ estrellas) está **igual**: su zip
 de Windows es un único `.exe` con `--onefile --windowed --noupx`, **sin firmar**,
-y lo que hace con los falsos positivos es enviarlos a Microsoft (issue #87) y
-publicar en **winget** (`winget install VictorIX.BlenderLauncher`). No hay poción
-mágica.
+y lo que hace con los falsos positivos es enviarlos a Microsoft (issue #87). No
+hay poción mágica.
 
 **El popup azul de SmartScreen** ("Windows protegió tu PC") solo lo quita un
 certificado de una CA: es reputación de editor + hash, y el Mark-of-the-Web del
 navegador lo dispara siempre. Para un usuario que baja el `.zip` de Releases,
-**no hay forma de evitarlo** sin firmar. Alternativas: **winget** (no hay
-descarga del navegador) o **SignPath** (gratis para open source; registro +
-GitHub Action, la clave vive en su HSM, no en el repo). Winget no firma nada,
-solo cambia el canal de instalación.
+**no hay forma de evitarlo** sin firmar; el usuario le da a "Más información" →
+"Ejecutar de todas formas". La única alternativa es **SignPath** (gratis para
+open source; registro + GitHub Action, la clave vive en su HSM, no en el repo).
+
+Se evaluó **winget** para saltarse el popup (no hay descarga del navegador, así
+que no hay Mark-of-the-Web) y se **descartó**: obliga al usuario inexperto a
+aprender a usar un comando en una terminal, que es precisamente el público de
+esta app. No merece la pena a cambio de quitar un aviso que se salta con dos
+clics. Si algún día se retoma, la idea era `.github/workflows/winget.yml` con
+`vedantmgoyal9/winget-releaser` y un PAT propio en `WINGET_ACC_TOKEN`.
 
 ### Verificación antes de tocar el job
 
