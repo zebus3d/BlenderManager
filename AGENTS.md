@@ -420,6 +420,31 @@ esta app. No merece la pena a cambio de quitar un aviso que se salta con dos
 clics. Si algún día se retoma, la idea era `.github/workflows/winget.yml` con
 `vedantmgoyal9/winget-releaser` y un PAT propio en `WINGET_ACC_TOKEN`.
 
+#### Activar la firma con SignPath (gratis para OSS)
+
+El job `windows` ya trae los pasos (`Subir el .exe sin firmar` + `Firmar con
+SignPath`), **inertes hasta que exista el secreto** `SIGNPATH_API_TOKEN`. La
+acción firma a partir de un **artifact de GitHub** (por eso se sube el `.exe`
+con `archive: false` antes), no de un fichero local; el Artifact Configuration de
+SignPath tiene que describir un único fichero PE. Puesta en marcha:
+
+1. Pedir el certificado en <https://signpath.org/apply> (vincular el repo de
+   GitHub; para OSS es gratis y la clave vive en su HSM, no en el repo).
+2. En SignPath.io: Trusted Build System **GitHub.com** → proyecto → signing
+   policy → **artifact configuration** (un fichero PE).
+3. Crear un **API token** de un usuario con permiso *submitter*.
+4. En GitHub (Settings → Secrets and variables → Actions):
+   - **Secret** `SIGNPATH_API_TOKEN`.
+   - **Variables** `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`,
+     `SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`.
+5. El siguiente push a `main` firma el `.exe`. Si el token no está, no cambia
+   nada (queda el autofirmado best-effort de plan B).
+
+Cuando esté firmado por una CA, el popup de SmartScreen desaparece **según se
+gana reputación** (es un certificado OV, no EV: no es instantáneo). El SHA-256
+del asset cambia al firmar, así que `checksums.txt` se recalcula solo (lo hace
+el job `release` desde el artifact).
+
 ### Verificación antes de tocar el job
 
 ```bash
