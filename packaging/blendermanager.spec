@@ -1,9 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 """Especificación de PyInstaller para empaquetar Blender Manager.
 
-Genera un paquete "one-folder" (no un único archivo) porque es más rápido de
-arrancar y más fácil de depurar que `--onefile`. En macOS además se crea el
-bundle .app.
+En Linux y macOS se genera un paquete "one-folder" (o un bundle `.app`), porque
+es más rápido de arrancar y más fácil de depurar que `--onefile`.
+
+En Windows, en cambio, se genera un **único `.exe`** (`--onefile`): todo va
+embebido y PyInstaller lo descomprime en `%TEMP%` al arrancar. Se hace así porque
+el reparto es un `.zip` que la gente baja a mano y el error clásico es
+descomprimir solo el `.exe`, borrar la carpeta `_internal` y encontrarse con
+``Failed to load Python DLL ... python312.dll``. Con un solo fichero no hay nada
+que perder. El precio es un arranque más lento (descomprime ~100 MB cada vez) y
+algo más de ruido con los antivirus heurísticos.
 
 Uso:
     pyinstaller --clean --noconfirm packaging/blendermanager.spec \
@@ -78,11 +85,9 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
+# Opciones comunes del ejecutable (recurso de versión e icono solo aplican en
+# Windows; en el resto de plataformas PyInstaller las ignora).
+_EXE_OPTIONS = dict(
     name="BlenderManager",
     debug=False,
     bootloader_ignore_signals=False,
@@ -91,30 +96,35 @@ exe = EXE(
     upx=False,
     console=False,
     disable_windowed_traceback=False,
-    # Recurso de versión del .exe (solo aplica en Windows).
     version=str(VERSION_INFO) if VERSION_INFO.is_file() else None,
-    # Icono del .exe (Windows ignora esto en las demas plataformas).
     icon=str(ICON_ICO) if ICON_ICO.is_file() else None,
 )
 
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    name="BlenderManager",
-)
-
-if sys.platform == "darwin":
-    app = BUNDLE(
-        coll,
-        name="BlenderManager.app",
-        icon=str(ICON_ICNS) if ICON_ICNS.is_file() else None,
-        bundle_identifier="org.zebus3d.blendermanager",
-        info_plist={
-            "NSHighResolutionCapable": True,
-            "CFBundleShortVersionString": APP_VERSION,
-            "CFBundleVersion": APP_VERSION,
-        },
+if sys.platform == "win32":
+    # Onefile: Python, Qt y todas las DLL van dentro del .exe. Un solo fichero
+    # que no se puede romper borrando `_internal` (ver la cabecera del spec).
+    exe = EXE(pyz, a.scripts, a.binaries, a.datas, [], **_EXE_OPTIONS)
+else:
+    # One-folder: el .exe y la carpeta `_internal` al lado.
+    exe = EXE(pyz, a.scripts, [], exclude_binaries=True, **_EXE_OPTIONS)
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=False,
+        name="BlenderManager",
     )
+
+    if sys.platform == "darwin":
+        app = BUNDLE(
+            coll,
+            name="BlenderManager.app",
+            icon=str(ICON_ICNS) if ICON_ICNS.is_file() else None,
+            bundle_identifier="org.zebus3d.blendermanager",
+            info_plist={
+                "NSHighResolutionCapable": True,
+                "CFBundleShortVersionString": APP_VERSION,
+                "CFBundleVersion": APP_VERSION,
+            },
+        )

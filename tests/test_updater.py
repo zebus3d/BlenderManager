@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -327,6 +328,41 @@ class SourceUpdateTests(unittest.TestCase):
                 mock.patch.object(updater, "_git_head", side_effect=["sha1", "sha1"]), \
                 mock.patch.object(updater.subprocess, "run", return_value=result):
             self.assertEqual(updater.source_update(), (True, "up-to-date"))
+
+
+class WindowsUpdateLayoutTests(unittest.TestCase):
+    """El updater de Windows debe encontrar el `.exe` en cualquier layout.
+
+    El asset pasó a ser **onefile** (un único `BlenderManager.exe` en la raíz del
+    zip) para que nadie pueda romper la instalación borrando `_internal`. Antes
+    `_apply_windows` daba por hecho que `extract()` devolvía la carpeta que
+    contiene el ejecutable; con un zip plano eso ya no se cumple.
+    """
+
+    def _apply_con(self, entries):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            archive = base / "update.zip"
+            with zipfile.ZipFile(archive, "w") as zf:
+                for name in entries:
+                    zf.writestr(name, "contenido")
+            with mock.patch.object(updater, "updates_dir",
+                                   return_value=base / "updates"), \
+                    mock.patch.object(updater.subprocess, "Popen") as popen:
+                ok = updater._apply_windows(archive)
+        return ok, popen
+
+    def test_onefile_un_solo_exe_en_la_raiz(self):
+        ok, popen = self._apply_con([updater.EXE_NAME])
+        self.assertTrue(ok)
+        lanzado = popen.call_args.args[0]
+        self.assertTrue(lanzado[0].endswith(updater.EXE_NAME))
+        self.assertIn("--apply-update", lanzado)
+
+    def test_onefolder_con_carpeta(self):
+        ok, popen = self._apply_con([f"BlenderManager/{updater.EXE_NAME}"])
+        self.assertTrue(ok)
+        self.assertTrue(popen.call_args.args[0][0].endswith(updater.EXE_NAME))
 
 
 if __name__ == "__main__":
