@@ -351,6 +351,56 @@ entorno o el fallo vuelve.
   no lo pilla, porque `--smoke` no importa Qt. Por eso el CI ahora lanza además
   la GUI empaquetada con el plugin *offscreen* en las tres plataformas.
 
+### Avisos falsos de antivirus en Windows (y qué NO hacer)
+
+Es un problema **conocido y esperado**, no un fallo del código: un `.exe` de
+PyInstaller **sin firmar** cae a menudo en los heurísticos de Defender (típico
+`Trojan:Win32/Wacatac.B!ml`, `PUA:Win32/...`). El bootloader se auto-extrae y eso
+es justo el patrón que usan muchos malwares hechos con PyInstaller, así que el
+detector dispara por parecido. `--onefile` es más propenso que one-folder, pero
+lo elegimos a propósito para que no exista `_internal` que borrar (ver arriba).
+
+**Lo que NO basta, o engaña:**
+
+- **Certificado autofirmado** (`New-SelfSignedCertificate` + `Set-AuthenticodeSignature`,
+  la técnica de `hurricane_solver`): **no quita SmartScreen** (no lo avala una CA)
+  y cada build genera un certificado distinto, así que no da reputación. Puede
+  suavizar heurísticos de algunos antivirus (el malware rara vez va firmado), pero
+  no es una solución. Aun así lo hacemos **best-effort** en el job de Windows
+  (`continue-on-error`, no rompe el release si el runner no deja firmar), porque
+  es barato. Ojo con la comparación: que en `hurricane_solver` «no dé alertas» no
+  demuestra que la firma funcione, porque aquel `.exe` es de **C++ (MSBuild)**, no
+  un onefile de PyInstaller; los heurísticos de Defender disparan sobre todo por
+  el bootloader que se auto-extrae.
+- Recomponer el bootloader de PyInstaller desde fuente: en la práctica da **más**
+  falsos positivos, y añade un toolchain C al CI.
+
+**Lo que sí funciona, gratis y sin cuenta (la vía de Blender Launcher V2):**
+
+1. **Enviar la muestra a Microsoft** en el portal WDSI
+   (<https://www.microsoft.com/en-us/wdsi/filesubmission>) marcándola como
+   *Clean (false positive)*. No hace falta cuenta (el correo es opcional) y
+   Microsoft saca el hash de las definiciones en uno o dos días. Es **por build**:
+   si vuelve a marcar una versión nueva, se repite. Ayuda
+   `python packaging/report_false_positive.py <exe-o-zip>`, que calcula el
+   SHA-256 y abre el portal.
+2. **Mantener PyInstaller al día**: cada release recompila el bootloader y suele
+   tardar en estar en las listas negras. `requirements-build.txt` pide `>=6.6`.
+3. **Documentar y verificar**: el README lleva el SHA-256 de cada asset
+   (`checksums.txt`); quien quiera puede confirmar que el fichero es el nuestro.
+
+Blender Launcher V2 (el proyecto hermano, 700+ estrellas) está **igual**: su zip
+de Windows es un único `.exe` con `--onefile --windowed --noupx`, **sin firmar**,
+y lo que hace con los falsos positivos es enviarlos a Microsoft (issue #87) y
+publicar en **winget** (`winget install VictorIX.BlenderLauncher`), que evita el
+"bájate un .exe de Internet" y el popup de SmartScreen. No hay poción mágica.
+
+**Si algún día se quiere quitar el popup de SmartScreen** ("editor desconocido",
+que solo sale al bajar de Internet): hace falta un certificado de una CA. El
+único gratis para open source es **SignPath** (registro + GitHub Action; la clave
+vive en su HSM, no en el repo). Winget no firma nada, solo cambia el canal de
+instalación.
+
 ### Verificación antes de tocar el job
 
 ```bash
@@ -427,9 +477,10 @@ El AppImage resultante pesa ~70 MB.
   `target.new`, `chmod 0755`, `os.replace` y `Popen` del nuevo. Funciona en Linux
   (el inodo viejo sigue vivo), pero si `target` es un directorio o no está
   definido se cierra la app sin haber instalado nada — de ahí la validación.
-- Firma de Windows: **descartada de momento** (un self-signed no reduce
-  SmartScreen/AV). Si aparecen falsos positivos, valorar CA real o Azure
-  Trusted Signing y resubmit a WDSI.
+- Firma de Windows: se firma **best-effort** con un autofirmado (no quita
+  SmartScreen; ver "Avisos falsos de antivirus en Windows"). Para quitarlo de
+  verdad, valorar SignPath (gratis para OSS), una CA real o Azure Trusted
+  Signing, y enviar los falsos positivos a WDSI.
 
 ## Verificación de UI sin pantalla
 
