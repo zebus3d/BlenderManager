@@ -1875,16 +1875,46 @@ class MainWindow(QWidget):
         self._set_status(tr("Cancelled"))
 
     def _on_download_done(self, path: str, build) -> None:
+        archive = Path(path)
+        # En macOS la API solo publica .dmg, que no es un contenedor que
+        # sepamos abrir. La descarga ha ido bien: dejamos el archivo donde
+        # está (sin borrarlo, aunque ``delete_archive`` esté activo, porque es
+        # el único artefacto útil) y le decimos al usuario qué hacer con él, en
+        # vez de intentar extraerlo y fingir un fallo de descarga.
+        if not is_archive(archive):
+            # No hubo extracción, así que no hay "Reemplazar" que completar:
+            # sin esto la carpeta vieja se borraría en la siguiente extracción.
+            self._replace_entry = None
+            self._set_downloading(False)
+            self.progress.setValue(0)
+            self.percent.setText("")
+            opener.reveal(archive)
+            self._show_message(
+                tr("Downloaded to {folder}", folder=archive.parent)
+                + "  ·  "
+                + tr("Open it to install Blender manually."),
+                10,
+            )
+            return
         self._set_status(tr("Extracting..."))
         self._set_downloading(True)
 
+        destination = Path(self._destination_for(build)).expanduser()
+
         def worker():
             try:
-                target = extract(path, Path(self._destination_for(build)).expanduser())
+                target = extract(archive, destination)
+                # El nombre de la carpeta extraída no lleva el hash de la
+                # compilación, así que lo anotamos nosotros: es lo único que
+                # distingue dos diarias de la misma versión bajadas en días
+                # distintos (ver ``services.installed``). Si no apareció una
+                # carpeta nueva (target == destino) no hay dónde anotarlo.
+                if Path(target) != destination:
+                    installed_service.write_marker(target, build)
                 # Borrar el archivo comprimido solo si el usuario lo pidió.
                 if self.delete_archive:
                     try:
-                        Path(path).unlink()
+                        archive.unlink()
                     except OSError:
                         pass
             except Exception as error:
