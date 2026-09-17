@@ -408,3 +408,9 @@ Icons are from [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
 
 Blender Manager has no accounts, no telemetry and no analytics. See
 [PRIVACY.md](PRIVACY.md) for what it stores locally and which servers it talks to.
+
+## License
+
+Blender Manager is free software, released under the
+[GNU General Public License v3.0](LICENSE).
+Copyright (C) 2019-2026 zebus3d.
