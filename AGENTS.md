@@ -380,10 +380,22 @@ lo elegimos a propósito para que no exista `_internal` que borrar (ver arriba).
 1. **Enviar la muestra a Microsoft** en el portal WDSI
    (<https://www.microsoft.com/en-us/wdsi/filesubmission>) marcándola como
    *Clean (false positive)*. No hace falta cuenta (el correo es opcional) y
-   Microsoft saca el hash de las definiciones en uno o dos días. Es **por build**:
-   si vuelve a marcar una versión nueva, se repite. Ayuda
+   Microsoft saca el hash de las definiciones en uno o dos días. Ayuda
    `python packaging/report_false_positive.py <exe-o-zip>`, que calcula el
    SHA-256 y abre el portal.
+   **¿Hay que hacerlo por cada build? No:**
+   - Solo importan las releases **estables promovidas**. Los push a `main`
+     actualizan un pre-release que el auto-update ignora y nadie descarga.
+   - Los nombres con `!ml` son detecciones **genéricas** (machine learning): al
+     confirmar el falso positivo, Microsoft suele ajustarlas y dejan de marcar
+     builds parecidas. Se reenvía **solo cuando vuelve a saltar**, no en cada
+     versión.
+   - La **auto-actualización no pasa por SmartScreen**: la hace la app con
+     `urllib`, que no pone Mark-of-the-Web (eso lo pone el navegador). El popup
+     azul solo lo ve quien baja el `.zip` a mano.
+   - Si aparece la marca, comparar en **VirusTotal** el `.exe` nuevo con el de la
+     versión anterior: si el anterior no está marcado y el nuevo sí, es el
+     heurístico del bootloader y toca enviarlo.
 2. **Mantener PyInstaller al día**: cada release recompila el bootloader y suele
    tardar en estar en las listas negras. `requirements-build.txt` pide `>=6.6`.
 3. **Documentar y verificar**: el README lleva el SHA-256 de cada asset
