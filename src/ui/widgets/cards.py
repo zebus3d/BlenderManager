@@ -362,7 +362,7 @@ class GridBuildCard(BaseBuildCard):
         sub.setAlignment(Qt.AlignHCenter)
         lay.addWidget(sub)
 
-        tag = QLabel(tr("Installed build") if installed else "")
+        tag = QLabel(tr("Local build") if installed else "")
         tag.setObjectName("Success")
         tag.setAlignment(Qt.AlignHCenter)
         lay.addWidget(tag)

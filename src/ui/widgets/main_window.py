@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QStackedWidget,
     QStyle,
+    QTabBar,
     QTabWidget,
     QStyleOptionSlider,
     QVBoxLayout,
@@ -99,6 +100,18 @@ MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT = 880, 540
 # LTS o una compilación diaria; las claves de i18n son estos textos en inglés.
 # Los saltos de línea (\n) se ven en el tooltip, así que pueden ser varias
 # líneas.
+# Canales de la barra de filtros, en el orden en que se enseñan. Son
+# excluyentes (solo se ve uno a la vez), así que van en una barra de pestañas
+# y no en pastillas sueltas.
+CHANNELS = (
+    ("all", "All"),
+    ("lts", "LTS"),
+    ("stable", "Stable"),
+    ("daily", "Daily"),
+    ("experimental", "Experimental"),
+    ("favorites", "Favorites"),
+)
+
 CHANNEL_TOOLTIPS = {
     "all": "Show every build: stable, LTS, daily and alpha.",
     "lts": "LTS = Long Term Support.\nVersions maintained for years and the "
@@ -364,15 +377,14 @@ class MainWindow(QWidget):
         root.setSpacing(0)
 
         root.addWidget(self._build_header())
-        self.filters = self._build_filters()
-        root.addWidget(self.filters)
 
         body = QHBoxLayout()
         body.setSpacing(0)
         body.addWidget(self._build_sidebar())
+        # El stack principal tiene las tres zonas: las listas (Local y Nube),
+        # Migración y Ajustes. Las listas llevan dentro su fila de filtros.
         self.stack = QStackedWidget()
-        self.stack.addWidget(self._build_store_view())
-        self.stack.addWidget(self._build_installed_view())
+        self.stack.addWidget(self._build_lists_view())
         self.migrate_view = MigrateView()
         self.migrate_view.set_system(self.system.os_name, self.system.arch)
         self.migrate_view.status_message.connect(self._show_message)
@@ -460,23 +472,30 @@ class MainWindow(QWidget):
         bar.setObjectName("Chrome")
         bar.setFixedHeight(44)
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(16, 6, 16, 6)
+        # Sin margen a la izquierda (las pestañas van pegadas al borde) ni abajo
+        # (tocan el fondo de la fila, como pestañas de verdad).
+        lay.setContentsMargins(0, 6, 16, 0)
         lay.setSpacing(6)
 
-        self.channel_group = QButtonGroup(bar)
-        self.channel_group.setExclusive(True)
-        self._channel_buttons = {}
-        for key, label in (("all", "All"), ("lts", "LTS"), ("stable", "Stable"),
-                           ("daily", "Daily"), ("experimental", "Experimental"),
-                           ("favorites", "Favorites")):
-            btn = Pill(tr(label), tr(CHANNEL_TOOLTIPS[key]))
-            self.channel_group.addButton(btn)
-            btn.clicked.connect(lambda _=False, k=key: self.set_channel(k))
-            lay.addWidget(btn)
-            self._channel_buttons[key] = btn
-        # Marcamos el filtro con el que se arranca, que es el que se guardó.
-        self._channel_buttons.get(self.channel,
-                                  self._channel_buttons["all"]).setChecked(True)
+        # Los canales son excluyentes, así que van en una barra de pestañas: es
+        # lo que espera ver quien elige "solo uno de estos". No lleva páginas
+        # (Tienda e Instaladas comparten el canal): al cambiar de pestaña se
+        # refiltra la lista de debajo.
+        self.channel_tabs = QTabBar()
+        self.channel_tabs.setObjectName("ChannelTabs")
+        self.channel_tabs.setExpanding(False)
+        self.channel_tabs.setDrawBase(False)
+        self.channel_tabs.setUsesScrollButtons(False)
+        self.channel_tabs.setToolTip(tr(
+            "Show only one kind of build at a time."))
+        for index, (key, label) in enumerate(CHANNELS):
+            self.channel_tabs.addTab(tr(label))
+            self.channel_tabs.setTabToolTip(index, tr(CHANNEL_TOOLTIPS[key]))
+        current = next((i for i, (key, _) in enumerate(CHANNELS)
+                        if key == self.channel), 0)
+        self.channel_tabs.setCurrentIndex(current)
+        self.channel_tabs.currentChanged.connect(self._on_channel_tab_changed)
+        lay.addWidget(self.channel_tabs, 0, Qt.AlignBottom)
         lay.addStretch()
 
         self.layout_group = QButtonGroup(bar)
@@ -528,7 +547,7 @@ class MainWindow(QWidget):
             ("installed", icons.INSTALLED, tr(
                 "Show the versions you already have on this computer.")),
             ("store", icons.STORE, tr(
-                "Show the builds you can download from Blender.")),
+                "Show the builds you can download from the cloud.")),
         ):
             btn = SideButton(glyph, tip)
             btn.setFont(icon_font(20))
@@ -566,6 +585,26 @@ class MainWindow(QWidget):
         grid.setAlignment(Qt.AlignTop)
         scroll.setWidget(content)
         return scroll, grid
+
+    def _build_lists_view(self) -> QWidget:
+        """Zona de listas (Local y Nube) con su fila de filtros encima.
+
+        Los filtros solo tienen sentido aquí: en Migración y Ajustes no son
+        listas de compilaciones. Al vivir con ellas, esas vistas usan el alto
+        completo (antes se reservaba la fila de 44 px y se ocultaba su contenido
+        para que la interfaz no diera un salto al cambiar de vista).
+        """
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        self.filters = self._build_filters()
+        lay.addWidget(self.filters)
+        self.list_stack = QStackedWidget()
+        self.list_stack.addWidget(self._build_store_view())
+        self.list_stack.addWidget(self._build_installed_view())
+        lay.addWidget(self.list_stack, 1)
+        return page
 
     def _build_store_view(self):
         self.store_scroll, self.store_grid = self._new_list_view()
@@ -688,7 +727,7 @@ class MainWindow(QWidget):
             "BlenderManager only looks inside its download folder. If you also "
             "have Blender installed or unzipped somewhere else (another drive, "
             "a portable copy...), point this to that folder and those versions "
-            "will show up in Installed. It is only read: downloads keep going "
+            "will show up in Local. It is only read: downloads keep going "
             "to the destination folder.")
         row_extra = QHBoxLayout()
         extra_label = QLabel(tr("Look for Blender in an extra folder"))
@@ -1076,8 +1115,20 @@ class MainWindow(QWidget):
         # Se recuerda para la próxima vez que se abra la aplicación.
         self.settings.channel = channel
         self.settings.save()
+        # Sincroniza la pestaña: el cambio puede venir de ella misma o de otro
+        # sitio (por ejemplo, al restaurar el canal guardado).
+        index = next((i for i, (key, _) in enumerate(CHANNELS)
+                      if key == channel), 0)
+        if self.channel_tabs.currentIndex() != index:
+            self.channel_tabs.blockSignals(True)
+            self.channel_tabs.setCurrentIndex(index)
+            self.channel_tabs.blockSignals(False)
         self._rebuild_store()
         self._rebuild_installed()
+
+    def _on_channel_tab_changed(self, index: int) -> None:
+        if 0 <= index < len(CHANNELS):
+            self.set_channel(CHANNELS[index][0])
 
     def _on_search_text(self, text: str) -> None:
         self._pending_search = text
@@ -1115,29 +1166,21 @@ class MainWindow(QWidget):
             self.migrate_view.set_installed(self.installed)
 
     def _set_view(self, view: str, animate: bool = True) -> None:
-        index = {"store": 0, "installed": 1, "migrate": 2, "settings": 3}.get(view, 0)
-        self.stack.setCurrentIndex(index)
+        # Tienda e Instaladas comparten la zona de listas (con sus filtros); lo
+        # que cambia entre ellas es la página del sub-stack.
+        if view in ("store", "installed"):
+            self.stack.setCurrentIndex(0)
+            self.list_stack.setCurrentIndex(0 if view == "store" else 1)
+            show_tools = True
+        else:
+            self.stack.setCurrentIndex({"migrate": 1, "settings": 2}.get(view, 0))
+            show_tools = False
         for key, btn in self.side_buttons.items():
             btn.setChecked(key == view)
-        # La migración y los ajustes no son listas de compilaciones: ni filtros
-        # ni buscador. PERO la fila de filtros (44 px fijos) se deja puesta y
-        # solo se oculta su contenido: si se escondiera entera, el contenido
-        # subiría esos 44 px y la interfaz pegaría un salto al cambiar de vista.
-        show_filters = view not in ("settings", "migrate")
-        self._set_filters_content_visible(show_filters)
-        self.header_tools.setVisible(show_filters)
-        self.zoom_box.setVisible(show_filters and self.layout_mode == "grid")
-
-    def _set_filters_content_visible(self, visible: bool) -> None:
-        """Oculta el contenido de la fila de filtros, no la fila.
-
-        Se recorren los hijos directos (las pastillas, los botones de vista y
-        los desplegables); el estirón del layout no es un widget y no molesta.
-        La fila se queda con su alto, que es lo que evita el salto.
-        """
-        for child in self.filters.findChildren(
-                QWidget, options=Qt.FindDirectChildrenOnly):
-            child.setVisible(visible)
+        # El buscador y el zoom del pie solo aplican a las listas; en Migración
+        # y Ajustes se ocultan (no arrastran salto: van en la cabecera y el pie).
+        self.header_tools.setVisible(show_tools)
+        self.zoom_box.setVisible(show_tools and self.layout_mode == "grid")
 
     def set_layout_mode(self, mode: str) -> None:
         """Cambia entre rejilla y lista y recuerda la elección."""
@@ -1574,8 +1617,8 @@ class MainWindow(QWidget):
                 text = tr("No favorites yet")
                 hint = tr("Tap the star on a card to keep it here.")
             else:
-                text = tr("No installed versions found")
-                hint = tr("Download one from the store to see it here.")
+                text = tr("No local versions found")
+                hint = tr("Download one from the cloud to see it here.")
             self._fill_grid(self.installed_grid, [self._placeholder(text, hint)],
                             columns)
             return
