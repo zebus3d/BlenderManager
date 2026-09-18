@@ -514,6 +514,15 @@ El AppImage resultante pesa ~70 MB.
   y relanza. Si no se puede (sin permiso en el directorio del bundle, bundle no
   localizable), macOS revela la descarga y avisa, como antes. No soportados solo
   avisan.
+  - **El `.zip` se extrae con `ditto -x -k`, NUNCA con `zipfile`**
+    (`macos_dmg.extract_zip`). `zipfile` de Python pierde los bits de ejecución
+    y los symlinks del bundle (y puede perder la firma), así que el `.app`
+    extraído **no arranca** — el síntoma que reportó Manu: "reemplaza pero no
+    abre". Es el mismo motivo por el que Blender Launcher V2 usa `ditto` en su
+    `extractor.py`.
+  - El helper comprueba `[ -x "$EXE" ]` antes de tocar nada y, si el nuevo
+    bundle no abre, restaura el viejo desde `BUNDLE.old` (que no borra hasta que
+    el nuevo arranca): así una actualización rota nunca deja al usuario sin app.
 - **Modo fuente**: al correr con `python3 src/main.py` no hay binario que
   reemplazar, así que la actualización es `git pull --ff-only` + reinicio
   (`updater.source_update` / `relaunch_source`, con `AppDialog` propio). Solo
