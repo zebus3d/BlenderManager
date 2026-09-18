@@ -250,11 +250,11 @@ class MainWindow(QWidget):
         # ``Settings.destination_for``; aquí solo se recuerda para la interfaz.
         self.lts_folder = self.settings.lts_folder
         self.separate_lts = bool(self.settings.separate_lts)
-        # Carpetas extra que el usuario añade para que la app busque ahí sus
-        # Blender (los que instaló a mano, por ejemplo). Solo se escanean, y
-        # solo si el interruptor está encendido.
-        self.extra_folders = list(self.settings.extra_folders)
-        self.use_extra_folders = bool(self.settings.use_extra_folders)
+        # Carpeta extra opcional (como ``lts_folder``): donde el usuario ya
+        # tenía sus Blender (instalados a mano, una copia portable...). Solo se
+        # escanea, y solo si el interruptor está encendido.
+        self.extra_folder = self.settings.extra_folder
+        self.use_extra_folder = bool(self.settings.use_extra_folder)
         self.launch_args = self.settings.launch_args
         self.delete_archive = bool(self.settings.delete_archive)
         # Bandeja del sistema: dos decisiones independientes (cerrar y
@@ -647,6 +647,7 @@ class MainWindow(QWidget):
         lay.addLayout(row_lts)
 
         self.lts_row = QWidget()
+        self.lts_row.setObjectName("FormRow")
         lts_lay = QHBoxLayout(self.lts_row)
         lts_lay.setContentsMargins(0, 0, 0, 0)
         lts_lay.setSpacing(6)
@@ -664,45 +665,45 @@ class MainWindow(QWidget):
         self.lts_row.setVisible(self.separate_lts)
         lay.addWidget(self.lts_row)
 
-        # Carpetas extra: BlenderManager solo mira su carpeta de descargas, así
+        # Carpeta extra: BlenderManager solo mira su carpeta de descargas, así
         # que quien ya tenía sus Blender en otro sitio (a mano, en otro disco,
-        # una copia portable) no los veía. La sección va bajo un interruptor,
-        # como las LTS aparte: apagado no se escanea nada y no ocupa sitio.
+        # una copia portable) no los veía. Igual que las LTS aparte: un
+        # interruptor y, debajo, una sola carpeta. Apagado no se escanea ni
+        # ocupa sitio; la ruta se recuerda igual.
         extra_tip = tr(
             "BlenderManager only looks inside its download folder. If you also "
             "have Blender installed or unzipped somewhere else (another drive, "
-            "a portable copy...), add that folder here and it will show up in "
-            "Installed. It is only read: downloads keep going to the "
-            "destination folder.")
+            "a portable copy...), point this to that folder and those versions "
+            "will show up in Installed. It is only read: downloads keep going "
+            "to the destination folder.")
         row_extra = QHBoxLayout()
-        extra_label = QLabel(tr("Look for Blender in other folders"))
+        extra_label = QLabel(tr("Look for Blender in an extra folder"))
         extra_label.setToolTip(extra_tip)
         row_extra.addWidget(extra_label)
         row_extra.addStretch()
-        self.extra_switch = SwitchPill(self.use_extra_folders, tooltip=extra_tip)
-        self.extra_switch.toggled.connect(self._on_extra_folders_toggled)
+        self.extra_switch = SwitchPill(self.use_extra_folder, tooltip=extra_tip)
+        self.extra_switch.toggled.connect(self._on_extra_folder_toggled)
         row_extra.addWidget(self.extra_switch)
         lay.addLayout(row_extra)
 
-        self.extra_section = QWidget()
-        extra_lay = QVBoxLayout(self.extra_section)
+        self.extra_row = QWidget()
+        self.extra_row.setObjectName("FormRow")
+        extra_lay = QHBoxLayout(self.extra_row)
         extra_lay.setContentsMargins(0, 0, 0, 0)
         extra_lay.setSpacing(6)
-        self.extra_box = QVBoxLayout()
-        self.extra_box.setContentsMargins(0, 0, 0, 0)
-        self.extra_box.setSpacing(6)
-        extra_lay.addLayout(self.extra_box)
-        add_extra = CardButton(tr("Add extra folder..."), tooltip=tr(
-            "Pick a folder that contains your installed Blender versions, one "
-            "per subfolder."))
-        add_extra.clicked.connect(self.add_extra_folder)
-        add_row = QHBoxLayout()
-        add_row.addWidget(add_extra)
-        add_row.addStretch()
-        extra_lay.addLayout(add_row)
-        self.extra_section.setVisible(self.use_extra_folders)
-        lay.addWidget(self.extra_section)
-        self._rebuild_extra_rows()
+        self.extra_input = QLineEdit(self.extra_folder)
+        self.extra_input.setPlaceholderText(tr("Your own Blender folder"))
+        self.extra_input.setToolTip(tr(
+            "Folder with your own Blender versions.\n"
+            "Each version has to be in its own subfolder."))
+        self.extra_input.textChanged.connect(self._on_extra_folder_changed)
+        extra_lay.addWidget(self.extra_input, 1)
+        extra_browse = CardButton(tr("Browse..."),
+                                  tooltip=tr("Choose a folder with Blender versions"))
+        extra_browse.clicked.connect(self.browse_extra_folder)
+        extra_lay.addWidget(extra_browse)
+        self.extra_row.setVisible(self.use_extra_folder)
+        lay.addWidget(self.extra_row)
 
         row2 = QHBoxLayout()
         row2.addWidget(QLabel(tr("Delete archive after extraction")))
@@ -1662,93 +1663,13 @@ class MainWindow(QWidget):
         if folder:
             self.lts_input.setText(folder)
 
-    # ------------------------------------------------ carpetas extra
-    def _rebuild_extra_rows(self) -> None:
-        """Rehace las filas de carpetas extra a partir de ``self.extra_folders``.
-
-        Se reconstruyen enteras (son pocas) al añadir o quitar; así los índices
-        de los manejadores siguen coincidiendo con la lista. Al editar el texto
-        no se rehace nada: eso solo actualiza el valor.
-        """
-        while self.extra_box.count():
-            item = self.extra_box.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                # Primero fuera de la vista y luego a la cola de borrado: si no,
-                # las filas viejas siguen pintándose un frame (como en la rejilla).
-                widget.setParent(None)
-                widget.deleteLater()
-        for index, folder in enumerate(self.extra_folders):
-            self.extra_box.addWidget(self._extra_folder_row(folder, index))
-
-    def _extra_folder_row(self, folder: str, index: int) -> QWidget:
-        """Fila de una carpeta extra: ruta editable, examinar y quitar."""
-        row = QWidget()
-        lay = QHBoxLayout(row)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
-        field = QLineEdit(folder)
-        field.setToolTip(tr(
-            "Folder with your own Blender versions.\n"
-            "Each version has to be in its own subfolder."))
-        field.textChanged.connect(
-            lambda text, i=index: self._set_extra_folder(i, text))
-        # El rescaneo se espera a que se termine de editar (Enter o perder el
-        # foco): hacerlo en cada tecla recorrería las carpetas sin necesidad.
-        field.editingFinished.connect(self.refresh_installed)
-        lay.addWidget(field, 1)
-        browse = CardButton(tr("Browse..."), tooltip=tr("Choose another folder"))
-        browse.clicked.connect(lambda _=False, i=index: self.browse_extra_folder(i))
-        lay.addWidget(browse)
-        remove = IconFlatButton(icons.DELETE,
-                                tr("Stop looking in this folder"))
-        remove.clicked.connect(lambda _=False, i=index: self.remove_extra_folder(i))
-        lay.addWidget(remove)
-        return row
-
-    def _save_extra_folders(self) -> None:
-        """Vuelca las carpetas extra en los ajustes y los guarda."""
-        self.settings.extra_folders = list(self.extra_folders)
-        self.settings.save()
-
-    def _set_extra_folder(self, index: int, text: str) -> None:
-        if 0 <= index < len(self.extra_folders):
-            self.extra_folders[index] = text
-            self._save_extra_folders()
-
-    def add_extra_folder(self) -> None:
-        """Añade una carpeta elegida con el diálogo del sistema."""
-        folder = self._choose_folder("", tr("Choose a folder with Blender versions"))
-        if not folder:
-            return
-        if folder not in self.extra_folders:
-            self.extra_folders.append(folder)
-            self._save_extra_folders()
-            self._rebuild_extra_rows()
-        self.refresh_installed()
-
-    def browse_extra_folder(self, index: int) -> None:
-        """Cambia la ruta de la fila ``index`` por la que elija el usuario."""
-        if not (0 <= index < len(self.extra_folders)):
-            return
+    # ------------------------------------------------ carpeta extra
+    def browse_extra_folder(self) -> None:
+        """Pide la carpeta opcional con los Blender del propio usuario."""
         folder = self._choose_folder(
-            self.extra_folders[index],
-            tr("Choose a folder with Blender versions"))
-        if not folder:
-            return
-        self.extra_folders[index] = folder
-        self._save_extra_folders()
-        self._rebuild_extra_rows()
-        self.refresh_installed()
-
-    def remove_extra_folder(self, index: int) -> None:
-        """Deja de escanear la carpeta de la fila ``index``."""
-        if not (0 <= index < len(self.extra_folders)):
-            return
-        del self.extra_folders[index]
-        self._save_extra_folders()
-        self._rebuild_extra_rows()
-        self.refresh_installed()
+            self.extra_folder, tr("Choose a folder with Blender versions"))
+        if folder:
+            self.extra_input.setText(folder)
 
     def _destination_for(self, build) -> str:
         """Carpeta donde va esta compilación: las LTS pueden ir aparte.
@@ -1783,13 +1704,19 @@ class MainWindow(QWidget):
         self.refresh_installed()
         self._rebuild_store()
 
-    def _on_extra_folders_toggled(self, value: bool) -> None:
-        """Enciende (o apaga) la búsqueda en las carpetas extra."""
-        self.use_extra_folders = value
-        self.settings.use_extra_folders = value
+    def _on_extra_folder_changed(self, text: str) -> None:
+        self.extra_folder = text
+        self.settings.extra_folder = text
         self.settings.save()
-        # Solo se enseña la sección cuando está activado; las rutas se guardan.
-        self.extra_section.setVisible(value)
+        self.refresh_installed()
+
+    def _on_extra_folder_toggled(self, value: bool) -> None:
+        """Enciende (o apaga) la búsqueda en la carpeta extra."""
+        self.use_extra_folder = value
+        self.settings.use_extra_folder = value
+        self.settings.save()
+        # Solo se enseña la carpeta cuando está activado; la ruta se guarda.
+        self.extra_row.setVisible(value)
         self.refresh_installed()
 
     def _on_archive_toggled(self, value: bool) -> None:

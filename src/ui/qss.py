@@ -48,6 +48,9 @@ def build_qss() -> str:
     /* El contenedor de refresco+buscador NO debe pintar su fondo: si no,
        aparece un recuadro más oscuro dentro de la cabecera. */
     QWidget#HeaderTools {{ background: transparent; }}
+    /* Filas que solo agrupan un campo y su botón: sin fondo, o el QWidget
+       pinta el BG oscuro y aparece una banda dentro de la tarjeta clara. */
+    QWidget#FormRow {{ background: transparent; }}
     QToolTip {{
         background-color: {t.BG};
         color: {t.TEXT};

@@ -548,37 +548,34 @@ class SettingsTests(unittest.TestCase):
             dest_folder="/tmp/datos", lts_folder="/tmp/datos", separate_lts=True)
         self.assertEqual(settings.folders(), ["/tmp/datos"])
 
-    def test_las_carpetas_extra_se_escanean_si_estan_activadas(self):
+    def test_la_carpeta_extra_se_escanea_si_esta_activada(self):
         settings = settings_module.Settings(
-            dest_folder="/tmp/datos",
-            extra_folders=["/tmp/viejos", " /tmp/otros "],
-            use_extra_folders=True)
-        # Se suman al destino (y a las LTS), sin duplicar rutas ni colar vacías.
-        self.assertEqual(settings.folders(),
-                         ["/tmp/datos", "/tmp/viejos", "/tmp/otros"])
+            dest_folder="/tmp/datos", extra_folder=" /tmp/viejos ",
+            use_extra_folder=True)
+        # Se suma al destino (y a las LTS), con la ruta ya normalizada.
+        self.assertEqual(settings.folders(), ["/tmp/datos", "/tmp/viejos"])
 
-    def test_las_carpetas_extra_apagadas_no_se_escanean(self):
+    def test_la_carpeta_extra_apagada_no_se_escanea(self):
         settings = settings_module.Settings(
-            dest_folder="/tmp/datos", extra_folders=["/tmp/viejos"])
-        # Apagado: no se mira, pero las rutas se recuerdan (como las LTS).
+            dest_folder="/tmp/datos", extra_folder="/tmp/viejos")
+        # Apagada: no se mira, pero la ruta se recuerda (como la carpeta LTS).
         self.assertEqual(settings.folders(), ["/tmp/datos"])
-        self.assertEqual(settings.extra_folders, ["/tmp/viejos"])
+        self.assertEqual(settings.extra_folder, "/tmp/viejos")
 
-    def test_carpetas_extra_igual_al_destino_no_se_repite(self):
+    def test_carpeta_extra_igual_al_destino_no_se_repite(self):
         settings = settings_module.Settings(
-            dest_folder="/tmp/datos",
-            extra_folders=["/tmp/datos", "/tmp/otros", ""],
-            use_extra_folders=True)
-        self.assertEqual(settings.folders(), ["/tmp/datos", "/tmp/otros"])
+            dest_folder="/tmp/datos", extra_folder="/tmp/datos",
+            use_extra_folder=True)
+        self.assertEqual(settings.folders(), ["/tmp/datos"])
 
-    def test_las_carpetas_extra_se_guardan(self):
+    def test_la_carpeta_extra_se_guarda(self):
         settings = settings_module.Settings()
-        settings.extra_folders = ["/tmp/viejos"]
-        settings.use_extra_folders = True
+        settings.extra_folder = "/tmp/viejos"
+        settings.use_extra_folder = True
         settings.save()
         loaded = settings_module.Settings.load()
-        self.assertEqual(loaded.extra_folders, ["/tmp/viejos"])
-        self.assertTrue(loaded.use_extra_folders)
+        self.assertEqual(loaded.extra_folder, "/tmp/viejos")
+        self.assertTrue(loaded.use_extra_folder)
 
     def test_favoritos_se_marcan_y_se_guardan(self):
         settings = settings_module.Settings()

@@ -156,13 +156,12 @@ class Settings:
     # apagues, para no perder la ruta elegida.
     lts_folder: str = ""
     separate_lts: bool = False
-    # Carpetas extra donde buscar versiones instaladas que no bajó la app (por
-    # ejemplo, las que el usuario instaló a mano o con otro gestor). Solo se
-    # escanean: las descargas nuevas siguen yendo a ``dest_folder``. El
-    # interruptor es independiente de la lista: al apagarlo se dejan de mirar,
-    # pero las rutas se recuerdan (como la carpeta LTS).
-    extra_folders: list[str] = field(default_factory=list)
-    use_extra_folders: bool = False
+    # Carpeta extra donde buscar versiones instaladas que no bajó la app (por
+    # ejemplo, las que el usuario instaló a mano o con otro gestor). Va con su
+    # propio interruptor, como las LTS aparte, y solo se escanea: las descargas
+    # nuevas siguen yendo a ``dest_folder``.
+    extra_folder: str = ""
+    use_extra_folder: bool = False
     language: str = "auto"
     delete_archive: bool = True
     launch_args: str = ""
@@ -243,8 +242,8 @@ class Settings:
             dest_folder=str(data.get("dest_folder") or ""),
             lts_folder=str(data.get("lts_folder") or ""),
             separate_lts=bool(data.get("separate_lts", False)),
-            extra_folders=_clean_string_list(data.get("extra_folders")),
-            use_extra_folders=bool(data.get("use_extra_folders", False)),
+            extra_folder=str(data.get("extra_folder") or ""),
+            use_extra_folder=bool(data.get("use_extra_folder", False)),
             language=str(data.get("language") or "auto"),
             delete_archive=bool(data.get("delete_archive", True)),
             launch_args=str(data.get("launch_args") or ""),
@@ -297,14 +296,14 @@ class Settings:
         Si las LTS viven aparte hay que escanear las dos. La carpeta LTS se
         incluye aunque el interruptor esté apagado: si se desactiva, las LTS ya
         instaladas ahí no deben desaparecer de la lista, solo se dejan de
-        mandar las nuevas. Las carpetas extra se suman al final, pero **solo si
-        el interruptor está encendido**: apagarlo es "no mires ahí", no
-        "olvida las rutas". Cuando dos rutas coinciden (o una está repetida) se
-        escanea una sola vez.
+        mandar las nuevas. La carpeta extra se suma al final, pero **solo si su
+        interruptor está encendido**: apagarlo es "no mires ahí", no "olvida la
+        ruta". Cuando dos rutas coinciden (o una está repetida) se escanea una
+        sola vez.
         """
         candidates = [self.dest_folder, self.lts_folder.strip()]
-        if self.use_extra_folders:
-            candidates.extend(self.extra_folders)
+        if self.use_extra_folder:
+            candidates.append(self.extra_folder.strip())
         folders = []
         for folder in candidates:
             name = (folder or "").strip()

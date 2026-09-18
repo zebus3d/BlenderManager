@@ -900,7 +900,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             self.assertEqual([e.version for e in window.installed],
                              ["5.1.2", "4.5.13"])
 
-    def test_anadir_y_quitar_una_carpeta_extra(self):
+    def test_la_carpeta_extra_busca_solo_si_esta_activada(self):
         import tempfile
         from pathlib import Path
 
@@ -910,35 +910,20 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             extra = Path(tmp) / "mis-blenders"
             (extra / "blender-5.0.1-linux-x64").mkdir(parents=True)
-            # La sección arranca apagada (como las LTS aparte).
-            self.assertTrue(window.extra_section.isHidden())
+            # Arranca apagada (como las LTS aparte): la fila ni se enseña.
+            self.assertTrue(window.extra_row.isHidden())
             window.extra_switch.setChecked(True)
-            self.assertFalse(window.extra_section.isHidden())
-            self.assertTrue(window.settings.use_extra_folders)
-            with mock.patch.object(window, "_choose_folder",
-                                   return_value=str(extra)):
-                window.add_extra_folder()
+            self.assertFalse(window.extra_row.isHidden())
+            self.assertTrue(window.settings.use_extra_folder)
+            window.extra_input.setText(str(extra))
             # Se escanea esa carpeta aunque no sea la de descargas.
-            self.assertEqual(window.settings.extra_folders, [str(extra)])
+            self.assertEqual(window.settings.extra_folder, str(extra))
             self.assertEqual([e.version for e in window.installed], ["5.0.1"])
-            # La misma carpeta no se añade dos veces.
-            with mock.patch.object(window, "_choose_folder",
-                                   return_value=str(extra)):
-                window.add_extra_folder()
-            self.assertEqual(window.settings.extra_folders, [str(extra)])
-            # Quitarla deja de escanearla y la borra de los ajustes.
-            window.remove_extra_folder(0)
-            self.assertEqual(window.settings.extra_folders, [])
-            self.assertEqual(window.installed, [])
-            # Apagarla deja de escanear sin olvidar las rutas guardadas.
-            with mock.patch.object(window, "_choose_folder",
-                                   return_value=str(extra)):
-                window.add_extra_folder()
-            self.assertEqual([e.version for e in window.installed], ["5.0.1"])
+            # Apagarla deja de escanear, pero la ruta se recuerda.
             window.extra_switch.setChecked(False)
-            self.assertTrue(window.extra_section.isHidden())
-            self.assertFalse(window.settings.use_extra_folders)
-            self.assertEqual(window.settings.extra_folders, [str(extra)])
+            self.assertTrue(window.extra_row.isHidden())
+            self.assertFalse(window.settings.use_extra_folder)
+            self.assertEqual(window.settings.extra_folder, str(extra))
             self.assertEqual(window.installed, [])
 
 
