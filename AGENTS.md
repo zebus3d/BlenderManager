@@ -208,13 +208,16 @@ minor** (`v1.3.0`).
   (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
   la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
 - **macOS: el `.dmg` se monta y se instala** (`src/services/macos_dmg.py`). La
-  API solo publica `.dmg`, que no es un comprimido, así que `hdiutil attach` lo
-  monta, se copia `Blender.app` a la carpeta destino con `ditto` (preserva
-  firma/metadatos del bundle) y se desmonta. Así la Mac puede **lanzarse desde
-  la app** como cualquier otra: antes solo se revelaba el fichero y no había
-  forma de abrirla. Es un módulo de `services/` (sin Qt) y usa `clean_env()`;
-  si el montaje falla, se cae al plan B (revelar y avisar). Los tests mockean
-  `hdiutil`/`ditto`, así que **no se prueba en el CI** (Ubuntu).
+  API solo publica `.dmg`, que no es un comprimido, así que `hdiutil attach
+  -mountpoint` lo monta, se copian los `.app` a la carpeta destino con `ditto`
+  (preserva firma/metadatos del bundle), se les quita la cuarentena con `xattr`
+  (por si el `.dmg` venía marcado) y se desmonta con `detach -force`. Es el
+  patrón de Homebrew Cask/kitty/Zed y el de Blender Launcher V2
+  (`source/threads/extractor.py`). Así la Mac puede **lanzarse desde la app**
+  como cualquier otra: antes solo se revelaba el fichero y no había forma de
+  abrirla. Es un módulo de `services/` (sin Qt) y usa `clean_env()`; si el
+  montaje falla, se cae al plan B (revelar y avisar). Los tests mockean
+  `hdiutil`/`ditto`/`xattr`, así que **no se prueba en el CI** (Ubuntu).
 
 ## Build Linux portable (PySide6)
 

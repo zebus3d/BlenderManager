@@ -4,7 +4,11 @@ En macOS la API de Blender solo publica ``.dmg``, que **no** es un archivo
 comprimido: para "extraerlo" hay que **montarlo** (``hdiutil attach``), copiar el
 ``Blender.app`` de dentro a la carpeta destino y desmontarlo. La copia se hace
 con ``ditto``, que preserva los metadatos y la firma del bundle (un
-``shutil.copytree`` puede dejarlo con problemas de Gatekeeper).
+``shutil.copytree`` puede dejarlo con problemas de Gatekeeper), y después se le
+quita el atributo de cuarentena con ``xattr`` por si el ``.dmg`` venía marcado.
+
+Es el mismo patrón que usan Homebrew Cask, kitty o Zed (``hdiutil`` + ``ditto``)
+y, para Blender en concreto, Blender Launcher V2 en su ``extractor.py``.
 
 Así la build queda igual que las de Linux/Windows: dentro de su carpeta, lista
 para que ``services.installed`` la escanee, ``services.launcher`` la abra y la
@@ -96,12 +100,22 @@ def install(dmg_path, dest_folder, version_hint: str = "",
         apps = sorted(mount.glob("*.app"))
         if not apps:
             raise DmgError("el .dmg no contiene ningún .app")
-        app = apps[0]
-        version = _app_version(app, version_hint or "unknown")
+        # El bundle de Blender para la versión; puede haber más de uno (p. ej.
+        # BlenderPlayer.app), así que se copian todos y se lanza el que toca.
+        main_app = next((a for a in apps if a.name == "Blender.app"), apps[0])
+        version = _app_version(main_app, version_hint or "unknown")
         arch = arch_hint or platform.machine() or "arm64"
         folder = _unique(dest / f"blender-{version}-macos-{arch}")
         folder.mkdir(parents=True)
-        _run(["ditto", str(app), str(folder / app.name)])
+        for bundle in apps:
+            target_app = folder / bundle.name
+            _run(["ditto", str(bundle), str(target_app)])
+            # Gatekeeper: si el .dmg venía marcado (p. ej. bajado antes con el
+            # navegador), el bundle hereda el atributo de cuarentena y macOS no
+            # deja ejecutarlo. Se quita; Blender está notarizado, así que no se
+            # debilita nada real. Lo mismo que hace Blender Launcher V2.
+            _run(["xattr", "-r", "-d", "com.apple.quarantine", str(target_app)],
+                 check=False)
         log(f"dmg instalado: {folder}")
         return folder
     finally:

@@ -1043,6 +1043,9 @@ class MacosDmgTests(unittest.TestCase):
             # Se monta y SIEMPRE se desmonta (aunque la copia fallara).
             self.assertTrue(any("attach" in c for c in calls))
             self.assertTrue(any("detach" in c for c in calls))
+            # Se copia con ditto y se quita la cuarentena (Gatekeeper).
+            self.assertTrue(any(c[0] == "ditto" for c in calls))
+            self.assertTrue(any(c[0] == "xattr" for c in calls))
 
     def test_usa_la_version_del_plist(self):
         import tempfile
