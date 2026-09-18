@@ -7,7 +7,12 @@ copia. La parte de habilitarlos en la versión destino la ejecuta Blender en
 segundo plano (``services/blender_runner``), porque el estado *habilitado*
 vive dentro de ``userpref.blend``.
 
-La disposición es la de un tablero de transferencia: el **origen** a la
+La pantalla sigue la misma guía que Ajustes: pestañas arriba (a la altura de
+las de canal), contenido debajo sobre el fondo oscuro y tarjetas un escalón por
+encima. La tarjeta "desde → hacia" es común a las tres pestañas y se mueve a la
+que esté abierta.
+
+Dentro de Add-ons, la disposición es la de un tablero de transferencia: el **origen** a la
 izquierda (con casilla, versión y veredicto), el **destino** a la derecha (con
 la carpeta donde caerá cada addon) y una flecha de un solo sentido en medio.
 Las dos columnas viven en la **misma área de scroll**, así que las filas quedan
@@ -39,6 +44,7 @@ from services import blender_config as bc
 from services import blender_prefs as bprefs
 from services import blender_runner
 from ui import icons
+from ui import theme as t
 from ui.fonts import glyph_icon, icon_font
 from ui.widgets.buttons import CardButton, CheckPill
 from ui.widgets.cards import card_shadow
@@ -170,13 +176,13 @@ def _settings_card(title: str = "") -> tuple:
 
     Es el mismo ``QFrame#SettingsCard`` que usa la pantalla de ajustes (título
     apagado, bordes redondeados, mismos márgenes); tenerlo en un solo sitio
-    evita que las cuatro tarjetas de esta vista se vayan separando con el
-    tiempo. Devuelve ``(tarjeta, layout)`` y, si hay ``title``, ya lo añade.
+    evita que las tarjetas de esta vista se vayan separando con el tiempo.
+    Devuelve ``(tarjeta, layout)`` y, si hay ``title``, ya lo añade.
     """
     card = QFrame()
     card.setObjectName("SettingsCard")
     # Sombra abajo a la derecha (la misma que las tarjetas de la tienda): las
-    # tarjetas van sobre el canvas gris de las pestañas y así se despegan de él.
+    # tarjetas van sobre el fondo oscuro de la pestaña y así se despegan de él.
     card_shadow(card)
     lay = QVBoxLayout(card)
     lay.setContentsMargins(16, 14, 16, 14)
@@ -364,65 +370,112 @@ class MigrateView(QWidget):
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
-        """Estructura de la pantalla.
+        """Estructura de la pantalla, calcada de Ajustes.
 
-        Arriba, una **barra fija** con el selector de versiones (origen →
-        destino) y las **dos pestañas**; el origen/destino es común a las dos,
-        así que no se repite dentro. Debajo, el aviso de Blender abierto. El
-        resto vive en un scroll con una pestaña por asunto:
+        Las **pestañas van arriba del todo** (a la misma altura que las de
+        canal de Tienda/Instaladas) y el contenido debajo, sobre el mismo fondo
+        oscuro que las listas; las tarjetas quedan un escalón por encima. Antes
+        había una cabecera propia y toda la vista iba del gris de panel: era la
+        única pantalla con el fondo claro.
+
+        La tarjeta **origen → destino** es común a las tres pestañas, así que
+        hay una sola y se mueve a la pestaña visible (``_show_header``).
 
         * **Add-ons**: el tablero y el botón de copiar lo seleccionado.
-        * **Preferences**: primero lo fino (ajustes uno a uno), luego los
-          ficheros completos y, al final, el reset a valores de fábrica.
+        * **Preferences**: primero lo fino (ajustes uno a uno) y luego los
+          ficheros completos.
+        * **Factory settings**: dejar la versión destino como recién instalada.
         """
         root = QVBoxLayout(self)
-        # Sin margen: las pestañas van **a sangre** (el canvas gris llega hasta
-        # la barra lateral, el borde derecho y la barra de estado). El padding
-        # va en la cabecera de arriba y en el interior de cada pestaña, no aquí.
+        # Sin margen: las pestañas van **a sangre** (el canvas llega hasta la
+        # barra lateral, el borde derecho y la barra de estado). El padding va
+        # dentro de cada pestaña, no aquí.
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        header = QWidget()
-        header.setObjectName("MigrateHeader")
-        header_lay = QVBoxLayout(header)
-        header_lay.setContentsMargins(24, 20, 24, 14)
-        header_lay.setSpacing(12)
-        # Título simple (sin tarjeta), como la vista de Ajustes: la barra
-        # lateral solo trae iconos, así que aquí hace falta saber dónde estás.
-        title = QLabel(tr("Migrate add-ons, extensions and preferences"))
-        title.setToolTip(tr(
-            "Pick a source and a destination version above, then use the tabs "
-            "to copy add-ons, individual settings or the whole preferences "
-            "file."))
-        header_lay.addWidget(title)
-        header_lay.addWidget(self._build_version_bar())
-
-        self.warning = QLabel("")
-        self.warning.setObjectName("Danger")
-        self.warning.setWordWrap(True)
-        self.warning.setVisible(False)
-        header_lay.addWidget(self.warning)
-        root.addWidget(header)
+        self.header = self._build_header()
 
         self.tabs = QTabWidget()
         self.tabs.setObjectName("MigrateTabs")
         self.tabs.addTab(self._build_addons_tab(), tr("Add-ons"))
         self.tabs.addTab(self._build_preferences_tab(), tr("Preferences"))
         self.tabs.addTab(self._build_factory_tab(), tr("Factory settings"))
+        # Misma alineación que Ajustes: el QTabWidget dibuja su barra arriba del
+        # todo, así que la vista baja lo que la fila mida de menos que la de
+        # filtros y las dos terminan a la misma altura al cambiar de pantalla.
+        # ``ensurePolished`` mide con el QSS ya aplicado (sin él la fila sale
+        # un par de píxeles más alta).
+        self.tabs.tabBar().ensurePolished()
+        bar_height = self.tabs.tabBar().sizeHint().height()
+        root.setContentsMargins(0, max(0, t.FILTERS_HEIGHT - bar_height), 0, 0)
         root.addWidget(self.tabs, 1)
 
+        self.tabs.currentChanged.connect(self._show_header)
+        self._show_header(self.tabs.currentIndex())
+
         self._set_controls_enabled(False)
+
+    def _build_header(self) -> QWidget:
+        """Bloque común a las tres pestañas: versiones y aviso de Blender abierto.
+
+        Es **un solo widget** que se reparenta a la pestaña visible: con una
+        copia por pestaña habría tres pares de desplegables que mantener en
+        sincronía, y el origen/destino es uno para toda la pantalla.
+        """
+        header = QWidget()
+        header.setObjectName("MigrateHeader")
+        lay = QVBoxLayout(header)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(12)
+        lay.addWidget(self._build_version_bar())
+
+        self.warning = QLabel("")
+        self.warning.setObjectName("Danger")
+        self.warning.setWordWrap(True)
+        self.warning.setVisible(False)
+        lay.addWidget(self.warning)
+        return header
+
+    def _show_header(self, index: int) -> None:
+        """Mueve la tarjeta de versiones a la pestaña que se acaba de abrir."""
+        page = self.tabs.widget(index)
+        if page is None or page is self.header.parentWidget():
+            return
+        old = self.header.parentWidget()
+        if old is not None and old.layout() is not None:
+            old.layout().removeWidget(self.header)
+        # ``insertWidget`` reparenta: la tarjeta pasa a ser hija de la página
+        # nueva y se dibuja arriba del todo, encima del contenido del tema.
+        page.layout().insertWidget(0, self.header)
+        self.header.show()
+
+    def _new_page(self) -> tuple:
+        """Página de una pestaña con los márgenes de Ajustes (``(page, lay)``).
+
+        El hueco de arriba lo ocupa la tarjeta de versiones, que se inserta en
+        la posición 0 al abrir la pestaña.
+        """
+        page = QWidget()
+        page.setObjectName("MigratePage")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(24, 20, 24, 20)
+        lay.setSpacing(16)
+        return page, lay
 
     def _build_version_bar(self) -> QFrame:
         """Tarjeta superior: de qué versión a qué versión (común a las pestañas).
 
-        Va en una tarjeta gris como el resto: sobre el fondo oscuro de la
-        ventana, un desplegable —que también es oscuro— no se distingue. Cada
-        columna lleva su etiqueta y, debajo, la ruta real de esa config: es lo
-        que deja claro *dónde* se va a escribir, sobre todo con las LTS en otro
-        disco o una config movida con ``BLENDER_USER_CONFIG``.
+        Va en una tarjeta como el resto: sobre el fondo oscuro de la ventana, un
+        desplegable —que también es oscuro— no se distingue. Cada columna lleva
+        su etiqueta y, debajo, la ruta real de esa config: es lo que deja claro
+        *dónde* se va a escribir, sobre todo con las LTS en otro disco o una
+        config movida con ``BLENDER_USER_CONFIG``.
         """
         card, lay = _settings_card()
+        card.setToolTip(tr(
+            "Pick a source and a destination version here, then use the tabs "
+            "to copy add-ons, individual settings or the whole preferences "
+            "file."))
         bar = QHBoxLayout()
         bar.setSpacing(10)
 
@@ -472,11 +525,7 @@ class MigrateView(QWidget):
         saltar la interfaz al cambiar de una a otra (que es lo que pasaba
         teniéndolos en la tarjeta de versiones).
         """
-        page = QWidget()
-        page.setObjectName("MigratePage")
-        lay = QVBoxLayout(page)
-        lay.setContentsMargins(24, 16, 24, 16)
-        lay.setSpacing(12)
+        page, lay = self._new_page()
 
         # El tablero es un layout DIRECTAMENTE en la página (sin un QWidget que
         # lo envuelva): un contenedor ajustado al tamaño de las tarjetas
@@ -555,11 +604,7 @@ class MigrateView(QWidget):
         pisar todo); el fichero completo es el atajo que reemplaza el
         ``userpref.blend`` entero, y por eso queda debajo.
         """
-        page = QWidget()
-        page.setObjectName("MigratePage")
-        lay = QVBoxLayout(page)
-        lay.setContentsMargins(24, 16, 24, 16)
-        lay.setSpacing(12)
+        page, lay = self._new_page()
         lay.addWidget(self._build_detail_prefs())
         lay.addWidget(self._build_preferences())
         lay.addStretch()
@@ -572,11 +617,7 @@ class MigrateView(QWidget):
         nada; deja la versión destino limpia) y así no se mezcla con la
         migración de ajustes. El reset es reversible desde aquí mismo.
         """
-        page = QWidget()
-        page.setObjectName("MigratePage")
-        lay = QVBoxLayout(page)
-        lay.setContentsMargins(24, 16, 24, 16)
-        lay.setSpacing(12)
+        page, lay = self._new_page()
         lay.addWidget(self._build_factory())
         lay.addStretch()
         return page

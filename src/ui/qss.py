@@ -71,17 +71,22 @@ def build_qss() -> str:
     QPushButton#Pill:checked {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
     QPushButton#Pill:disabled {{ color: rgba(230,230,230,0.35); }}
 
-    /* --- Pestañas de canal (filtros excluyentes) ---
-       Sin páginas debajo, así que se redondean por los cuatro lados y se leen
-       como un selector de pestañas en lugar de solapas que esperan un panel. */
-    /* El QTabBar es un QWidget pelado y, si no, pinta el BG del tema (el más
-       oscuro) y tapa el gris de la fila entre pestaña y pestaña. */
-    QTabBar#ChannelTabs {{ background: transparent; }}
-    QTabBar#ChannelTabs::tab {{
+    /* --- Pestañas (canal, migración y ajustes) ---
+       Mismo aspecto en las tres: oscuras, compactas y con el mismo color de
+       texto. Las de canal van en un QTabBar suelto (sin páginas debajo); las
+       otras, dentro de un QTabWidget que sí tiene panel.
+       El QTabBar es un QWidget pelado y, si no, pinta el BG del tema (más
+       oscuro) y tapa el gris de la fila. */
+    QTabBar#ChannelTabs,
+    QTabWidget#MigrateTabs QTabBar,
+    QTabWidget#SettingsTabs QTabBar {{ background: transparent; }}
+    QTabBar#ChannelTabs::tab,
+    QTabWidget#MigrateTabs QTabBar::tab,
+    QTabWidget#SettingsTabs QTabBar::tab {{
         background-color: {t.FILTER};
         border: 1px solid rgba(0,0,0,0.35);
-        /* Redondeadas arriba y rectas abajo: así se leen como pestañas y no
-           como botones. */
+        /* Redondeadas arriba y rectas abajo: se leen como pestañas y no como
+           botones. */
         border-bottom: none;
         border-top-left-radius: 6px;
         border-top-right-radius: 6px;
@@ -90,8 +95,12 @@ def build_qss() -> str:
         color: {t.TEXT};
         font-weight: bold;
     }}
-    QTabBar#ChannelTabs::tab:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
-    QTabBar#ChannelTabs::tab:selected {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
+    QTabBar#ChannelTabs::tab:hover,
+    QTabWidget#MigrateTabs QTabBar::tab:hover,
+    QTabWidget#SettingsTabs QTabBar::tab:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
+    QTabBar#ChannelTabs::tab:selected,
+    QTabWidget#MigrateTabs QTabBar::tab:selected,
+    QTabWidget#SettingsTabs QTabBar::tab:selected {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
 
     /* --- Barra lateral --- */
     QPushButton#SideButton {{
@@ -257,58 +266,42 @@ def build_qss() -> str:
        y Qt descarta su ``image``). Aquí solo se deja el color del texto. */
     QCheckBox {{ color: {t.TEXT}; spacing: 8px; }}
 
-    /* --- Migración: fondo gris unificado y pestañas ---
-       Toda la vista (cabecera + canvas de las pestañas) va del mismo gris
-       (SURFACE), de modo que arriba y abajo forman un solo bloque; encima van
-       las tarjetas (SURFACE_HIGH) con sombra. Las solapas de las pestañas sí
-       son oscuras, para que se lean como pestañas y no se fundan con el gris. */
+    /* --- Migración: mismo esquema de capas que las listas y Ajustes ---
+       La vista va en SURFACE, pero de ella solo se ve la **fila de detrás de
+       las pestañas**: el panel lo tapa todo lo demás y va oscuro (BG), como el
+       fondo de Local y Nube. Encima, las tarjetas en SURFACE con su sombra.
+       Antes toda la vista iba en SURFACE y era la única pantalla con el fondo
+       gris claro de arriba abajo. */
     QWidget#MigrateView {{ background-color: {t.SURFACE}; }}
-    /* La cabecera (título + tarjeta de versiones) se pinta el gris por su
-       cuenta: es un QWidget pelado y, si no, la regla global de QWidget le
-       pone el BG oscuro y rompe la unificación. */
-    QWidget#MigrateHeader {{ background-color: {t.SURFACE}; }}
+    /* La tarjeta de versiones va dentro de la pestaña: su contenedor es un
+       QWidget pelado, así que se pinta el fondo oscuro de la página. */
+    QWidget#MigrateHeader {{ background-color: {t.BG}; }}
     QTabWidget#MigrateTabs, QTabWidget#SettingsTabs {{ background-color: {t.SURFACE}; }}
-    QTabWidget#MigrateTabs QTabBar, QTabWidget#SettingsTabs QTabBar {{ background-color: {t.SURFACE}; }}
-    QTabWidget#MigrateTabs QTabBar::tab, QTabWidget#SettingsTabs QTabBar::tab {{
-        background-color: {t.FILTER};
-        color: {t.MUTED};
-        border: 1px solid rgba(0,0,0,0.45);
-        border-bottom: none;
-        border-top-left-radius: 6px;
-        border-top-right-radius: 6px;
-        padding: 6px 16px;
-        margin-right: 3px;
-        font-weight: bold;
-    }}
-    QTabWidget#MigrateTabs QTabBar::tab:hover, QTabWidget#SettingsTabs QTabBar::tab:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
-    QTabWidget#MigrateTabs QTabBar::tab:selected, QTabWidget#SettingsTabs QTabBar::tab:selected {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
-    /* Alinea la primera pestaña con el padding interno del canvas (24 px, el
-       mismo que la cabecera): si no, el texto de la pestaña queda pegado al
-       borde y descuadra con las tarjetas de debajo. */
-    QTabWidget#MigrateTabs QTabBar::tab:first {{ margin-left: 24px; }}
 
     /* El pane es la única parte del QTabWidget que pinta fondo; las páginas se
-       pintan el suyo (un QWidget pelado no siempre deja pasar el del pane). */
+       pintan el suyo (un QWidget pelado no siempre deja pasar el del pane).
+       El borde de arriba es la línea que separa las solapas del contenido. */
     QTabWidget#MigrateTabs::pane, QTabWidget#SettingsTabs::pane {{
         border: none;
         border-top: 1px solid {t.SURFACE_ALT};
-        background-color: {t.SURFACE};
+        background-color: {t.BG};
         top: -1px;
     }}
-    QWidget#MigratePage {{ background-color: {t.SURFACE}; }}
-    /* Especificidad: `QWidget#MigrateView QWidget` (id+tipo+tipo) ganaría a
-       `QFrame#SettingsCard` (id+tipo); por eso las tarjetas se declaran con el
-       mismo prefijo. Aplica a TODA la vista (cabecera incluida), porque el
-       fondo ahora es gris también arriba. */
-    QWidget#MigrateView QFrame#SettingsCard {{ background-color: {t.SURFACE_HIGH}; }}
+    QWidget#MigratePage {{ background-color: {t.BG}; }}
+    /* Las tarjetas se quedan con el SURFACE de `QFrame#SettingsCard` (el mismo
+       gris que las tarjetas de las listas): ahora que la página va oscura, no
+       hace falta subirlas un escalón más. Las filas de addons sí bajan, porque
+       van DENTRO de una tarjeta y con el mismo gris se perderían. */
     QWidget#MigrateView QFrame#AddonRow {{ background-color: {t.CARD_DIM}; }}
     QWidget#MigrateView QFrame#AddonRow[zebra="true"] {{ background-color: {t.CARD_DIM_ALT}; }}
 
-    /* --- Ajustes: el mismo efecto de capas que Migración ---
-       Fondo gris (SURFACE) en cada página de pestaña y las tarjetas un escalón
-       por encima (SURFACE_HIGH) con sombra (la pone `_settings_card`). */
+    /* --- Ajustes: igual que Migración ---
+       La página exterior y la tira de pestañas van en SURFACE; el panel de cada
+       pestaña (``SettingsTabPage``) baja a BG, como el fondo de Local y Nube, y
+       las tarjetas se quedan en SURFACE con la sombra que pone
+       `_settings_card`. */
     QWidget#SettingsPage {{ background-color: {t.SURFACE}; }}
-    QWidget#SettingsPage QFrame#SettingsCard {{ background-color: {t.SURFACE_HIGH}; }}
+    QWidget#SettingsTabPage {{ background-color: {t.BG}; }}
 
     /* --- Campos de texto --- */
     QLineEdit {{
