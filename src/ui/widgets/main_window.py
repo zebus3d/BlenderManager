@@ -84,6 +84,10 @@ PLATFORM_LABELS = {value: key for key, value in PLATFORMS.items()}
 ARCH_LABELS = ["x86_64", "arm64"]
 LANGUAGE_IDS = {"auto": "Automatic", "en": "English", "es": "Spanish"}
 MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
+
+# Alto de la fila de filtros (la que lleva las pestañas de canal). Se usa
+# también en Ajustes para que sus pestañas queden a la misma altura.
+FILTERS_HEIGHT = 44
 # Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
 ZOOM_STEP = 0.1
 
@@ -470,7 +474,7 @@ class MainWindow(QWidget):
     def _build_filters(self) -> QFrame:
         bar = QFrame()
         bar.setObjectName("Chrome")
-        bar.setFixedHeight(44)
+        bar.setFixedHeight(FILTERS_HEIGHT)
         lay = QHBoxLayout(bar)
         # Sin margen a la izquierda (las pestañas van pegadas al borde) ni abajo
         # (tocan el fondo de la fila, como pestañas de verdad).
@@ -620,14 +624,13 @@ class MainWindow(QWidget):
         # son los mismos que en Migración (objectName `SettingsPage`/`SettingsCard`).
         page = QWidget()
         page.setObjectName("SettingsPage")
+        # Sin título: las pestañas van pegadas al borde izquierdo y a la misma
+        # altura que las de canal (Local y Nube). Como el QTabWidget dibuja su
+        # barra arriba del todo, se baja lo que mida de menos para que las dos
+        # filas de pestañas terminen a la misma altura.
         outer = QVBoxLayout(page)
-        outer.setContentsMargins(24, 20, 24, 20)
-        outer.setSpacing(16)
-
-        header = QHBoxLayout()
-        header.addWidget(QLabel(tr("Settings")))
-        header.addStretch()
-        outer.addLayout(header)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
         tabs = QTabWidget()
         tabs.setObjectName("SettingsTabs")
@@ -641,6 +644,8 @@ class MainWindow(QWidget):
                     tr("System"))
         tabs.addTab(self._settings_tab(self._settings_updates_card()),
                     tr("Updates"))
+        bar_height = tabs.tabBar().sizeHint().height()
+        outer.setContentsMargins(0, max(0, FILTERS_HEIGHT - bar_height), 0, 0)
         outer.addWidget(tabs, 1)
         return page
 

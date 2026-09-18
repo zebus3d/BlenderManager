@@ -19,7 +19,6 @@ _TRANSLATIONS = {
         "Blender Downloads Manager": "Gestor de descargas de Blender",
         "Cloud": "Nube",
         "Local": "Local",
-        "Settings": "Ajustes",
         "Refresh": "Actualizar",
         "Search...": "Buscar...",
         "All": "Todas",
