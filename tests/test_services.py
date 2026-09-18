@@ -1012,15 +1012,15 @@ class MacosDmgTests(unittest.TestCase):
 
         def run(command, check=True):
             calls.append(command)
-            if command[0] == "hdiutil" and "attach" in command:
+            if command[0].endswith("hdiutil") and "attach" in command:
                 mount = Path(command[command.index("-mountpoint") + 1])
                 app = mount / "Blender.app"
                 (app / "Contents" / "MacOS").mkdir(parents=True)
                 (app / "Contents" / "MacOS" / "Blender").write_text("bin")
                 with (app / "Contents" / "Info.plist").open("wb") as handle:
                     plistlib.dump({"CFBundleShortVersionString": "9.9.9"}, handle)
-            elif command[0] == "ditto":
-                shutil.copytree(command[1], command[2])
+            elif command[0].endswith("ditto") and Path(command[-2]).is_dir():
+                shutil.copytree(command[-2], command[-1])
             return mock.Mock(returncode=0, stdout="", stderr="")
 
         return run
@@ -1044,8 +1044,28 @@ class MacosDmgTests(unittest.TestCase):
             self.assertTrue(any("attach" in c for c in calls))
             self.assertTrue(any("detach" in c for c in calls))
             # Se copia con ditto y se quita la cuarentena (Gatekeeper).
-            self.assertTrue(any(c[0] == "ditto" for c in calls))
-            self.assertTrue(any(c[0] == "xattr" for c in calls))
+            self.assertTrue(any(c[0].endswith("ditto") for c in calls))
+            self.assertTrue(any(c[0].endswith("xattr") for c in calls))
+
+    def test_extract_zip_usa_ditto_no_zipfile(self):
+        """El .zip de la app se extrae con ditto: zipfile rompe el bundle.
+
+        Python's zipfile pierde los bits de ejecución y los symlinks del .app,
+        y el bundle extraído no arranca. Blender Launcher V2 usa ditto por esto.
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            zip_path = base / "BlenderManager-macos.zip"
+            zip_path.write_bytes(b"zip")
+            calls = []
+            with mock.patch.object(macos_dmg, "_run",
+                                   side_effect=lambda c, check=True: calls.append(c)):
+                macos_dmg.extract_zip(zip_path, base / "out")
+        self.assertEqual(calls[0][0], "/usr/bin/ditto")
+        self.assertIn("-x", calls[0])
+        self.assertIn("-k", calls[0])
 
     def test_usa_la_version_del_plist(self):
         import tempfile

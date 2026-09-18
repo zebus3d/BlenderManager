@@ -58,6 +58,21 @@ def _run(command, check: bool = True):
     return result
 
 
+def extract_zip(zip_path, dest_folder) -> None:
+    """Extrae un ``.zip`` con ``ditto``, no con ``zipfile``.
+
+    **Importante**: ``zipfile`` de Python no restaura los bits de ejecución ni
+    los enlaces simbólicos del bundle (y puede perder la firma), así que el
+    ``.app`` extraído **no arranca**. En macOS la forma correcta de descomprimir
+    un bundle es ``ditto -x -k``; es lo mismo que hace Blender Launcher V2 para
+    este caso. Solo se usa al aplicar una actualización (el usuario descomprime
+    el zip de la release con Finder, que ya lo hace bien).
+    """
+    dest = Path(dest_folder)
+    dest.mkdir(parents=True, exist_ok=True)
+    _run(["/usr/bin/ditto", "-x", "-k", str(zip_path), str(dest)])
+
+
 def _app_version(app: Path, fallback: str) -> str:
     """Versión del bundle (``CFBundleShortVersionString``), o ``fallback``.
 
@@ -95,8 +110,8 @@ def install(dmg_path, dest_folder, version_hint: str = "",
     dest.mkdir(parents=True, exist_ok=True)
     mount = Path(tempfile.mkdtemp(prefix="blendermanager-dmg-"))
     try:
-        _run(["hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen",
-              "-mountpoint", str(mount), str(dmg)])
+        _run(["/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly",
+              "-noautoopen", "-mountpoint", str(mount), str(dmg)])
         apps = sorted(mount.glob("*.app"))
         if not apps:
             raise DmgError("el .dmg no contiene ningún .app")
@@ -109,17 +124,17 @@ def install(dmg_path, dest_folder, version_hint: str = "",
         folder.mkdir(parents=True)
         for bundle in apps:
             target_app = folder / bundle.name
-            _run(["ditto", str(bundle), str(target_app)])
+            _run(["/usr/bin/ditto", str(bundle), str(target_app)])
             # Gatekeeper: si el .dmg venía marcado (p. ej. bajado antes con el
             # navegador), el bundle hereda el atributo de cuarentena y macOS no
             # deja ejecutarlo. Se quita; Blender está notarizado, así que no se
             # debilita nada real. Lo mismo que hace Blender Launcher V2.
-            _run(["xattr", "-r", "-d", "com.apple.quarantine", str(target_app)],
-                 check=False)
+            _run(["/usr/bin/xattr", "-r", "-d", "com.apple.quarantine",
+                  str(target_app)], check=False)
         log(f"dmg instalado: {folder}")
         return folder
     finally:
         # Desmontar y limpiar SIEMPRE, aunque falle la copia: si no, el volumen
         # se queda montado y el siguiente intento falla con "resource busy".
-        _run(["hdiutil", "detach", str(mount), "-force"], check=False)
+        _run(["/usr/bin/hdiutil", "detach", str(mount), "-force"], check=False)
         shutil.rmtree(mount, ignore_errors=True)
