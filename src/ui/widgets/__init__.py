@@ -32,6 +32,7 @@ from ui.widgets.dialogs import (
     update_available,
 )
 from ui.widgets.main_window import MainWindow
+from ui.widgets.migrate import MigrateView
 from ui.widgets.tray import TrayIcon
 
 __all__ = [
@@ -45,6 +46,7 @@ __all__ = [
     "IconLinkButton",
     "InstalledCard",
     "MainWindow",
+    "MigrateView",
     "Pill",
     "ProgressDialog",
     "SideButton",

@@ -396,6 +396,298 @@ _TRANSLATIONS = {
         "Do nothing.": "No hace nada.",
         "This cannot be undone.": "Esto no se puede deshacer.",
         "Close this message.": "Cierra este aviso.",
+
+        # --- Migración de addons entre versiones de Blender ---
+        "Migrate": "Migrar",
+        "Copy add-ons, extensions and preferences from one Blender version to "
+        "another.":
+            "Copia addons, extensiones y preferencias de una versión de Blender "
+            "a otra.",
+        "Migrate add-ons, extensions and preferences":
+            "Migrar addons, extensiones y preferencias",
+        "Copy the add-ons (and extensions) of one installed version to "
+        "another, checking first whether they are compatible.":
+            "Copia los addons (y extensiones) de una versión instalada a otra, "
+            "comprobando antes si son compatibles.",
+        "From": "Desde",
+        "To": "Hacia",
+        "Source": "Origen",
+        "Destination": "Destino",
+        "(not copied)": "(no se copia)",
+        "Source and destination must be different.":
+            "El origen y el destino tienen que ser distintos.",
+        "You need at least two installed Blender versions.":
+            "Necesitas al menos dos versiones de Blender instaladas.",
+        "No add-ons found in this version":
+            "No se encontraron addons en esta versión",
+        "Install some add-ons in the source version first.":
+            "Instala addons en la versión de origen primero.",
+        "Add-ons": "Addons",
+        "Extension": "Extensión",
+        "Legacy add-on": "Addon clásico",
+        "Compatible": "Compatible",
+        "Review": "Revisar",
+        "Not compatible": "No compatible",
+        "It needs Blender {version} or newer.":
+            "Necesita Blender {version} o posterior.",
+        "It does not support Blender {version} yet.":
+            "Todavía no soporta Blender {version}.",
+        "It is not published for this system.":
+            "No está publicado para este sistema.",
+        "Its dependencies are built for another Python version.":
+            "Sus dependencias están compiladas para otra versión de Python.",
+        "It does not state a minimum version.":
+            "No indica una versión mínima.",
+        # Cómo revisar un addon marcado "Review" (el motivo solo no basta).
+        "Copy it and enable it in the destination version. If it fails to "
+        "load, it needs a build of the add-on made for that Blender "
+        "(its compiled dependencies do not match).":
+            "Cópialo y actívalo en la versión de destino. Si no carga, "
+            "necesitas una compilación del addon hecha para ese Blender (sus "
+            "dependencias compiladas no coinciden).",
+        "The add-on does not say which Blender it works with. Copy it and "
+        "test its panel or operators in the destination version; if they "
+        "fail, leave it disabled.":
+            "El addon no indica con qué Blender funciona. Cópialo y prueba su "
+            "panel u operadores en la versión de destino; si fallan, déjalo "
+            "desactivado.",
+        "Copy it and test it in the destination version before relying on it.":
+            "Cópialo y pruébalo en la versión de destino antes de confiar en él.",
+        "{total} add-ons · {ok} compatible · {warn} to review · {blocked} "
+        "not compatible":
+            "{total} addons · {ok} compatibles · {warn} por revisar · "
+            "{blocked} no compatibles",
+        "Select all": "Seleccionar todo",
+        "Select none": "No seleccionar ninguno",
+        "Add-ons keep the state they had in the source: the ones that were "
+        "enabled there are enabled here too.":
+            "Los addons conservan el estado que tenían en el origen: los que "
+            "estaban activados allí también lo estarán aquí.",
+        "Copy selected": "Copiar seleccionados",
+        "Copy the selected add-ons to the destination.":
+            "Copia los addons marcados a la versión de destino.",
+        "Nothing selected": "No has seleccionado nada",
+        "Copied {count} add-ons.": "Se copiaron {count} addons.",
+        "Nothing was copied.": "No se copió nada.",
+        "Migration complete": "Migración completada",
+        "Some add-ons could not be copied:":
+            "Algunos addons no se pudieron copiar:",
+        "What was replaced was kept next to it as a backup.":
+            "Lo que se reemplazó se guardó al lado como copia de seguridad.",
+        "Enabling the add-ons in Blender...":
+            "Activando los addons en Blender...",
+        "Enabled {count} add-ons in Blender {version}.":
+            "Se activaron {count} addons en Blender {version}.",
+        "The add-ons were copied but not enabled. You can enable them in "
+        "Blender's preferences.":
+            "Los addons se copiaron pero no se activaron. Puedes activarlos en "
+            "las preferencias de Blender.",
+        "Could not enable some add-ons:":
+            "No se pudieron activar algunos addons:",
+        "Close Blender {version} before migrating: it would overwrite the "
+        "changes when it quits.":
+            "Cierra Blender {version} antes de migrar: si no, sobrescribirá "
+            "los cambios al salir.",
+        "Blender {version} is running": "Blender {version} está abierto",
+        "No add-ons to migrate": "No hay addons que migrar",
+
+        # --- Migración de preferencias (ficheros de config/) ---
+        "Preferences": "Preferencias",
+        "Preferences file": "Fichero de preferencias",
+        "Copy the preferences file of the source version. It replaces the "
+        "current one (a backup is kept).":
+            "Copia el fichero de preferencias de la versión de origen. "
+            "Reemplaza el actual (se guarda una copia de seguridad).",
+        "Copy preferences": "Copiar preferencias",
+        "Copy the selected preference files.":
+            "Copia los ficheros de preferencias marcados.",
+        "(replaces the current one)": "(reemplaza el actual)",
+        "The startup file replaces your default scene and interface. "
+        "Leave it off unless you know what it does.":
+            "El fichero de arranque reemplaza tu escena e interfaz por defecto. "
+            "Déjalo desactivado salvo que sepas lo que hace.",
+        "No preferences found in the source version.":
+            "No se encontraron preferencias en la versión de origen.",
+        "Copied {count} preference files.":
+            "Se copiaron {count} ficheros de preferencias.",
+        "Some files could not be copied:":
+            "Algunos ficheros no se pudieron copiar:",
+        "Undo last migration": "Deshacer última migración",
+        "Put back what the last migration replaced and remove what it copied.":
+            "Devuelve lo que reemplazó la última migración y quita lo que copió.",
+        "This puts back what the last migration replaced and removes what it "
+        "copied from Blender {version}.\n\nAdd-ons you have changed since then "
+        "will be lost.":
+            "Esto devuelve lo que reemplazó la última migración y quita lo que "
+            "copió de Blender {version}.\n\nLos addons que hayas cambiado desde "
+            "entonces se perderán.",
+        "Undo": "Deshacer",
+        "Migration undone": "Migración deshecha",
+        "Restored {count} items to their previous state.":
+            "Se restauraron {count} elementos a su estado anterior.",
+        "Removed {count} items that were copied.":
+            "Se quitaron {count} elementos que se habían copiado.",
+        "There was nothing to undo.": "No había nada que deshacer.",
+        "Some items could not be restored:":
+            "Algunos elementos no se pudieron restaurar:",
+
+        # --- Preferencias selectivas (comparadas con las de fábrica) ---
+        "Preferences in detail": "Preferencias en detalle",
+        "Pick individual settings changed from Blender's defaults. They are "
+        "read automatically from the source version (it starts once, it may "
+        "take a moment).":
+            "Elige ajustes concretos que hayan cambiado respecto a los valores "
+            "por defecto de Blender. Se leen automáticamente de la versión de "
+            "origen (arranca una vez, puede tardar un momento).",
+        "Read again": "Leer de nuevo",
+        "Read the settings from the source version again.":
+            "Vuelve a leer los ajustes de la versión de origen.",
+        "{changed} settings changed from Blender's defaults · {active} "
+        "add-ons enabled in the source.":
+            "{changed} ajustes cambiados respecto a los valores por defecto de "
+            "Blender · {active} addons activados en el origen.",
+        "Apply to destination": "Aplicar al destino",
+        "Write the selected settings in the destination version.":
+            "Escribe los ajustes marcados en la versión de destino.",
+        "Reading settings...": "Leyendo ajustes...",
+        "Could not read the settings.": "No se pudieron leer los ajustes.",
+        "You have no settings changed from Blender's defaults.":
+            "No tienes ajustes cambiados respecto a los valores por defecto de "
+            "Blender.",
+        "{count} settings changed from Blender's defaults.":
+            "{count} ajustes cambiados respecto a los valores por defecto de "
+            "Blender.",
+        "This depends on your computer, not on your settings. Leave it off "
+        "unless it is the same machine.":
+            "Esto depende de tu equipo, no de tus ajustes. Déjalo desactivado "
+            "salvo que sea el mismo ordenador.",
+        "The source version has no executable to read.":
+            "La versión de origen no tiene ejecutable que leer.",
+        "The destination version has no executable to write.":
+            "La versión de destino no tiene ejecutable en el que escribir.",
+        "Applying settings...": "Aplicando ajustes...",
+        "Settings applied": "Ajustes aplicados",
+        "Applied {count} settings to Blender {version}.":
+            "Se aplicaron {count} ajustes a Blender {version}.",
+        "No settings were applied.": "No se aplicó ningún ajuste.",
+        "These settings no longer exist in this version:":
+            "Estos ajustes ya no existen en esta versión:",
+
+        # --- Tooltips de la vista de migración ---
+        "Pick a source and a destination version above, then use the tabs to "
+        "copy add-ons, individual settings or the whole preferences file.":
+            "Elige arriba una versión de origen y otra de destino y usa las "
+            "pestañas para copiar addons, ajustes concretos o el fichero de "
+            "preferencias entero.",
+        "Version you are copying the add-ons and settings from.":
+            "Versión de la que copias los addons y los ajustes.",
+        "Version you are copying the add-ons and settings to.":
+            "Versión a la que copias los addons y los ajustes.",
+        "Folder with the settings and add-ons of the source version. It is "
+        "only read, never written.":
+            "Carpeta con los ajustes y addons de la versión de origen. Solo se "
+            "lee, nunca se escribe.",
+        "Folder with the settings and add-ons of the destination version. This "
+        "is where the copy writes; what exists there is kept as a backup.":
+            "Carpeta con los ajustes y addons de la versión de destino. Aquí "
+            "escribe la copia; lo que ya exista se guarda como copia de "
+            "seguridad.",
+        "The add-ons and settings selected on the left are copied to the "
+        "version on the right.":
+            "Los addons y ajustes marcados a la izquierda se copian a la "
+            "versión de la derecha.",
+        "The ticked add-ons are copied from left to right. Nothing is moved: "
+        "the source version stays as it is.":
+            "Los addons marcados se copian de izquierda a derecha. No se mueve "
+            "nada: la versión de origen se queda como está.",
+        "Add-ons installed in the version you are copying from. Tick the ones "
+        "you want in the destination version.":
+            "Addons instalados en la versión de origen. Marca los que quieras "
+            "tener en la de destino.",
+        "Where each add-on lands in the destination version. Add-ons that were "
+        "enabled in the source are enabled here too.":
+            "Dónde queda cada addon en la versión de destino. Los que estaban "
+            "activados en el origen también se activan aquí.",
+        "How many add-ons were found, how many are compatible, how many you "
+        "should review and how many cannot be copied.":
+            "Cuántos addons se encontraron, cuántos son compatibles, cuántos "
+            "conviene revisar y cuántos no se pueden copiar.",
+        "Tick every add-on that can be copied. The ones marked \"Not "
+        "compatible\" cannot be ticked.":
+            "Marca todos los addons que se puedan copiar. Los de «No "
+            "compatible» no se pueden marcar.",
+        "Untick them all, to copy nothing.":
+            "Desmárcalos todos, para no copiar nada.",
+        "Tick every setting listed below.":
+            "Marca todos los ajustes de la lista.",
+        "Untick them all, to migrate no setting.":
+            "Desmárcalos todos, para no migrar ningún ajuste.",
+        "Copy the ticked add-ons to the destination version and enable the "
+        "ones that were enabled in the source.":
+            "Copia los addons marcados a la versión de destino y activa los "
+            "que estaban activados en el origen.",
+        "Tick to include this add-on in the copy.":
+            "Marca para incluir este addon en la copia.",
+        "It works with the destination version; it will be copied and kept as "
+        "it is.":
+            "Funciona con la versión de destino; se copiará y se dejará tal "
+            "cual.",
+        "This add-on is not copied, so nothing changes here.":
+            "Este addon no se copia, así que aquí no cambia nada.",
+        "Where it lands on the destination side: {path}":
+            "Dónde queda en la versión de destino: {path}",
+        "{name} of the source version:\n{path}":
+            "{name} de la versión de origen:\n{path}",
+        "Settings saved aside by a previous reset, ready to be put back.":
+            "Ajustes guardados aparte por un restablecimiento anterior, listos "
+            "para recuperarlos.",
+
+        # --- Reset a valores de fábrica (con instantánea recuperable) ---
+        "Factory settings": "Valores de fábrica",
+        "Put Blender {version} back to a clean state. Its current settings are "
+        "saved aside and can be restored, unless you delete them.":
+            "Devuelve Blender {version} a un estado limpio. Sus ajustes "
+            "actuales se guardan aparte y se pueden recuperar, salvo que los "
+            "borres.",
+        "Reset to factory settings": "Restablecer a valores de fábrica",
+        "Save the current settings aside and start clean.":
+            "Guarda aparte los ajustes actuales y empieza de cero.",
+        "Restore last settings": "Recuperar últimos ajustes",
+        "Put the saved settings back.": "Devuelve los ajustes guardados.",
+        "Delete saved settings": "Borrar ajustes guardados",
+        "Delete the saved settings for good.":
+            "Borra los ajustes guardados para siempre.",
+        "Saved settings: {count}. The newest is from {date}.":
+            "Ajustes guardados: {count}. El más reciente es del {date}.",
+        "No saved settings. Resetting will keep nothing to go back to.":
+            "No hay ajustes guardados. Si restableces, no habrá nada a lo que "
+            "volver.",
+        "This version has no settings yet.":
+            "Esta versión todavía no tiene ajustes.",
+        "Settings saved aside and reset.":
+            "Ajustes guardados aparte y restablecidos.",
+        "Your settings were saved. Blender {version} will start clean the next "
+        "time you open it.":
+            "Tus ajustes se guardaron. Blender {version} arrancará limpio la "
+            "próxima vez que lo abras.",
+        "Blender {version} will start clean on next launch.\n\nYour settings "
+        "are saved aside, so you can put them back from this same screen.":
+            "Blender {version} arrancará limpio la próxima vez.\n\nTus ajustes "
+            "se guardan aparte, así que podrás devolverlos desde esta misma "
+            "pantalla.",
+        "Reset": "Restablecer",
+        "Put back the saved settings of Blender {version}?\n\nThe clean "
+        "settings you have now are saved aside, so this can be undone too.":
+            "¿Devolver los ajustes guardados de Blender {version}?\n\nLos "
+            "ajustes limpios que tienes ahora se guardan aparte, así que esto "
+            "también se puede deshacer.",
+        "Restore": "Recuperar",
+        "Settings restored.": "Ajustes recuperados.",
+        "Delete the saved settings for good? You will not be able to restore "
+        "them.":
+            "¿Borrar los ajustes guardados para siempre? No podrás "
+            "recuperarlos.",
+        "Saved settings deleted.": "Ajustes guardados borrados.",
     }
 }
 

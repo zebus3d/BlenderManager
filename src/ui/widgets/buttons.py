@@ -7,7 +7,7 @@ puntos de enganche (``objectName`` y propiedades dinámicas) que el QSS usa.
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QCheckBox, QPushButton
 
 from ui import icons
 from ui import theme as t
@@ -174,3 +174,80 @@ class SwitchPill(QPushButton):
     def leaveEvent(self, event):
         super().leaveEvent(event)
         self.update()
+
+
+class CheckPill(QCheckBox):
+    """Casilla de verificación con la palomita pintada a mano.
+
+    Se probó a hacerlo con QSS (``::indicator`` + un SVG en ``image``), pero la
+    regla global ``QWidget { background-color: ... }`` hereda sobre el indicador
+    y Qt **descarta el image** (comprobado: 0 px de palomita con el mismo data
+    URI que, aislado, sí pinta). Es el mismo problema que con ``SwitchPill``, así
+    que se pinta con ``QPainter``: cuadro redondeado y, al marcar, un trazo de
+    check con el color del texto seleccionado.
+
+    Sigue siendo un ``QCheckBox`` normal: emite ``toggled``, responde a clic y a
+    teclado (Tab + Espacio) y lleva el texto al lado.
+    """
+
+    BOX = 16          # lado del cuadro
+    GAP = 8           # separación entre el cuadro y el texto
+    RADIUS = 4
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        box = self._box_rect()
+
+        if self.isChecked() and self.isEnabled():
+            fill = QColor(t.ACCENT_DARK if self.underMouse() else t.ACCENT)
+            edge = fill
+        elif not self.isEnabled():
+            fill, edge = QColor(t.FIELD), QColor(t.BORDER)
+        else:
+            fill = QColor(t.FIELD)
+            edge = QColor(t.ACCENT if self.underMouse() else t.BORDER)
+        painter.setPen(QPen(edge, 1))
+        painter.setBrush(fill)
+        painter.drawRoundedRect(box, self.RADIUS, self.RADIUS)
+
+        if self.isChecked():
+            self._draw_check(painter, box)
+
+        # El texto (y solo el texto) con el color del QSS. ``QCheckBox`` no tiene
+        # ``alignment()``, así que se pinta a la izquierda y centrado a mano.
+        if self.text():
+            text_rect = self.rect().adjusted(
+                int(box.right()) + self.GAP, 0, 0, 0)
+            painter.setPen(self.palette().color(self.foregroundRole()))
+            painter.drawText(text_rect,
+                             Qt.AlignLeft | Qt.AlignVCenter, self.text())
+        painter.end()
+
+    def _box_rect(self) -> QRectF:
+        """Cuadro centrado verticalmente, a la izquierda."""
+        top = (self.height() - self.BOX) / 2
+        return QRectF(0.5, top + 0.5, self.BOX - 1, self.BOX - 1)
+
+    def _draw_check(self, painter: QPainter, box: QRectF) -> None:
+        """Trazo de la palomita, dentro del cuadro."""
+        painter.setPen(QPen(QColor(t.TEXT_SEL), 2.2, Qt.SolidLine,
+                            Qt.RoundCap, Qt.RoundJoin))
+        painter.setBrush(Qt.NoBrush)
+        left, top, width, height = (box.x(), box.y(), box.width(), box.height())
+        points = [
+            (left + width * 0.28, top + height * 0.52),
+            (left + width * 0.44, top + height * 0.70),
+            (left + width * 0.74, top + height * 0.30),
+        ]
+        for index in range(len(points) - 1):
+            painter.drawLine(QRectF(points[index][0], points[index][1], 0, 0)
+                             .topLeft(),
+                             QRectF(points[index + 1][0], points[index + 1][1],
+                                    0, 0).topLeft())
+
+    def sizeHint(self):
+        """Ancho = cuadro + hueco + texto, para que no se solape con la palomita."""
+        hint = super().sizeHint()
+        hint.setWidth(hint.width() + self.GAP)
+        return hint

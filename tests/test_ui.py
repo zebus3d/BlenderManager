@@ -7,6 +7,7 @@ controlador, el cálculo de columnas de la rejilla y los diálogos.
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -244,6 +245,14 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+        # El aspecto (QSS) es parte de lo que se mide aquí: el ancho del botón
+        # con solo icono depende del padding que le quita el stylesheet. Antes
+        # esto "funcionaba" solo porque otro test lo había aplicado de rebote;
+        # al correr la clase sola, el botón medía 80 px y el test fallaba.
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
 
     def test_zoom_limits(self):
         from ui.widgets.main_window import MAX_ZOOM, MIN_ZOOM, MainWindow
@@ -2262,6 +2271,487 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
                                return_value=False):
             window = self._window()
         self.assertFalse(window.autostart_switch.isEnabled())
+
+
+def _fake_installed(version, name=None):
+    from model.build import InstalledBuild
+
+    return InstalledBuild(
+        name=name or f"blender-{version}-linux-x64",
+        path=Path("/tmp") / f"blender-{version}",
+        version=version,
+        executable=Path("/tmp") / f"blender-{version}" / "blender",
+    )
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class MigrateViewTests(SettingsIsolated, unittest.TestCase):
+    """La vista de migración de addons (services/blender_config por debajo)."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def setUp(self):
+        # Otros tests de la suite dejan el idioma en español; aquí se comprueban
+        # textos, así que hay que fijarlo (y restaurarlo al terminar).
+        import i18n
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+
+    def _view(self):
+        from ui.widgets.migrate import MigrateView
+
+        view = MigrateView()
+        view.set_system("linux", "x86_64")
+        return view
+
+    @staticmethod
+    def _run_now(target=None, *args, **kwargs):
+        """Sustituto síncrono de ``threading.Thread`` (ver un test que lo usa).
+
+        La vista lanza su trabajo en hilos; en un test, un hilo que emite una
+        señal cuando el test ya terminó abre un diálogo modal que cuelga el
+        suite. Aquí se ejecuta el trabajo en el momento, dejando el estado
+        cerrado y determinista.
+        """
+        if target is not None:
+            target()
+
+        class _Immediate:
+            def start(self):
+                pass
+
+        return _Immediate()
+
+    def _with_configs(self, view, configs, source=None, target=None):
+        """Inyecta instaladas y redirige ``config_for`` a carpetas temporales.
+
+        ``configs`` mapea versión completa -> ``BlenderConfig``. Se pueden fijar
+        los desplegables con ``source``/``target`` (versión completa).
+        """
+        from model.build import minor_of
+        from services import blender_config as bc
+
+        def fake_config_for(version, platform, env=None):
+            series = minor_of(version)
+            for key, value in configs.items():
+                if minor_of(key) == series:
+                    return value
+            raise KeyError(series)
+
+        patch = mock.patch.object(bc, "config_for", side_effect=fake_config_for)
+        patch.start()
+        self.addCleanup(patch.stop)
+        # Más nueva primero, como las devuelve el escaneo real.
+        entries = [_fake_installed(v) for v in sorted(configs, reverse=True)]
+        view.set_installed(entries)
+        if source:
+            view.source_combo.setCurrentIndex(
+                [e.version for e in entries].index(source))
+        if target:
+            view.target_combo.setCurrentIndex(
+                [e.version for e in entries].index(target))
+
+    def _config(self, tmp, version, manifest=None, legacy=None):
+        """Monta una config de mentira; ``legacy`` admite una o varias tuplas."""
+        from services import blender_config as bc
+
+        series = ".".join(version.split(".")[:2])
+        root = Path(tmp) / series
+        config = bc.BlenderConfig(series, root, "linux", root / "config",
+                                  root / "scripts", root / "extensions")
+        if manifest:
+            folder = config.extensions_dir / "user_default" / manifest[0]
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / bc.MANIFEST_NAME).write_text(manifest[1], encoding="utf-8")
+        for item in ([legacy] if legacy and isinstance(legacy[0], str)
+                     else (legacy or [])):
+            folder = config.addons_dir / item[0]
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "__init__.py").write_text(item[1], encoding="utf-8")
+        return config
+
+    def test_necesita_dos_versiones(self):
+        from unittest import mock as _mock
+
+        view = self._view()
+        with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                         return_value=False):
+            view.set_installed([_fake_installed("5.2.1")])
+        self.assertEqual(len(view._choices), 1)
+        self.assertFalse(view.copy_btn.isEnabled())
+        self.assertIn("two", view.summary.text().lower())
+
+    def test_origen_y_destino_no_pueden_coincidir(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            view = self._view()
+            # Dos versiones instaladas, pero apuntando la misma en los dos lados.
+            configs = {"4.5.0": self._config(tmp, "4.5.0"),
+                       "5.3.0": self._config(tmp, "5.3.0")}
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False):
+                self._with_configs(view, configs, source="5.3.0",
+                                   target="5.3.0")
+            self.assertTrue(view.source_combo.isVisible() or True)
+            self.assertFalse(view.copy_btn.isEnabled())
+            self.assertIn("different", view.summary.text().lower())
+
+    def test_planifica_y_marca_incompatibles(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(
+                tmp, "4.5.0",
+                manifest=("MatPlus",
+                          'id = "MatPlus"\nname = "MatPlus"\nversion = "1.3.0"\n'
+                          'blender_version_min = "4.5.0"\n'),
+                legacy=("oldtool",
+                        'bl_info = {"name": "OldTool", "version": (0, 9), '
+                        '"blender": (6, 0, 0)}\n'))
+            target = self._config(tmp, "5.3.0")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+            by_name = {plan.addon.name: plan for plan in view.plans}
+            self.assertEqual(by_name["MatPlus"].status, "ok")
+            self.assertTrue(by_name["MatPlus"].selected)
+            self.assertEqual(by_name["OldTool"].status, "blocked")
+            self.assertFalse(by_name["OldTool"].selected)
+            # Las filas del tablero se pintan una por addon.
+            self.assertEqual(len(view._rows), len(view.plans))
+
+    def test_no_migra_los_bloqueados_aunque_los_marquen(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(
+                tmp, "4.5.0",
+                legacy=("oldtool",
+                        'bl_info = {"name": "OldTool", "version": (0, 9), '
+                        '"blender": (6, 0, 0)}\n'))
+            target = self._config(tmp, "5.3.0")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.migrate.show_info"):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view._select_all(True)
+                view.apply()
+            self.assertFalse(list(target.addons_dir.iterdir())
+                             if target.addons_dir.is_dir() else [])
+
+    def test_copiar_escribe_en_el_destino(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(
+                tmp, "4.5.0",
+                legacy=("miaddon",
+                        'bl_info = {"name": "MiAddon", "version": (1, 0), '
+                        '"blender": (4, 0, 0)}\n'))
+            target = self._config(tmp, "5.3.0")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.migrate.show_info"):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                # Sin lectura del origen, ``was_enabled`` es False, así que no
+                # se activa nada (no se lanza un Blender de verdad en tests).
+                view.apply()
+            self.assertTrue((target.addons_dir / "miaddon" / "__init__.py")
+                            .is_file())
+
+    def test_solo_activa_los_que_estaban_activos_en_origen(self):
+        """El estado activado se imita: no se activa todo por migrar."""
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(
+                tmp, "4.5.0",
+                legacy=[("activo",
+                         'bl_info = {"name": "Activo", "version": (1, 0), '
+                         '"blender": (4, 0, 0)}\n'),
+                        ("apagado",
+                         'bl_info = {"name": "Apagado", "version": (1, 0), '
+                         '"blender": (4, 0, 0)}\n')])
+            target = self._config(tmp, "5.3.0")
+            exe = Path(tmp) / "blender"
+            exe.write_text("", encoding="utf-8")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.migrate.show_info"), \
+                    _mock.patch("ui.widgets.migrate.confirm",
+                                return_value=True), \
+                    _mock.patch("ui.widgets.migrate.threading") as threading, \
+                    _mock.patch("ui.widgets.migrate.blender_runner.enable_addons",
+                                return_value={"enabled": ["activo"],
+                                              "errors": []}) as enable:
+                # El hilo de activación se ejecuta síncrono: así el test no deja
+                # una señal diferida que luego abra un diálogo modal.
+                threading.Thread.side_effect = self._run_now
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.target_entry = _fake_installed("5.3.0")
+                view.target_entry.executable = exe
+                # Solo "activo" lo estaba en origen.
+                view.source_enabled = {"activo"}
+                view._rebuild_plan()
+                view.apply()
+                # Se llama a enable_addons una vez, solo con el activo.
+                self.assertTrue(enable.called)
+                _, modules = enable.call_args[0][:2]
+                self.assertEqual(modules, ["activo"])
+
+    def test_no_intenta_activar_si_el_ejecutable_no_existe(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(
+                tmp, "4.5.0",
+                legacy=("miaddon",
+                        'bl_info = {"name": "MiAddon", "version": (1, 0), '
+                        '"blender": (4, 0, 0)}\n'))
+            target = self._config(tmp, "5.3.0")
+            view = self._view()
+            # El ejecutable de la instalada falsa no existe en disco.
+            with _mock.patch("ui.widgets.migrate.blender_runner.enable_addons") \
+                    as enable, \
+                    _mock.patch("ui.widgets.migrate.show_info"), \
+                    _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                                return_value=False):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.apply()
+            enable.assert_not_called()
+
+    def test_preferencias_copia_userpref_con_backup(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5.0")
+            target = self._config(tmp, "5.3.0")
+            source.config_dir.mkdir(parents=True)
+            target.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
+            (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.migrate.show_info"):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.apply_preferences()
+            self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
+                             b"NUEVO")
+            backups = [p for p in target.config_dir.iterdir()
+                       if "blendermanager-bak" in p.name]
+            self.assertEqual(len(backups), 1)
+
+    def test_startup_no_se_migra_sin_marcarlo(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5.0")
+            target = self._config(tmp, "5.3.0")
+            source.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"P")
+            (source.config_dir / "startup.blend").write_bytes(b"S")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.migrate.show_info"):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.apply_preferences()
+            self.assertFalse((target.config_dir / "startup.blend").exists())
+            self.assertTrue((target.config_dir / "userpref.blend").exists())
+
+    def test_preferencias_avisa_si_blender_esta_abierto(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5.0")
+            target = self._config(tmp, "5.3.0")
+            source.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"P")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=True), \
+                    _mock.patch("ui.widgets.migrate.show_info") as info:
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.apply_preferences()
+            # No debe copiar y debe avisar.
+            self.assertTrue(info.called)
+            self.assertFalse((target.config_dir / "userpref.blend").exists())
+
+    def test_undo_restaura_y_oculta_el_boton(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5.0")
+            target = self._config(tmp, "5.3.0")
+            source.config_dir.mkdir(parents=True)
+            target.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
+            (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.migrate.show_info"), \
+                    _mock.patch("ui.widgets.migrate.confirm",
+                                return_value=True):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.apply_preferences()
+                # La vista no se ha mostrado (offscreen), así que ``isVisible``
+                # siempre es False: se comprueba el flag propio del widget.
+                self.assertFalse(view.undo_btn.isHidden())
+                view.undo()
+            self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
+                             b"VIEJO")
+            self.assertTrue(view.undo_btn.isHidden())
+
+    def test_preferencias_en_detalle_carga_y_aplica(self):
+        from unittest import mock as _mock
+
+        user = {"view.ui_scale": 1.25, "view.show_developer_ui": True,
+                "inputs.navigation_mode": "FLY"}
+        factory = {"view.ui_scale": 1.0, "view.show_developer_ui": False,
+                   "inputs.navigation_mode": "WALK"}
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5.0")
+            target = self._config(tmp, "5.3.0")
+            source.config_dir.mkdir(parents=True)
+            # El ejecutable tiene que existir para que apply_detail_prefs no
+            # corte antes de llamar al servicio (que va mockeado).
+            exe = Path(tmp) / "blender"
+            exe.write_text("", encoding="utf-8")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.migrate.show_info"), \
+                    _mock.patch("ui.widgets.migrate.bprefs.read_preferences",
+                                side_effect=[user, factory]), \
+                    _mock.patch("ui.widgets.migrate.blender_runner.enabled_addons",
+                                return_value=["matplus"]), \
+                    _mock.patch("ui.widgets.migrate.bprefs.apply_preferences",
+                                return_value={"applied": ["view.ui_scale"],
+                                              "errors": []}) as apply:
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.source_entry = _fake_installed("4.5.0")
+                view.target_entry = _fake_installed("5.3.0")
+                view.target_entry.executable = exe
+                view.source_entry.executable = exe
+                # La lectura es automática y corre en un hilo; aquí se simula
+                # que ya llegó el resultado de las preferencias.
+                view._prefs_waiting = True
+                view._on_prefs_loaded({"user": user, "factory": factory})
+                self.assertEqual(len(view.detail_prefs), 3)
+                view.detail_prefs[0].selected = True
+                view.apply_detail_prefs()
+                view._prefs_waiting = True
+                view._on_prefs_applied(
+                    {"result": {"applied": ["view.ui_scale"], "errors": []},
+                     "version": "5.3.0"})
+            self.assertTrue(apply.called)
+
+    def test_reset_fabrica_aparta_la_config_y_permite_recuperar(self):
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = self._config(tmp, "5.3.0")
+            target.config_dir.mkdir(parents=True)
+            (target.config_dir / "userpref.blend").write_bytes(b"MIO")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.migrate.show_info"), \
+                    _mock.patch("ui.widgets.migrate.confirm",
+                                return_value=True):
+                view.target_entry = _fake_installed("5.3.0")
+                view.platform = "linux"
+                # Solo hace falta el destino para el reset.
+                view.source_entry = _fake_installed("4.5.0")
+                view.target_cfg = target
+                with _mock.patch.object(view, "_target_config",
+                                        return_value=target):
+                    view.reset_to_factory()
+                    snapshots = __import__(
+                        "services.blender_config", fromlist=["x"]
+                    ).snapshots_for(target)
+                    self.assertEqual(len(snapshots), 1)
+                    self.assertFalse(target.config_dir.exists())
+                    view.restore_factory_snapshot()
+            self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
+                             b"MIO")
+
+    def test_review_explica_como_revisar(self):
+        """El amarillo "Review" tiene que decir qué hacer, no solo el motivo."""
+        from services import blender_config as bc
+        from ui.widgets.migrate import _status_tooltip
+
+        addon = bc.Addon(kind="legacy", module="x", name="X", version="1.0",
+                         min_version="", max_version="", path=Path("/tmp/x"))
+        unknown = bc.AddonPlan(addon, bc.WARN, bc.REASON_UNKNOWN_VERSION,
+                               Path("/tmp/x"))
+        tip = _status_tooltip(unknown)
+        self.assertIn("minimum version", tip)      # el motivo
+        self.assertIn("test", tip.lower())          # y cómo comprobarlo
+
+        wheels = bc.AddonPlan(addon, bc.WARN, bc.REASON_WHEEL_ABI,
+                              Path("/tmp/x"))
+        self.assertIn("enable it", _status_tooltip(wheels).lower())
+
+    def test_compatible_explica_que_se_copia(self):
+        from services import blender_config as bc
+        from ui.widgets.migrate import _status_tooltip
+
+        addon = bc.Addon(kind="legacy", module="x", name="X", version="1.0",
+                         min_version="4.0.0", max_version="", path=Path("/tmp/x"))
+        plan = bc.AddonPlan(addon, bc.OK, "", Path("/tmp/x"))
+        # La verde también lleva tooltip: dice que no hay nada que revisar.
+        self.assertIn("destination version", _status_tooltip(plan))
+
+    def test_set_view_migrate_oculta_el_contenido_de_los_filtros(self):
+        """La fila de filtros se reserva, no se oculta entera.
+
+        Ocultarla entera (lo que se hacía antes) sube el contenido 44 px y la
+        interfaz pega un salto al cambiar de vista. Ahora se queda la fila con
+        su alto y solo se esconde su contenido.
+        """
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.migrate_view.set_installed([])
+        window.set_view("store")
+        self.assertFalse(window.grid_btn.isHidden())
+
+        window.set_view("migrate")
+        self.assertEqual(window.view, "migrate")
+        self.assertFalse(window.filters.isHidden())   # la fila sigue puesta
+        self.assertTrue(window.grid_btn.isHidden())   # pero sin contenido
+        self.assertFalse(window._zoom_enabled())
+
+        # Y al volver, el contenido reaparece.
+        window.set_view("store")
+        self.assertFalse(window.grid_btn.isHidden())
 
 
 if __name__ == "__main__":

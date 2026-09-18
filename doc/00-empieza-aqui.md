@@ -63,6 +63,9 @@ src/
     installed.py     # escanea las versiones ya descargadas
     launcher.py      # lanza Blender como proceso aparte
     updater.py       # comprueba e instala actualizaciones
+    blender_config.py # addons y carpetas de config de cada versión (+ migrar)
+    blender_runner.py # arranca Blender en --background (habilitar addons)
+    blender_prefs.py  # preferencias por clave: diff contra fábrica y aplicar
 
   ui/                # la interfaz (lo único que conoce Qt)
     qss.py           # el aspecto de TODA la app (una hoja de estilos)
@@ -71,8 +74,10 @@ src/
     fonts.py         # carga de la fuente de iconos
     widgets/
       buttons.py     # botones, pastillas, interruptores e iconos
+      labels.py      # etiquetas que recortan el texto (no ensanchan columnas)
       cards.py       # tarjetas de compilaciones (tienda e instaladas)
       dialogs.py     # diálogos con el aspecto de la app
+      migrate.py     # tablero de migración de addons entre versiones
       main_window.py # MainWindow: el controlador de la pantalla principal
 
   assets/            # logo de Blender, icono de la app y fuente de iconos
