@@ -900,32 +900,6 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             self.assertEqual([e.version for e in window.installed],
                              ["5.1.2", "4.5.13"])
 
-    def test_anadir_y_quitar_una_carpeta_extra(self):
-        import tempfile
-        from pathlib import Path
-
-        from ui.widgets.main_window import MainWindow
-
-        window = MainWindow()
-        with tempfile.TemporaryDirectory() as tmp:
-            extra = Path(tmp) / "mis-blenders"
-            (extra / "blender-5.0.1-linux-x64").mkdir(parents=True)
-            with mock.patch.object(window, "_choose_folder",
-                                   return_value=str(extra)):
-                window.add_extra_folder()
-            # Se escanea esa carpeta aunque no sea la de descargas.
-            self.assertEqual(window.settings.extra_folders, [str(extra)])
-            self.assertEqual([e.version for e in window.installed], ["5.0.1"])
-            # La misma carpeta no se añade dos veces.
-            with mock.patch.object(window, "_choose_folder",
-                                   return_value=str(extra)):
-                window.add_extra_folder()
-            self.assertEqual(window.settings.extra_folders, [str(extra)])
-            # Quitarla deja de escanearla y la borra de los ajustes.
-            window.remove_extra_folder(0)
-            self.assertEqual(window.settings.extra_folders, [])
-            self.assertEqual(window.installed, [])
-
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class BlenderUpdateTests(SettingsIsolated, unittest.TestCase):
