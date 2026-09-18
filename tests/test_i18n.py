@@ -15,7 +15,7 @@ class I18nTests(unittest.TestCase):
     def test_spanish_translation(self):
         i18n.set_language("es")
         self.assertEqual(i18n.tr("Download"), "Descargar")
-        self.assertEqual(i18n.tr("Settings"), "Ajustes")
+        self.assertEqual(i18n.tr("Downloads"), "Descargas")
 
     def test_format_arguments(self):
         i18n.set_language("es")

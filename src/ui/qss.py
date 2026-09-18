@@ -285,7 +285,7 @@ def build_qss() -> str:
     /* Alinea la primera pestaña con el padding interno del canvas (24 px, el
        mismo que la cabecera): si no, el texto de la pestaña queda pegado al
        borde y descuadra con las tarjetas de debajo. */
-    QTabWidget#MigrateTabs QTabBar::tab:first, QTabWidget#SettingsTabs QTabBar::tab:first {{ margin-left: 24px; }}
+    QTabWidget#MigrateTabs QTabBar::tab:first {{ margin-left: 24px; }}
 
     /* El pane es la única parte del QTabWidget que pinta fondo; las páginas se
        pintan el suyo (un QWidget pelado no siempre deja pasar el del pane). */
