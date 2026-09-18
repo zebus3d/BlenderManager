@@ -341,19 +341,23 @@ _TRANSLATIONS = {
         "destination folder.":
             "Carpeta solo para las versiones LTS.\n"
             "Déjala vacía para usar la carpeta de destino.",
-        "Other folders with installed versions":
-            "Otras carpetas con versiones instaladas",
-        "BlenderManager only looks for Blender inside its download folder. "
-        "Add any folder where you already keep your own Blender versions and "
-        "they will show up as installed.":
-            "BlenderManager solo busca Blender en su carpeta de descargas. "
-            "Añade aquí cualquier carpeta donde ya tengas tus propias versiones "
-            "de Blender y aparecerán como instaladas.",
+        "Other folders where you already have Blender":
+            "Otras carpetas donde ya tienes Blender",
+        "BlenderManager only looks inside its download folder. If you also "
+        "have Blender installed or unzipped somewhere else (another drive, a "
+        "portable copy...), add that folder here and it will show up in "
+        "Installed. It is only read: downloads keep going to the destination "
+        "folder.":
+            "BlenderManager solo mira dentro de su carpeta de descargas. Si "
+            "además tienes Blender instalado o descomprimido en otro sitio "
+            "(otro disco, una copia portable...), añade esa carpeta aquí y "
+            "aparecerá en Instaladas. Solo se lee: las descargas siguen yendo "
+            "a la carpeta de destino.",
         "Add folder...": "Añadir carpeta...",
         "Pick a folder that contains your installed Blender versions, one per "
         "subfolder.":
-            "Elige una carpeta que contenga tus versiones de Blender "
-            "instaladas, cada una en su subcarpeta.",
+            "Elige la carpeta que contiene tus Blender, cada uno en su "
+            "subcarpeta.",
         "Choose a folder with Blender versions":
             "Elige una carpeta con versiones de Blender",
         "Folder with your own Blender versions.\nEach version has to be in its "

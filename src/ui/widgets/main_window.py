@@ -663,13 +663,16 @@ class MainWindow(QWidget):
         lay.addWidget(self.lts_row)
 
         # Carpetas extra: BlenderManager solo mira su carpeta de descargas, así
-        # que quien ya tenía sus Blender en otro sitio no los veía. Aquí puede
-        # apuntar dónde están; se escanean además de la de destino.
-        lay.addWidget(QLabel(tr("Other folders with installed versions")))
+        # que quien ya tenía sus Blender en otro sitio (a mano, en otro disco,
+        # una copia portable) no los veía. Aquí puede apuntar dónde están; se
+        # escanean además de la de destino y no cambian dónde se descarga.
+        lay.addWidget(QLabel(tr("Other folders where you already have Blender")))
         extra_hint = QLabel(tr(
-            "BlenderManager only looks for Blender inside its download folder. "
-            "Add any folder where you already keep your own Blender versions "
-            "and they will show up as installed."))
+            "BlenderManager only looks inside its download folder. If you also "
+            "have Blender installed or unzipped somewhere else (another drive, "
+            "a portable copy...), add that folder here and it will show up in "
+            "Installed. It is only read: downloads keep going to the "
+            "destination folder."))
         extra_hint.setObjectName("Muted")
         extra_hint.setWordWrap(True)
         lay.addWidget(extra_hint)
