@@ -1379,6 +1379,77 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
             abridor.kwargs["on_click"]()
         abrir.assert_called_once()
 
+    def test_en_mac_el_dmg_se_instala_en_la_carpeta(self):
+        """macOS: el .dmg se monta y el Blender.app queda en la carpeta destino.
+
+        Antes solo se revelaba el fichero y no había forma de lanzar esa build
+        desde la app; montarlo y copiarlo la deja como cualquier otra (escaneo,
+        lanzar, desinstalar).
+        """
+        import tempfile
+        from pathlib import Path as _Path
+
+        from PySide6.QtTest import QTest
+
+        from services import installed
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.system = window.system._replace(os_name="darwin")
+        build = _build("5.2.1", "v52", "stable")
+        with tempfile.TemporaryDirectory() as tmp:
+            destino = _Path(tmp)
+            dmg = destino / "blender-5.2.1-macos-arm64.dmg"
+            dmg.write_bytes(b"dmg")
+            carpeta = destino / "blender-5.2.1-macos-arm64"
+            carpeta.mkdir()
+            with mock.patch.object(window, "_destination_for",
+                                   return_value=str(destino)), \
+                    mock.patch.object(main_window.macos_dmg, "available",
+                                      return_value=True), \
+                    mock.patch.object(main_window.macos_dmg, "install",
+                                      return_value=carpeta) as instalar, \
+                    mock.patch.object(main_window.opener, "reveal") as revelar:
+                window._on_download_done(str(dmg), build)
+                QTest.qWait(300)
+            marcador = installed.read_marker(carpeta)
+        instalar.assert_called_once()
+        revelar.assert_not_called()
+        self.assertEqual(marcador.get("version"), "5.2.1")
+
+    def test_si_falla_instalar_el_dmg_se_revela_y_avisa(self):
+        """Plan B: si montar o copiar falla, se revela el .dmg y se avisa."""
+        import tempfile
+        from pathlib import Path as _Path
+
+        from PySide6.QtTest import QTest
+
+        from i18n import tr
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.system = window.system._replace(os_name="darwin")
+        build = _build("5.2.1", "v52", "stable")
+        with tempfile.TemporaryDirectory() as tmp:
+            dmg = _Path(tmp) / "blender-5.2.1-macos-arm64.dmg"
+            dmg.write_bytes(b"dmg")
+            with mock.patch.object(window, "_destination_for",
+                                   return_value=tmp), \
+                    mock.patch.object(main_window.macos_dmg, "available",
+                                      return_value=True), \
+                    mock.patch.object(main_window.macos_dmg, "install",
+                                      side_effect=RuntimeError("mount failed")), \
+                    mock.patch.object(main_window.opener, "reveal",
+                                      return_value=True) as revelar, \
+                    mock.patch.object(window, "_show_message") as aviso:
+                window._on_download_done(str(dmg), build)
+                QTest.qWait(300)
+        revelar.assert_called_once()
+        self.assertIn(tr("Open it to install Blender manually."),
+                      aviso.call_args.args[0])
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class ElideTests(SettingsIsolated, unittest.TestCase):

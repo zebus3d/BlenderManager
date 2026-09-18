@@ -33,6 +33,7 @@ _TRANSLATIONS = {
         "Choosing the fastest source...":
             "Buscando la fuente más rápida...",
         "Extracting...": "Extrayendo...",
+        "Installing...": "Instalando...",
         "Launch": "Lanzar",
         "Launching": "Lanzando",
         "Delete": "Borrar",
