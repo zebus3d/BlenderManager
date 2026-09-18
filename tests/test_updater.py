@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 import zipfile
@@ -367,3 +368,85 @@ class WindowsUpdateLayoutTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MacosUpdateTests(unittest.TestCase):
+    """macOS: un helper reemplaza el .app cuando la app se cierra (estilo Sparkle).
+
+    En el CI (Ubuntu) no hay bundle ni `/bin/sh` de macOS, así que se mockean
+    `sys.executable`, `updates_dir` y `Popen`, y se comprueba el script generado.
+    """
+
+    def _fake_bundle(self, base):
+        bundle = base / "BlenderManager.app"
+        (bundle / "Contents" / "MacOS").mkdir(parents=True)
+        return bundle / "Contents" / "MacOS" / "BlenderManager"
+
+    def _zip_con_app(self, base):
+        archive = base / "BlenderManager-macos.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("BlenderManager.app/Contents/MacOS/BlenderManager", "bin")
+        return archive
+
+    def test_app_bundle_detecta_el_bundle(self):
+        from pathlib import Path as _Path
+
+        self.assertEqual(
+            updater._app_bundle(
+                "/Applications/BlenderManager.app/Contents/MacOS/BlenderManager"),
+            _Path("/Applications/BlenderManager.app"))
+        self.assertIsNone(updater._app_bundle("/usr/bin/python3"))
+        self.assertIsNone(
+            updater._app_bundle("/Applications/Foo/Contents/MacOS/Bar"))
+
+    def test_aplica_con_un_helper(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            exe = self._fake_bundle(base)
+            archive = self._zip_con_app(base)
+            updates = base / "updates"
+            with mock.patch.object(updater.sys, "executable", str(exe)), \
+                    mock.patch.object(updater, "updates_dir", return_value=updates), \
+                    mock.patch.object(updater, "_open_fallback") as fallback, \
+                    mock.patch.object(updater.subprocess, "Popen") as popen:
+                ok = updater._apply_macos(archive)
+
+            self.assertTrue(ok)
+            fallback.assert_not_called()
+            popen.assert_called_once()
+            # El helper espera al PID, mueve, copia con ditto y relanza.
+            script = next(updates.rglob("apply-update.sh"))
+            texto = script.read_text(encoding="utf-8")
+            self.assertIn(f"PID={os.getpid()}", texto)
+            self.assertIn("ditto", texto)
+            self.assertIn("xattr", texto)
+            self.assertIn("/usr/bin/open", texto)
+
+    def test_sin_permiso_cae_al_plan_b(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            exe = self._fake_bundle(base)
+            archive = self._zip_con_app(base)
+            with mock.patch.object(updater.sys, "executable", str(exe)), \
+                    mock.patch.object(updater.os, "access", return_value=False), \
+                    mock.patch.object(updater, "_open_fallback") as fallback:
+                ok = updater._apply_macos(archive)
+
+        self.assertFalse(ok)
+        fallback.assert_called_once()
+
+    def test_zip_sin_app_cae_al_plan_b(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            exe = self._fake_bundle(base)
+            archive = base / "raro.zip"
+            with zipfile.ZipFile(archive, "w") as zf:
+                zf.writestr("leeme.txt", "no hay app")
+            with mock.patch.object(updater.sys, "executable", str(exe)), \
+                    mock.patch.object(updater, "updates_dir",
+                                      return_value=base / "updates"), \
+                    mock.patch.object(updater, "_open_fallback") as fallback:
+                ok = updater._apply_macos(archive)
+
+        self.assertFalse(ok)
+        fallback.assert_called_once()

@@ -501,8 +501,12 @@ El AppImage resultante pesa ~70 MB.
   en el panel de ajustes (dentro de `_build_settings_view`).
 - Preferencia `auto_update` en `src/services/settings.py` (por defecto activada).
 - Aplicación por plataforma: Linux AppImage reemplaza `$APPIMAGE`; Windows
-  extrae a staging y relanza el binario nuevo con `--apply-update`; macOS y no
-  soportados solo avisan.
+  extrae a staging y relanza el binario nuevo con `--apply-update`; macOS extrae
+  el zip y lanza un **helper** (estilo Sparkle) que espera a que la app se
+  cierre, mueve el bundle viejo, copia el nuevo con `ditto`, quita la cuarentena
+  y relanza. Si no se puede (sin permiso en el directorio del bundle, bundle no
+  localizable), macOS revela la descarga y avisa, como antes. No soportados solo
+  avisan.
 - **Modo fuente**: al correr con `python3 src/main.py` no hay binario que
   reemplazar, así que la actualización es `git pull --ff-only` + reinicio
   (`updater.source_update` / `relaunch_source`, con `AppDialog` propio). Solo

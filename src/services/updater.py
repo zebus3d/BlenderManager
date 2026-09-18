@@ -15,8 +15,11 @@ Aplicar la actualización es distinto en cada plataforma:
   extrae la release en un directorio temporal y se relanza el binario *nuevo*
   con ``--apply-update``; ese proceso espera a que salga el actual, copia los
   ficheros y arranca la versión nueva.
-* **macOS** (y cualquier caso no soportado): solo se avisa y se revela la
-  descarga, porque reemplazar un .app sin firmar es poco fiable.
+* **macOS**: se extrae el zip y se lanza un helper (como Sparkle) que espera a
+  que la app se cierre, mueve el bundle viejo, copia el nuevo con ``ditto``,
+  quita la cuarentena y relanza. Si no se puede (sin permiso en el directorio del
+  bundle, bundle no localizable), se cae a revelar la descarga y avisar.
+* **Cualquier otro caso**: solo se avisa y se revela la descarga.
 """
 
 import json
@@ -415,6 +418,99 @@ def _apply_windows(archive: Path) -> bool:
     return True
 
 
+# --- macOS ---------------------------------------------------------------
+
+def _app_bundle(executable) -> Path | None:
+    """Bundle ``.app`` del ejecutable en marcha, o ``None``.
+
+    El binario va en ``<bundle>.app/Contents/MacOS/BlenderManager``, así que el
+    bundle es el tercer padre. Si no encaja (modo fuente, layout raro), se
+    devuelve ``None`` y se cae al plan B.
+    """
+    exe = Path(executable).resolve()
+    if exe.parent.name != "MacOS" or len(exe.parents) <= 2:
+        return None
+    bundle = exe.parents[2]
+    return bundle if bundle.suffix == ".app" else None
+
+
+def _apply_macos(archive: Path) -> bool:
+    """Reemplaza el ``.app`` con un helper que espera a que la app se cierre.
+
+    No se puede pisar el bundle en marcha de forma fiable, así que se hace como
+    Sparkle: se extrae el zip y se deja un pequeño script que **espera** a que
+    este proceso muera, mueve el bundle viejo, copia el nuevo con ``ditto``,
+    quita la cuarentena y relanza. Devuelve True para que la interfaz cierre la
+    app (el helper hace el resto).
+
+    Ante cualquier duda (no encuentro el bundle, no hay permiso de escritura,
+    el zip no trae el .app) se cae al plan B: revelar el fichero y no cerrar.
+    """
+    bundle = _app_bundle(sys.executable)
+    if bundle is None:
+        log("macos update: no encuentro el bundle .app")
+        _open_fallback(archive)
+        return False
+    if not os.access(bundle.parent, os.W_OK):
+        # /Applications sin permiso (o app translocada por Gatekeeper): no nos
+        # arriesgamos a dejarle sin app; que la instale a mano.
+        log(f"macos update: sin permiso de escritura en {bundle.parent}")
+        _open_fallback(archive)
+        return False
+
+    staging = updates_dir() / f"macos-{int(time.time())}"
+    try:
+        folder = extract(archive, staging)
+    except Exception as error:
+        log(f"macos update extract failed: {error}")
+        shutil.rmtree(staging, ignore_errors=True)
+        _open_fallback(archive)
+        return False
+
+    candidates = [folder] if folder.suffix == ".app" else list(folder.rglob("*.app"))
+    if not candidates or not candidates[0].is_dir():
+        log("macos update: el zip no trae ningún .app")
+        shutil.rmtree(staging, ignore_errors=True)
+        _open_fallback(archive)
+        return False
+    new_app = candidates[0]
+
+    # El script espera, mueve y copia. Las rutas van entre comillas y los
+    # comandos con ruta absoluta (el entorno del binario es mínimo). Si el
+    # ditto falla, restaura el bundle viejo para no dejarle sin app.
+    script = staging / "apply-update.sh"
+    script.write_text(
+        "#!/bin/sh\n"
+        f'PID={os.getpid()}\n'
+        f'BUNDLE="{bundle}"\n'
+        f'NEW="{new_app}"\n'
+        'while kill -0 "$PID" 2>/dev/null; do sleep 0.5; done\n'
+        '/bin/sleep 1\n'
+        '/bin/rm -rf "$BUNDLE.old"\n'
+        '/bin/mv "$BUNDLE" "$BUNDLE.old" || exit 1\n'
+        '/usr/bin/ditto "$NEW" "$BUNDLE" || { /bin/mv "$BUNDLE.old" "$BUNDLE"; exit 1; }\n'
+        '/usr/bin/xattr -dr com.apple.quarantine "$BUNDLE" 2>/dev/null\n'
+        '/bin/rm -rf "$BUNDLE.old"\n'
+        '/usr/bin/open "$BUNDLE"\n',
+        encoding="utf-8")
+    try:
+        script.chmod(0o755)
+        subprocess.Popen(
+            ["/bin/sh", str(script)],
+            env=opener.clean_env(),
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True, close_fds=True,
+        )
+    except OSError as error:
+        log(f"macos update helper launch failed: {error}")
+        shutil.rmtree(staging, ignore_errors=True)
+        _open_fallback(archive)
+        return False
+    log(f"macos update: helper lanzado para reemplazar {bundle}")
+    return True
+
+
 def apply(path) -> bool:
     """Instala la actualización descargada.
 
@@ -430,6 +526,8 @@ def apply(path) -> bool:
         return _apply_appimage(archive)
     if sys.platform.startswith("win"):
         return _apply_windows(archive)
+    if sys.platform == "darwin":
+        return _apply_macos(archive)
     _open_fallback(archive)
     return False
 
