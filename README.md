@@ -426,18 +426,18 @@ for that reason alone (see "Why the Linux build is a plain Ubuntu 22.04 job").
 The Blender logo is a trademark of the [Blender Foundation](https://www.blender.org/).
 Icons are from [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
 
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate
-by [SignPath Foundation](https://signpath.org).
-
-- Committers and reviewers: [@zebus3d](https://github.com/zebus3d) (repository owner)
-- Approvers: [@zebus3d](https://github.com/zebus3d) (repository owner)
-
 ## Privacy
 
 Blender Manager has no accounts, no telemetry and no analytics. See
 [PRIVACY.md](PRIVACY.md) for what it stores locally and which servers it talks to.
+
+<!-- Code signing policy (SignPath): OCULTO hasta que aprueben la solicitud.
+La peticion fue rechazada, asi que no se anuncia nada que no tengamos. Cuando
+SignPath apruebe, descomentar esta seccion (te da la reputacion que piden en
+signpath.org/terms) y volver a anadir el bloque POLICY de promote.yml.
+- Committers and reviewers: [@zebus3d](https://github.com/zebus3d) (repository owner)
+- Approvers: [@zebus3d](https://github.com/zebus3d) (repository owner)
+-->
 
 ## License
 
