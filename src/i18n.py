@@ -207,10 +207,12 @@ _TRANSLATIONS = {
             "BlenderManager sigue ejecutándose en la bandeja. Haz clic en su "
             "icono para recuperar la ventana.",
         "Updates": "Actualizaciones",
-        "Check for updates automatically": "Buscar actualizaciones automáticamente",
+        "Check for updates on startup": "Buscar actualizaciones al iniciar",
         "Check for updates periodically": "Buscar actualizaciones periódicamente",
-        "Look for new versions of BlenderManager every so often":
-            "Busca versiones nuevas de BlenderManager cada cierto tiempo",
+        "Look for new versions of BlenderManager every so often,\n"
+        "even if the startup check is off.":
+            "Busca versiones nuevas de BlenderManager cada cierto tiempo,\n"
+            "aunque esté desactivado el chequeo al iniciar.",
         "Check for updates every": "Buscar actualizaciones cada",
         "Never": "Nunca",
         "Every minute": "Cada minuto",
@@ -356,10 +358,11 @@ _TRANSLATIONS = {
         "--background to start without the interface.":
             "Argumentos extra que recibe Blender al lanzarlo.\n"
             "Ejemplo: --background para arrancar sin interfaz.",
-        "Check for new BlenderManager versions when the app starts.\nTurn it "
-        "off if you do not want to update.":
+        "Check for new BlenderManager versions when the app starts.\n"
+        "It only downloads one when you accept; checking is cheap.":
             "Busca versiones nuevas de BlenderManager al abrir la "
-            "aplicación.\nApágalo si no quieres actualizar.",
+            "aplicación.\nSolo descarga una cuando la aceptas; comprobar es "
+            "barato.",
         "How often BlenderManager looks for its own updates.\nIt only "
         "downloads one when you accept; checking is cheap.":
             "Cada cuánto busca BlenderManager sus propias actualizaciones.\n"
