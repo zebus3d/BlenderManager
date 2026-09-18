@@ -69,19 +69,46 @@ def cache_dir() -> Path:
     return Path(base) / APP_NAME.lower()
 
 
-def default_destination() -> Path:
-    """Carpeta de descargas propuesta la primera vez.
+# Carpeta conocida "Descargas" de Windows (FOLDERID_Downloads). El usuario puede
+# haberla movido a otro disco, y eso lo dice el registro, no %USERPROFILE%.
+_WINDOWS_DOWNLOADS_GUID = "{374DE290-123F-4565-9164-39C4925E467B}"
+_WINDOWS_SHELL_FOLDERS = (
+    r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders")
 
-    El nombre de la carpeta de descargas depende del sistema: en Windows y macOS
-    es siempre ``Downloads`` (no se traduce), pero en Linux los directorios XDG
-    del usuario pueden estar en su idioma (``Descargas`` en español). Se prefiere
-    la que exista de verdad; si no hay ninguna, ``Downloads``.
+
+def _downloads_dir() -> Path:
+    """Carpeta de Descargas del usuario, tal y como la ve el sistema.
+
+    * **Windows**: se lee la carpeta conocida del registro y se expanden las
+      variables (``%USERPROFILE%``); así funciona aunque la hayan movido a otro
+      disco. Si no se puede leer, ``~/Downloads``.
+    * **macOS**: siempre ``~/Downloads``.
+    * **Linux**: ``~/Downloads`` y, si no existe, ``~/Descargas`` (los
+      directorios XDG pueden estar en el idioma del usuario).
     """
     home = Path.home()
+    if sys.platform.startswith("win"):
+        try:
+            import winreg
+
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                _WINDOWS_SHELL_FOLDERS) as key:
+                value, _ = winreg.QueryValueEx(key, _WINDOWS_DOWNLOADS_GUID)
+            moved = Path(os.path.expandvars(value))
+            if moved.is_dir():
+                return moved
+        except OSError:
+            pass
+        return home / "Downloads"
     downloads = home / "Downloads"
     if not downloads.exists() and (home / "Descargas").exists():
         downloads = home / "Descargas"
-    return downloads / "Blenders"
+    return downloads
+
+
+def default_destination() -> Path:
+    """Carpeta de descargas propuesta la primera vez."""
+    return _downloads_dir() / "Blenders"
 
 
 # Zoom con el que arranca la rejilla y valor de fábrica del "restablecer".

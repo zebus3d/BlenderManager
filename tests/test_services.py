@@ -1101,3 +1101,46 @@ class DefaultDestinationTests(unittest.TestCase):
                                    return_value=Path(tmp)):
                 self.assertEqual(settings_module.default_destination(),
                                  Path(tmp) / "Descargas" / "Blenders")
+
+
+class WindowsDownloadsTests(unittest.TestCase):
+    """En Windows la carpeta Descargas puede estar movida: manda el registro."""
+
+    def _fake_winreg(self, value=None, raises=False):
+        import contextlib
+        import types
+
+        module = types.ModuleType("winreg")
+        module.HKEY_CURRENT_USER = object()
+        if raises:
+            def boom(*args, **kwargs):
+                raise OSError("clave inexistente")
+            module.OpenKey = boom
+            module.QueryValueEx = boom
+        else:
+            module.OpenKey = lambda *a, **k: contextlib.nullcontext(object())
+            module.QueryValueEx = lambda key, name: (value, 1)
+        return module
+
+    def test_usa_la_carpeta_conocida_del_registro(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            moved = Path(tmp) / "Descargas movidas"
+            moved.mkdir()
+            with mock.patch.object(settings_module.sys, "platform", "win32"), \
+                    mock.patch.dict(sys.modules,
+                                    {"winreg": self._fake_winreg(str(moved))}):
+                self.assertEqual(settings_module._downloads_dir(), moved)
+
+    def test_si_el_registro_falla_usa_downloads(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(settings_module.sys, "platform", "win32"), \
+                    mock.patch.object(settings_module.Path, "home",
+                                      return_value=Path(tmp)), \
+                    mock.patch.dict(sys.modules,
+                                    {"winreg": self._fake_winreg(raises=True)}):
+                self.assertEqual(settings_module._downloads_dir(),
+                                 Path(tmp) / "Downloads")
