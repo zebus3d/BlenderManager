@@ -353,7 +353,7 @@ _TRANSLATIONS = {
             "(otro disco, una copia portable...), añade esa carpeta aquí y "
             "aparecerá en Instaladas. Solo se lee: las descargas siguen yendo "
             "a la carpeta de destino.",
-        "Add folder...": "Añadir carpeta...",
+        "Add extra folder...": "Añadir carpeta extra...",
         "Pick a folder that contains your installed Blender versions, one per "
         "subfolder.":
             "Elige la carpeta que contiene tus Blender, cada uno en su "
