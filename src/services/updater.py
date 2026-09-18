@@ -487,8 +487,11 @@ def _apply_macos(archive: Path) -> bool:
         'while kill -0 "$PID" 2>/dev/null; do sleep 0.5; done\n'
         '/bin/sleep 1\n'
         '/bin/rm -rf "$BUNDLE.old"\n'
-        '/bin/mv "$BUNDLE" "$BUNDLE.old" || exit 1\n'
-        '/usr/bin/ditto "$NEW" "$BUNDLE" || { /bin/mv "$BUNDLE.old" "$BUNDLE"; exit 1; }\n'
+        # Si algo falla, se deja el bundle como estaba y se relanza el viejo:
+        # mejor eso que dejar al usuario sin app.
+        '/bin/mv "$BUNDLE" "$BUNDLE.old" || { /usr/bin/open "$BUNDLE"; exit 1; }\n'
+        '/usr/bin/ditto "$NEW" "$BUNDLE" '
+        '|| { /bin/mv "$BUNDLE.old" "$BUNDLE"; /usr/bin/open "$BUNDLE"; exit 1; }\n'
         '/usr/bin/xattr -dr com.apple.quarantine "$BUNDLE" 2>/dev/null\n'
         '/bin/rm -rf "$BUNDLE.old"\n'
         '/usr/bin/open "$BUNDLE"\n',
