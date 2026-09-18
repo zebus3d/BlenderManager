@@ -250,9 +250,6 @@ class MainWindow(QWidget):
         # ``Settings.destination_for``; aquí solo se recuerda para la interfaz.
         self.lts_folder = self.settings.lts_folder
         self.separate_lts = bool(self.settings.separate_lts)
-        # Carpetas extra que el usuario añade para que la app busque ahí sus
-        # Blender (los que instaló a mano, por ejemplo). Solo se escanean.
-        self.extra_folders = list(self.settings.extra_folders)
         self.launch_args = self.settings.launch_args
         self.delete_archive = bool(self.settings.delete_archive)
         # Bandeja del sistema: dos decisiones independientes (cerrar y
@@ -661,33 +658,6 @@ class MainWindow(QWidget):
         lts_lay.addWidget(lts_browse)
         self.lts_row.setVisible(self.separate_lts)
         lay.addWidget(self.lts_row)
-
-        # Carpetas extra: BlenderManager solo mira su carpeta de descargas, así
-        # que quien ya tenía sus Blender en otro sitio no los veía. Aquí puede
-        # apuntar dónde están; se escanean además de la de destino.
-        lay.addWidget(QLabel(tr("Other folders with installed versions")))
-        extra_hint = QLabel(tr(
-            "BlenderManager only looks for Blender inside its download folder. "
-            "Add any folder where you already keep your own Blender versions "
-            "and they will show up as installed."))
-        extra_hint.setObjectName("Muted")
-        extra_hint.setWordWrap(True)
-        lay.addWidget(extra_hint)
-
-        self.extra_box = QVBoxLayout()
-        self.extra_box.setContentsMargins(0, 0, 0, 0)
-        self.extra_box.setSpacing(6)
-        lay.addLayout(self.extra_box)
-
-        add_extra = CardButton(tr("Add folder..."), tooltip=tr(
-            "Pick a folder that contains your installed Blender versions, one "
-            "per subfolder."))
-        add_extra.clicked.connect(self.add_extra_folder)
-        add_row = QHBoxLayout()
-        add_row.addWidget(add_extra)
-        add_row.addStretch()
-        lay.addLayout(add_row)
-        self._rebuild_extra_rows()
 
         row2 = QHBoxLayout()
         row2.addWidget(QLabel(tr("Delete archive after extraction")))
@@ -1646,94 +1616,6 @@ class MainWindow(QWidget):
                                      tr("Choose the folder for LTS builds"))
         if folder:
             self.lts_input.setText(folder)
-
-    # ------------------------------------------------ carpetas extra
-    def _rebuild_extra_rows(self) -> None:
-        """Rehace las filas de carpetas extra a partir de ``self.extra_folders``.
-
-        Se reconstruyen enteras (son pocas) al añadir o quitar; así los índices
-        de los manejadores siguen coincidiendo con la lista. Al editar el texto
-        no se rehace nada: eso solo actualiza el valor.
-        """
-        while self.extra_box.count():
-            item = self.extra_box.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                # Primero fuera de la vista y luego a la cola de borrado: si no,
-                # las filas viejas siguen pintándose un frame (como en la rejilla).
-                widget.setParent(None)
-                widget.deleteLater()
-        for index, folder in enumerate(self.extra_folders):
-            self.extra_box.addWidget(self._extra_folder_row(folder, index))
-
-    def _extra_folder_row(self, folder: str, index: int) -> QWidget:
-        """Fila de una carpeta extra: ruta editable, examinar y quitar."""
-        row = QWidget()
-        lay = QHBoxLayout(row)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
-        field = QLineEdit(folder)
-        field.setToolTip(tr(
-            "Folder with your own Blender versions.\n"
-            "Each version has to be in its own subfolder."))
-        field.textChanged.connect(
-            lambda text, i=index: self._set_extra_folder(i, text))
-        # El rescaneo se espera a que se termine de editar (Enter o perder el
-        # foco): hacerlo en cada tecla recorrería las carpetas sin necesidad.
-        field.editingFinished.connect(self.refresh_installed)
-        lay.addWidget(field, 1)
-        browse = CardButton(tr("Browse..."), tooltip=tr("Choose another folder"))
-        browse.clicked.connect(lambda _=False, i=index: self.browse_extra_folder(i))
-        lay.addWidget(browse)
-        remove = IconFlatButton(icons.DELETE,
-                                tr("Stop looking in this folder"))
-        remove.clicked.connect(lambda _=False, i=index: self.remove_extra_folder(i))
-        lay.addWidget(remove)
-        return row
-
-    def _save_extra_folders(self) -> None:
-        """Vuelca las carpetas extra en los ajustes y los guarda."""
-        self.settings.extra_folders = list(self.extra_folders)
-        self.settings.save()
-
-    def _set_extra_folder(self, index: int, text: str) -> None:
-        if 0 <= index < len(self.extra_folders):
-            self.extra_folders[index] = text
-            self._save_extra_folders()
-
-    def add_extra_folder(self) -> None:
-        """Añade una carpeta elegida con el diálogo del sistema."""
-        folder = self._choose_folder("", tr("Choose a folder with Blender versions"))
-        if not folder:
-            return
-        if folder not in self.extra_folders:
-            self.extra_folders.append(folder)
-            self._save_extra_folders()
-            self._rebuild_extra_rows()
-        self.refresh_installed()
-
-    def browse_extra_folder(self, index: int) -> None:
-        """Cambia la ruta de la fila ``index`` por la que elija el usuario."""
-        if not (0 <= index < len(self.extra_folders)):
-            return
-        folder = self._choose_folder(
-            self.extra_folders[index],
-            tr("Choose a folder with Blender versions"))
-        if not folder:
-            return
-        self.extra_folders[index] = folder
-        self._save_extra_folders()
-        self._rebuild_extra_rows()
-        self.refresh_installed()
-
-    def remove_extra_folder(self, index: int) -> None:
-        """Deja de escanear la carpeta de la fila ``index``."""
-        if not (0 <= index < len(self.extra_folders)):
-            return
-        del self.extra_folders[index]
-        self._save_extra_folders()
-        self._rebuild_extra_rows()
-        self.refresh_installed()
 
     def _destination_for(self, build) -> str:
         """Carpeta donde va esta compilación: las LTS pueden ir aparte.
