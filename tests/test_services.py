@@ -10,7 +10,7 @@ from pathlib import Path
 
 import services.settings as settings_module
 from model.build import Build, favorite_key
-from services import api, detector, elevate, installed, tls
+from services import api, detector, elevate, installed, macos_dmg, tls
 from services.extractor import extract, is_archive
 
 
@@ -997,3 +997,81 @@ class OpenerTests(unittest.TestCase):
         env = popen.call_args.kwargs["env"]
         self.assertNotIn("LD_LIBRARY_PATH", env)
         self.assertNotIn("LD_PRELOAD", env)
+
+
+class MacosDmgTests(unittest.TestCase):
+    """El .dmg de macOS se monta y se copia el Blender.app a la carpeta destino.
+
+    No hace falta un Mac: se mockea ``_run`` (hdiutil/ditto) y se comprueba la
+    logica de montaje, nombre de carpeta y copia.
+    """
+
+    def _fake_run(self, calls):
+        import plistlib
+        import shutil
+
+        def run(command, check=True):
+            calls.append(command)
+            if command[0] == "hdiutil" and "attach" in command:
+                mount = Path(command[command.index("-mountpoint") + 1])
+                app = mount / "Blender.app"
+                (app / "Contents" / "MacOS").mkdir(parents=True)
+                (app / "Contents" / "MacOS" / "Blender").write_text("bin")
+                with (app / "Contents" / "Info.plist").open("wb") as handle:
+                    plistlib.dump({"CFBundleShortVersionString": "9.9.9"}, handle)
+            elif command[0] == "ditto":
+                shutil.copytree(command[1], command[2])
+            return mock.Mock(returncode=0, stdout="", stderr="")
+
+        return run
+
+    def test_instala_el_app_en_el_destino(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            dmg = base / "blender-9.9.9-macos-arm64.dmg"
+            dmg.write_bytes(b"dmg")
+            calls = []
+            with mock.patch.object(macos_dmg, "_run",
+                                   side_effect=self._fake_run(calls)):
+                folder = macos_dmg.install(dmg, base / "Blenders", "9.9.9", "arm64")
+
+            self.assertEqual(folder.name, "blender-9.9.9-macos-arm64")
+            executable = folder / "Blender.app" / "Contents" / "MacOS" / "Blender"
+            self.assertTrue(executable.is_file())
+            # Se monta y SIEMPRE se desmonta (aunque la copia fallara).
+            self.assertTrue(any("attach" in c for c in calls))
+            self.assertTrue(any("detach" in c for c in calls))
+
+    def test_usa_la_version_del_plist(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            dmg = base / "b.dmg"
+            dmg.write_bytes(b"dmg")
+            with mock.patch.object(macos_dmg, "_run",
+                                   side_effect=self._fake_run([])):
+                # El hint dice 1.0.0 pero el Info.plist dice 9.9.9: manda el plist.
+                folder = macos_dmg.install(dmg, base, "1.0.0", "arm64")
+            self.assertEqual(folder.name, "blender-9.9.9-macos-arm64")
+
+    def test_dmg_sin_app_falla(self):
+        import tempfile
+
+        def run(command, check=True):
+            return mock.Mock(returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dmg = Path(tmp) / "b.dmg"
+            dmg.write_bytes(b"dmg")
+            with mock.patch.object(macos_dmg, "_run", side_effect=run):
+                with self.assertRaises(macos_dmg.DmgError):
+                    macos_dmg.install(dmg, Path(tmp) / "out", "5.2.1", "arm64")
+
+    def test_available_solo_en_macos(self):
+        with mock.patch.object(macos_dmg.sys, "platform", "linux"):
+            self.assertFalse(macos_dmg.available())
+        with mock.patch.object(macos_dmg.sys, "platform", "darwin"):
+            self.assertTrue(macos_dmg.available())

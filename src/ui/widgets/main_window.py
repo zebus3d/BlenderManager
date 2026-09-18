@@ -52,6 +52,7 @@ from services import (
     detector,
     elevate,
     installed as installed_service,
+    macos_dmg,
     opener,
     settings as settings_service,
     sources,
@@ -215,6 +216,7 @@ class MainWindow(QWidget):
     download_done = Signal(str, object)   # path, build
     download_error = Signal(str)
     extract_done = Signal(str)
+    dmg_manual = Signal(str)   # macOS: no se pudo instalar, se revela a mano
     update_result = Signal(str, object, bool)
     update_applied = Signal(str)
     update_manual = Signal()   # descargada, pero hay que instalarla a mano
@@ -337,6 +339,7 @@ class MainWindow(QWidget):
         self.download_done.connect(self._on_download_done)
         self.download_error.connect(self._on_download_error)
         self.extract_done.connect(self._on_extract_done)
+        self.dmg_manual.connect(self._on_dmg_manual)
         self.update_result.connect(self._on_update_result)
         self.update_applied.connect(self._on_update_applied)
         self.update_manual.connect(self._on_update_manual)
@@ -1878,25 +1881,21 @@ class MainWindow(QWidget):
 
     def _on_download_done(self, path: str, build) -> None:
         archive = Path(path)
-        # En macOS la API solo publica .dmg, que no es un contenedor que
-        # sepamos abrir. La descarga ha ido bien: dejamos el archivo donde
-        # está (sin borrarlo, aunque ``delete_archive`` esté activo, porque es
-        # el único artefacto útil) y le decimos al usuario qué hacer con él, en
-        # vez de intentar extraerlo y fingir un fallo de descarga.
+        # El .dmg de macOS no es un archivo comprimido, pero sí se puede
+        # montar y copiar el Blender.app a la carpeta destino: así la build se
+        # puede lanzar desde la app como cualquier otra (antes se dejaba el
+        # fichero y había que instalarla a mano, sin forma de abrirla luego).
+        if (not is_archive(archive)
+                and archive.suffix.lower() == ".dmg"
+                and self.system.os_name == "darwin"
+                and macos_dmg.available()):
+            self._install_dmg(archive, build)
+            return
         if not is_archive(archive):
-            # No hubo extracción, así que no hay "Reemplazar" que completar:
-            # sin esto la carpeta vieja se borraría en la siguiente extracción.
-            self._replace_entry = None
-            self._set_downloading(False)
-            self.progress.setValue(0)
-            self.percent.setText("")
-            opener.reveal(archive)
-            self._show_message(
-                tr("Downloaded to {folder}", folder=archive.parent)
-                + "  ·  "
-                + tr("Open it to install Blender manually."),
-                10,
-            )
+            # Otro fichero que no sabemos abrir (o un .dmg bajado desde otro
+            # sistema para un Mac): se deja donde está y se avisa, en vez de
+            # fingir un fallo de descarga.
+            self._on_dmg_manual(str(archive))
             return
         self._set_status(tr("Extracting..."))
         self._set_downloading(True)
@@ -1926,6 +1925,57 @@ class MainWindow(QWidget):
             self.extract_done.emit(str(target))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _install_dmg(self, archive: Path, build) -> None:
+        """Monta el .dmg e instala el ``Blender.app`` en un hilo de trabajo.
+
+        Montar y copiar un bundle son operaciones lentas, así que van fuera del
+        hilo de la interfaz. El resultado vuelve por ``extract_done`` (el mismo
+        camino que una extracción normal, así el "Reemplazar" y el refresco
+        funcionan igual) o por ``dmg_manual`` si no se pudo.
+        """
+        self._set_status(tr("Installing..."))
+        self._set_downloading(True)
+        destination = Path(self._destination_for(build)).expanduser()
+
+        def worker():
+            try:
+                target = macos_dmg.install(archive, destination,
+                                           build.version, build.arch)
+                installed_service.write_marker(target, build)
+                if self.delete_archive:
+                    try:
+                        archive.unlink()
+                    except OSError:
+                        pass
+            except Exception as error:
+                download_log(f"dmg install failed: {error}")
+                self.dmg_manual.emit(str(archive))
+                return
+            self.extract_done.emit(str(target))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_dmg_manual(self, path: str) -> None:
+        """Plan B de macOS (o fichero que no sabemos abrir): revelar y avisar.
+
+        La descarga ha ido bien, así que no es un "Download failed": se deja el
+        fichero donde está y se explica que hay que instalarlo a mano.
+        """
+        archive = Path(path)
+        # No hubo extracción, así que no hay "Reemplazar" que completar: sin
+        # esto la carpeta vieja se borraría en la siguiente extracción.
+        self._replace_entry = None
+        self._set_downloading(False)
+        self.progress.setValue(0)
+        self.percent.setText("")
+        opener.reveal(archive)
+        self._show_message(
+            tr("Downloaded to {folder}", folder=archive.parent)
+            + "  ·  "
+            + tr("Open it to install Blender manually."),
+            10,
+        )
 
     def _on_extract_done(self, target: str) -> None:
         self._set_downloading(False)

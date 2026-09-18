@@ -207,6 +207,14 @@ minor** (`v1.3.0`).
   `.blendermanager.json` dentro de su carpeta con el hash de la compilación
   (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
   la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
+- **macOS: el `.dmg` se monta y se instala** (`src/services/macos_dmg.py`). La
+  API solo publica `.dmg`, que no es un comprimido, así que `hdiutil attach` lo
+  monta, se copia `Blender.app` a la carpeta destino con `ditto` (preserva
+  firma/metadatos del bundle) y se desmonta. Así la Mac puede **lanzarse desde
+  la app** como cualquier otra: antes solo se revelaba el fichero y no había
+  forma de abrirla. Es un módulo de `services/` (sin Qt) y usa `clean_env()`;
+  si el montaje falla, se cae al plan B (revelar y avisar). Los tests mockean
+  `hdiutil`/`ditto`, así que **no se prueba en el CI** (Ubuntu).
 
 ## Build Linux portable (PySide6)
 

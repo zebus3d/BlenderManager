@@ -29,9 +29,10 @@ need to install anything.
   in the filter bar to grab a build for a friend or a USB stick, not just for the
   machine you are running on. Your choice is remembered for next time.
 - **Downloads with progress**, **SHA-256** integrity verification and automatic
-  extraction (`.tar.xz` on Linux, `.zip` on Windows). On macOS Blender is only
-  published as `.dmg`, which is not extracted: the app downloads it, reveals it
-  in Finder and tells you to open it.
+  installation (`.tar.xz` on Linux, `.zip` on Windows, `.dmg` on macOS: the app
+  mounts the disk image and copies `Blender.app` into your folder, so it can be
+  launched, renamed and uninstalled like any other build). If mounting fails it
+  falls back to revealing the file in Finder.
 - **Installed versions**: launch or uninstall them from the app. The filters and
   search apply to them too, and they are highlighted in the store so you can tell
   at a glance what you already have.
