@@ -791,13 +791,15 @@ class MainWindow(QWidget):
         sep.setFixedHeight(1)
         lay.addWidget(sep)
 
+        # Dos ajustes independientes: comprobar al arrancar, y comprobar cada X
+        # rato. Apagar el primero NO apaga el segundo.
         row = QHBoxLayout()
-        row.addWidget(QLabel(tr("Check for updates automatically")))
+        row.addWidget(QLabel(tr("Check for updates on startup")))
         row.addStretch()
         self.update_switch = SwitchPill(
             self.auto_update, tooltip=tr(
-                "Check for new BlenderManager versions when the app "
-                "starts.\nTurn it off if you do not want to update."))
+                "Check for new BlenderManager versions when the app starts.\n"
+                "It only downloads one when you accept; checking is cheap."))
         self.update_switch.toggled.connect(self.set_auto_update)
         row.addWidget(self.update_switch)
         lay.addLayout(row)
@@ -807,8 +809,8 @@ class MainWindow(QWidget):
         row_periodic.addWidget(QLabel(tr("Check for updates periodically")))
         row_periodic.addStretch()
         self.periodic_switch = SwitchPill(self.periodic_update, tooltip=tr(
-            "Look for new versions of BlenderManager every so often"))
-        self.periodic_switch.setEnabled(self.auto_update)
+            "Look for new versions of BlenderManager every so often,\n"
+            "even if the startup check is off."))
         self.periodic_switch.toggled.connect(self.set_periodic_update)
         row_periodic.addWidget(self.periodic_switch)
         lay.addLayout(row_periodic)
@@ -825,8 +827,7 @@ class MainWindow(QWidget):
         self.update_interval_combo.setToolTip(tr(
             "How often BlenderManager looks for its own updates.\n"
             "It only downloads one when you accept; checking is cheap."))
-        self.update_interval_combo.setEnabled(
-            self.auto_update and self.periodic_update)
+        self.update_interval_combo.setEnabled(self.periodic_update)
         self.update_interval_combo.currentIndexChanged.connect(
             self._on_update_interval_changed)
         row_interval.addWidget(self.update_interval_combo)
@@ -1677,32 +1678,27 @@ class MainWindow(QWidget):
         self.reset_zoom_slider.setValue(round(settings_service.DEFAULT_ZOOM * 100))
 
     def set_auto_update(self, active: bool) -> None:
-        """Guarda si hay que buscar actualizaciones automáticamente.
+        """Guarda si hay que comprobar actualizaciones al arrancar.
 
-        Es el interruptor maestro: al apagarlo no se comprueba nada (ni al
-        arrancar ni cada X) y se deshabilitan los controles del periódico.
+        Es independiente del chequeo periódico: apagarlo no lo toca.
         """
         self.auto_update = active
         self.settings.auto_update = active
         self.settings.save()
-        if hasattr(self, "periodic_switch"):
-            self.periodic_switch.setEnabled(active)
-            self.update_interval_combo.setEnabled(active and self.periodic_update)
-        self._apply_update_timer()
 
     def set_periodic_update(self, active: bool) -> None:
-        """Apaga/enciende solo el chequeo periódico (el de arranque sigue)."""
+        """Apaga/enciende el chequeo periódico (independiente del de arranque)."""
         self.periodic_update = active
         self.settings.periodic_update = active
         self.settings.save()
         if hasattr(self, "update_interval_combo"):
-            self.update_interval_combo.setEnabled(self.auto_update and active)
+            self.update_interval_combo.setEnabled(active)
         self._apply_update_timer()
 
     def _apply_update_timer(self) -> None:
         """(Re)programa el chequeo periódico de la app según los ajustes."""
         minutes = self.settings.update_interval_min
-        if self.auto_update and self.periodic_update and minutes > 0:
+        if self.periodic_update and minutes > 0:
             self._update_timer.start(minutes * 60 * 1000)
         else:
             self._update_timer.stop()

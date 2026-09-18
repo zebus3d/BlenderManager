@@ -1775,14 +1775,17 @@ class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(window.settings.update_interval_min, 60)
         self.assertEqual(window._update_timer.interval(), 60 * 60 * 1000)
 
-    def test_apagar_auto_update_para_el_temporizador(self):
+    def test_apagar_el_chequeo_al_iniciar_no_para_el_periodico(self):
+        """Los dos ajustes son independientes: apagar uno no toca el otro."""
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
         window.update_switch.setChecked(False)
-        self.assertFalse(window._update_timer.isActive())
-        self.assertFalse(window.update_interval_combo.isEnabled())
-        self.assertFalse(window.periodic_switch.isEnabled())
+        # El periódico sigue programado y sus controles activos.
+        self.assertTrue(window._update_timer.isActive())
+        self.assertTrue(window.periodic_switch.isEnabled())
+        self.assertTrue(window.update_interval_combo.isEnabled())
+        self.assertFalse(window.settings.auto_update)
 
     def test_apagar_el_periodico_no_para_el_de_arranque(self):
         from ui.widgets.main_window import MainWindow
