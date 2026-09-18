@@ -1095,6 +1095,32 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
             window._on_update_result("v1.4.0", [asset], True)
             disponible.assert_called_once()
 
+    def test_actualiza_directo_a_la_ultima_no_es_secuencial(self):
+        """No hay parches: desde una version vieja se baja la ultima directa.
+
+        Si tienes la 1.0.0 y la ultima es la 1.3.0, se ofrece y se descarga el
+        asset de la 1.3.0; no hay que pasar por la 1.1.0 ni la 1.2.0. Lo que se
+        mira es ``releases/latest``, no la siguiente version.
+        """
+        from services import updater
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.current_version = "1.0.0"
+        asset = {"name": updater.asset_for(window.system),
+                 "url": "http://example/v1.3.0"}
+        with mock.patch.object(sys, "frozen", True, create=True), \
+                mock.patch.object(window, "_show_update_available") as ofrecer, \
+                mock.patch.object(window.update_downloader, "start") as bajar:
+            window._on_update_result("v1.3.0", [asset], False)
+            # Se ofrece la 1.3.0 (no una intermedia).
+            self.assertEqual(ofrecer.call_args.args[0], "v1.3.0")
+            # Y al aceptar se descarga el asset de la 1.3.0.
+            window._do_update(asset)
+
+        bajar.assert_called_once()
+        self.assertEqual(bajar.call_args.args[0], "http://example/v1.3.0")
+
     def test_dialogo_fuente_rehabilita_al_fallar(self):
         from i18n import tr
         from ui.widgets.dialogs import AppDialog
