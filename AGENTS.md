@@ -500,6 +500,13 @@ El AppImage resultante pesa ~70 MB.
   (`check_updates`, `_show_update_available`, `_show_source_update`) y controles
   en el panel de ajustes (dentro de `_build_settings_view`).
 - Preferencia `auto_update` en `src/services/settings.py` (por defecto activada).
+- **Reintento de conexión** (`services/downloader.py`): el handshake TLS de
+  `release-assets.githubusercontent.com` es **intermitente** (el log de un
+  usuario de Mac lo enseña: el mismo asset se bajó bien en v1.29.0 y v1.31.0 y
+  falló con `_ssl.c:993: The handshake operation timed out` en v1.33.0). Se
+  reintenta la conexión hasta 3 veces (solo la conexión; no se reinicia una
+  descarga a medias) y el `HTTPError` no se reintenta. El fallo es antes de
+  descargar, así que reintentar no cuesta datos.
 - Aplicación por plataforma: Linux AppImage reemplaza `$APPIMAGE`; Windows
   extrae a staging y relanza el binario nuevo con `--apply-update`; macOS extrae
   el zip y lanza un **helper** (estilo Sparkle) que espera a que la app se
