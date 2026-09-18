@@ -341,8 +341,8 @@ _TRANSLATIONS = {
         "destination folder.":
             "Carpeta solo para las versiones LTS.\n"
             "Déjala vacía para usar la carpeta de destino.",
-        "Other folders where you already have Blender":
-            "Otras carpetas donde ya tienes Blender",
+        "Look for Blender in other folders":
+            "Buscar Blender en otras carpetas",
         "BlenderManager only looks inside its download folder. If you also "
         "have Blender installed or unzipped somewhere else (another drive, a "
         "portable copy...), add that folder here and it will show up in "

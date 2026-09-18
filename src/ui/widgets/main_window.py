@@ -251,8 +251,10 @@ class MainWindow(QWidget):
         self.lts_folder = self.settings.lts_folder
         self.separate_lts = bool(self.settings.separate_lts)
         # Carpetas extra que el usuario añade para que la app busque ahí sus
-        # Blender (los que instaló a mano, por ejemplo). Solo se escanean.
+        # Blender (los que instaló a mano, por ejemplo). Solo se escanean, y
+        # solo si el interruptor está encendido.
         self.extra_folders = list(self.settings.extra_folders)
+        self.use_extra_folders = bool(self.settings.use_extra_folders)
         self.launch_args = self.settings.launch_args
         self.delete_archive = bool(self.settings.delete_archive)
         # Bandeja del sistema: dos decisiones independientes (cerrar y
@@ -664,24 +666,32 @@ class MainWindow(QWidget):
 
         # Carpetas extra: BlenderManager solo mira su carpeta de descargas, así
         # que quien ya tenía sus Blender en otro sitio (a mano, en otro disco,
-        # una copia portable) no los veía. Aquí puede apuntar dónde están; se
-        # escanean además de la de destino y no cambian dónde se descarga.
-        # El texto largo va en el tooltip del título: en la altura por defecto
-        # de la ventana no cabe y empujaba el resto de la tarjeta.
-        extra_title = QLabel(tr("Other folders where you already have Blender"))
-        extra_title.setToolTip(tr(
+        # una copia portable) no los veía. La sección va bajo un interruptor,
+        # como las LTS aparte: apagado no se escanea nada y no ocupa sitio.
+        extra_tip = tr(
             "BlenderManager only looks inside its download folder. If you also "
             "have Blender installed or unzipped somewhere else (another drive, "
             "a portable copy...), add that folder here and it will show up in "
             "Installed. It is only read: downloads keep going to the "
-            "destination folder."))
-        lay.addWidget(extra_title)
+            "destination folder.")
+        row_extra = QHBoxLayout()
+        extra_label = QLabel(tr("Look for Blender in other folders"))
+        extra_label.setToolTip(extra_tip)
+        row_extra.addWidget(extra_label)
+        row_extra.addStretch()
+        self.extra_switch = SwitchPill(self.use_extra_folders, tooltip=extra_tip)
+        self.extra_switch.toggled.connect(self._on_extra_folders_toggled)
+        row_extra.addWidget(self.extra_switch)
+        lay.addLayout(row_extra)
 
+        self.extra_section = QWidget()
+        extra_lay = QVBoxLayout(self.extra_section)
+        extra_lay.setContentsMargins(0, 0, 0, 0)
+        extra_lay.setSpacing(6)
         self.extra_box = QVBoxLayout()
         self.extra_box.setContentsMargins(0, 0, 0, 0)
         self.extra_box.setSpacing(6)
-        lay.addLayout(self.extra_box)
-
+        extra_lay.addLayout(self.extra_box)
         add_extra = CardButton(tr("Add extra folder..."), tooltip=tr(
             "Pick a folder that contains your installed Blender versions, one "
             "per subfolder."))
@@ -689,7 +699,9 @@ class MainWindow(QWidget):
         add_row = QHBoxLayout()
         add_row.addWidget(add_extra)
         add_row.addStretch()
-        lay.addLayout(add_row)
+        extra_lay.addLayout(add_row)
+        self.extra_section.setVisible(self.use_extra_folders)
+        lay.addWidget(self.extra_section)
         self._rebuild_extra_rows()
 
         row2 = QHBoxLayout()
@@ -1770,6 +1782,15 @@ class MainWindow(QWidget):
         self.lts_row.setVisible(value)
         self.refresh_installed()
         self._rebuild_store()
+
+    def _on_extra_folders_toggled(self, value: bool) -> None:
+        """Enciende (o apaga) la búsqueda en las carpetas extra."""
+        self.use_extra_folders = value
+        self.settings.use_extra_folders = value
+        self.settings.save()
+        # Solo se enseña la sección cuando está activado; las rutas se guardan.
+        self.extra_section.setVisible(value)
+        self.refresh_installed()
 
     def _on_archive_toggled(self, value: bool) -> None:
         self.delete_archive = value

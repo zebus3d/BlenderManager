@@ -910,6 +910,11 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             extra = Path(tmp) / "mis-blenders"
             (extra / "blender-5.0.1-linux-x64").mkdir(parents=True)
+            # La sección arranca apagada (como las LTS aparte).
+            self.assertTrue(window.extra_section.isHidden())
+            window.extra_switch.setChecked(True)
+            self.assertFalse(window.extra_section.isHidden())
+            self.assertTrue(window.settings.use_extra_folders)
             with mock.patch.object(window, "_choose_folder",
                                    return_value=str(extra)):
                 window.add_extra_folder()
@@ -924,6 +929,16 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             # Quitarla deja de escanearla y la borra de los ajustes.
             window.remove_extra_folder(0)
             self.assertEqual(window.settings.extra_folders, [])
+            self.assertEqual(window.installed, [])
+            # Apagarla deja de escanear sin olvidar las rutas guardadas.
+            with mock.patch.object(window, "_choose_folder",
+                                   return_value=str(extra)):
+                window.add_extra_folder()
+            self.assertEqual([e.version for e in window.installed], ["5.0.1"])
+            window.extra_switch.setChecked(False)
+            self.assertTrue(window.extra_section.isHidden())
+            self.assertFalse(window.settings.use_extra_folders)
+            self.assertEqual(window.settings.extra_folders, [str(extra)])
             self.assertEqual(window.installed, [])
 
 
