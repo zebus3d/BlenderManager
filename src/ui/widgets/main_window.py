@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QStackedWidget,
     QStyle,
+    QTabWidget,
     QStyleOptionSlider,
     QVBoxLayout,
     QWidget,
@@ -575,9 +576,9 @@ class MainWindow(QWidget):
         return self.installed_scroll
 
     def _build_settings_view(self) -> QWidget:
-        # Fondo gris y tarjetas más claras encima con sombra, igual que la
-        # vista de Migración: el objectName de la página y del scroll hace que
-        # el QSS ponga el gris, y `_settings_card` la sombra.
+        # Un tema por pestaña: con tantas opciones, las dos columnas ya no
+        # cabían a la altura mínima de la ventana. Las tarjetas y el fondo gris
+        # son los mismos que en Migración (objectName `SettingsPage`/`SettingsCard`).
         page = QWidget()
         page.setObjectName("SettingsPage")
         outer = QVBoxLayout(page)
@@ -589,22 +590,35 @@ class MainWindow(QWidget):
         header.addStretch()
         outer.addLayout(header)
 
-        columns = QHBoxLayout()
-        columns.setSpacing(16)
-        columns.addWidget(self._settings_general_card(), 1)
-        columns.addWidget(self._settings_launch_card(), 1)
-        outer.addLayout(columns)
-        outer.addStretch()
+        tabs = QTabWidget()
+        tabs.setObjectName("SettingsTabs")
+        tabs.addTab(self._settings_tab(self._settings_downloads_card()),
+                    tr("Downloads"))
+        tabs.addTab(self._settings_tab(self._settings_interface_card()),
+                    tr("Interface"))
+        tabs.addTab(self._settings_tab(self._settings_launch_card()),
+                    tr("Launch"))
+        tabs.addTab(self._settings_tab(self._settings_system_card()),
+                    tr("System"))
+        tabs.addTab(self._settings_tab(self._settings_updates_card()),
+                    tr("Updates"))
+        outer.addWidget(tabs, 1)
+        return page
 
-        # La tarjeta de General ya no cabe a la altura mínima de la ventana (con
-        # las opciones de bandeja, autoarranque y arranque minimizado pide más
-        # de 400 px). Con scroll, a tamaños pequeños se desplaza en vez de
-        # recortar la última fila (el botón de restablecer el tamaño).
-        scroll = QScrollArea()
-        scroll.setObjectName("SettingsScroll")
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(page)
-        return scroll
+    def _settings_tab(self, card: QFrame) -> QWidget:
+        """Página de una pestaña de Ajustes: una sola tarjeta con sus márgenes.
+
+        Cada tema cabe de sobra en su pestaña, así que no lleva scroll (como las
+        de Migración); el mínimo de la ventana lo fija la pestaña más alta.
+        """
+        page = QWidget()
+        page.setObjectName("SettingsPage")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(24, 20, 24, 20)
+        lay.setSpacing(16)
+        lay.addWidget(card)
+        lay.addStretch()
+        return page
 
     def _settings_card(self, title: str) -> tuple[QFrame, QVBoxLayout]:
         card = QFrame()
@@ -620,8 +634,8 @@ class MainWindow(QWidget):
         lay.addWidget(label)
         return card, lay
 
-    def _settings_general_card(self) -> QFrame:
-        card, lay = self._settings_card(tr("General"))
+    def _settings_downloads_card(self) -> QFrame:
+        card, lay = self._settings_card(tr("Downloads"))
         lay.addWidget(QLabel(tr("Destination folder")))
         row = QHBoxLayout()
         self.dest_input = QLineEdit(self.dest_folder)
@@ -715,6 +729,10 @@ class MainWindow(QWidget):
         self.archive_switch.toggled.connect(self._on_archive_toggled)
         row2.addWidget(self.archive_switch)
         lay.addLayout(row2)
+        return card
+
+    def _settings_interface_card(self) -> QFrame:
+        card, lay = self._settings_card(tr("Interface"))
 
         row3 = QHBoxLayout()
         row3.addWidget(QLabel(tr("Language")))
@@ -727,6 +745,48 @@ class MainWindow(QWidget):
         self.language_combo.currentTextChanged.connect(self._on_language_changed)
         row3.addWidget(self.language_combo)
         lay.addLayout(row3)
+
+        # Destino del "restablecer" (Ctrl+0 / Ctrl+clic en el slider del pie).
+        # Es una preferencia, no el zoom actual: moverlo aquí NO cambia la
+        # rejilla; solo decide a qué tamaño vuelve el reset. Por eso el slider
+        # del pie sigue persistiendo lo que el usuario dejara la última sesión.
+        row4 = QHBoxLayout()
+        row4.addWidget(QLabel(tr("Reset zoom")))
+        row4.addStretch()
+        self.reset_zoom_slider = _ZoomSlider(Qt.Horizontal)
+        self.reset_zoom_slider.setRange(int(MIN_ZOOM * 100), int(MAX_ZOOM * 100))
+        self.reset_zoom_slider.setValue(round(self.settings.reset_zoom * 100))
+        self.reset_zoom_slider.setFixedWidth(130)
+        self.reset_zoom_slider.setToolTip(
+            tr("Zoom the grid returns to (Ctrl+0 or Ctrl+click on the slider)"))
+        self.reset_zoom_slider.valueChanged.connect(self._on_reset_zoom_changed)
+        self.reset_zoom_slider.sliderReleased.connect(self._save_reset_zoom)
+        self.reset_zoom_slider.reset_requested.connect(self._factory_reset_zoom)
+        row4.addWidget(self.reset_zoom_slider)
+        self.reset_zoom_label = QLabel(f"{round(self.settings.reset_zoom * 100)} %")
+        self.reset_zoom_label.setObjectName("Muted")
+        self.reset_zoom_label.setToolTip(
+            tr("Size the grid returns to when you reset the zoom."))
+        self.reset_zoom_label.setFixedWidth(40)
+        self.reset_zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        row4.addWidget(self.reset_zoom_label)
+        lay.addLayout(row4)
+
+        # Tamaño de la ventana: vuelve al de fábrica y se centra. Útil si una
+        # sesión la dejó enorme o en una esquina.
+        row5 = QHBoxLayout()
+        row5.addWidget(QLabel(tr("Window size")))
+        row5.addStretch()
+        reset_window = CardButton(
+            tr("Reset"), tooltip=tr("Return the window to its default size and "
+                                    "center it on the screen."))
+        reset_window.clicked.connect(self.reset_window_size)
+        row5.addWidget(reset_window)
+        lay.addLayout(row5)
+        return card
+
+    def _settings_system_card(self) -> QFrame:
+        card, lay = self._settings_card(tr("System"))
 
         # Bandeja del sistema: dos decisiones independientes (cerrar y
         # minimizar). Si el escritorio no la soporta se deshabilitan, porque
@@ -805,44 +865,6 @@ class MainWindow(QWidget):
             # igual, así que no se ofrece un ajuste que no haría nada.
             self.start_minimized_switch.setEnabled(False)
             self.start_minimized_switch.setToolTip(tray_unavailable)
-
-        # Destino del "restablecer" (Ctrl+0 / Ctrl+clic en el slider del pie).
-        # Es una preferencia, no el zoom actual: moverlo aquí NO cambia la
-        # rejilla; solo decide a qué tamaño vuelve el reset. Por eso el slider
-        # del pie sigue persistiendo lo que el usuario dejara la última sesión.
-        row4 = QHBoxLayout()
-        row4.addWidget(QLabel(tr("Reset zoom")))
-        row4.addStretch()
-        self.reset_zoom_slider = _ZoomSlider(Qt.Horizontal)
-        self.reset_zoom_slider.setRange(int(MIN_ZOOM * 100), int(MAX_ZOOM * 100))
-        self.reset_zoom_slider.setValue(round(self.settings.reset_zoom * 100))
-        self.reset_zoom_slider.setFixedWidth(130)
-        self.reset_zoom_slider.setToolTip(
-            tr("Zoom the grid returns to (Ctrl+0 or Ctrl+click on the slider)"))
-        self.reset_zoom_slider.valueChanged.connect(self._on_reset_zoom_changed)
-        self.reset_zoom_slider.sliderReleased.connect(self._save_reset_zoom)
-        self.reset_zoom_slider.reset_requested.connect(self._factory_reset_zoom)
-        row4.addWidget(self.reset_zoom_slider)
-        self.reset_zoom_label = QLabel(f"{round(self.settings.reset_zoom * 100)} %")
-        self.reset_zoom_label.setObjectName("Muted")
-        self.reset_zoom_label.setToolTip(
-            tr("Size the grid returns to when you reset the zoom."))
-        self.reset_zoom_label.setFixedWidth(40)
-        self.reset_zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        row4.addWidget(self.reset_zoom_label)
-        lay.addLayout(row4)
-
-        # Tamaño de la ventana: vuelve al de fábrica y se centra. Útil si una
-        # sesión la dejó enorme o en una esquina.
-        row5 = QHBoxLayout()
-        row5.addWidget(QLabel(tr("Window size")))
-        row5.addStretch()
-        reset_window = CardButton(
-            tr("Reset"), tooltip=tr("Return the window to its default size and "
-                                    "center it on the screen."))
-        reset_window.clicked.connect(self.reset_window_size)
-        row5.addWidget(reset_window)
-        lay.addLayout(row5)
         return card
 
     def _settings_launch_card(self) -> QFrame:
@@ -855,11 +877,10 @@ class MainWindow(QWidget):
             "Example: --background to start without the interface."))
         self.args_input.textChanged.connect(self._on_args_changed)
         lay.addWidget(self.args_input)
+        return card
 
-        sep = QFrame()
-        sep.setObjectName("RowSeparator")
-        sep.setFixedHeight(1)
-        lay.addWidget(sep)
+    def _settings_updates_card(self) -> QFrame:
+        card, lay = self._settings_card(tr("Updates"))
 
         # Dos ajustes independientes: comprobar al arrancar, y comprobar cada X
         # rato. Apagar el primero NO apaga el segundo.
