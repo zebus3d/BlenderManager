@@ -62,8 +62,10 @@ need to install anything.
   opens that series' release notes (e.g.
   `developer.blender.org/docs/release_notes/5.2/`) in your browser, so you can
   check what changed before downloading.
-- **Self-updating**: packaged builds (Linux AppImage, Windows) replace themselves
-  and restart; a source checkout runs `git pull` and restarts instead. The app
+- **Self-updating**: packaged builds replace themselves and restart (the Linux
+  AppImage in place, Windows via a helper, and macOS with a helper that swaps the
+  `.app` once the app has quit); a source checkout runs `git pull` and restarts
+  instead. The app
   checks on start and **periodically** (every 1 minute to 3 hours, or never), and
   the update dialog can **skip this version**. An automatic check never interrupts
   a running download and never repeats a version you already dismissed; "Check
