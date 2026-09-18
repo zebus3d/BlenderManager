@@ -2,11 +2,14 @@
 
 La descarga se hace siempre en un hilo aparte para no congelar la interfaz;
 las llamadas de vuelta (progreso, fin, error) las recibe quien nos llame y es
-su responsabilidad reenviarlas al hilo de Kivy con ``Clock.schedule_once``.
+su responsabilidad reenviarlas al hilo de la interfaz (con una señal de Qt; ver
+``MainWindow._Bridge``).
 """
 
 import hashlib
 import threading
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -15,6 +18,15 @@ from services.settings import cache_dir
 
 USER_AGENT = "BlenderManager/0.2 (+https://github.com/zebus3d/BlenderManager)"
 CHUNK_SIZE = 1024 * 256  # 256 KiB por lectura
+
+# Tiempo máximo para conectar (incluye el handshake TLS), y reintentos de la
+# conexión. El caso real: "urlopen error _ssl.c:993: The handshake operation
+# timed out" al bajar el zip de una release en macOS, el mismo asset que otras
+# veces sí había funcionado. Es intermitente, así que reintentar lo resuelve; el
+# fallo ocurre **antes de descargar**, así que reintentar no cuesta datos.
+CONNECT_TIMEOUT = 30
+CONNECT_ATTEMPTS = 3
+RETRY_DELAY = 3  # segundos entre intentos
 
 
 def log(message: str) -> None:
@@ -62,6 +74,29 @@ class Downloader:
         )
         self._thread.start()
 
+    def _connect(self, url):
+        """Abre la conexión, reintentando los fallos de red transitorios.
+
+        Solo se reintenta la **conexión** (incluye el handshake TLS): si el
+        fallo llega a mitad de la descarga, mejor no empezar de cero. Un
+        ``HTTPError`` (404, 500...) no se reintenta: no va a cambiar.
+        """
+        for intento in range(1, CONNECT_ATTEMPTS + 1):
+            try:
+                request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+                # Con contexto explicito: si no, en Arch no encuentra las CAs y
+                # no se puede descargar nada (ver services/tls.py).
+                return urllib.request.urlopen(request, timeout=CONNECT_TIMEOUT,
+                                              context=tls.ssl_context())
+            except urllib.error.HTTPError:
+                raise
+            except Exception as error:
+                if self._cancel.is_set() or intento == CONNECT_ATTEMPTS:
+                    raise
+                log(f"download connect failed ({url}), reintento "
+                    f"{intento}/{CONNECT_ATTEMPTS}: {error}")
+                time.sleep(RETRY_DELAY)
+
     def _run(self, url, dest_folder, filename, expected_sha256, on_progress, on_done, on_error):
         # Descargamos primero a un .part y solo al final renombramos,
         # así una descarga a medias no se confunde con una completa.
@@ -73,11 +108,7 @@ class Downloader:
             # La URL va al log: un fallo de red (handshake TLS, host bloqueado)
             # es indistinguible de otro sin saber a qué host iba.
             log(f"downloading {url} -> {final_path}")
-            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            # Con contexto explicito: si no, en Arch no encuentra las CAs y no
-            # se puede descargar nada (ver services/tls.py).
-            with urllib.request.urlopen(request, timeout=30,
-                                        context=tls.ssl_context()) as response:
+            with self._connect(url) as response:
                 total = int(response.headers.get("Content-Length") or 0)
                 digest = hashlib.sha256()
                 downloaded = 0

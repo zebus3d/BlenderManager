@@ -1144,3 +1144,52 @@ class WindowsDownloadsTests(unittest.TestCase):
                                     {"winreg": self._fake_winreg(raises=True)}):
                 self.assertEqual(settings_module._downloads_dir(),
                                  Path(tmp) / "Downloads")
+
+
+class DownloaderRetryTests(unittest.TestCase):
+    """La conexión se reintenta: el handshake TLS de un CDN es intermitente.
+
+    Caso real (Mac, 2026-09-18): "urlopen error _ssl.c:993: The handshake
+    operation timed out" al bajar el zip de una release; el mismo asset había
+    funcionado otras veces. Como el fallo es ANTES de descargar, reintentar sale
+    gratis.
+    """
+
+    def setUp(self):
+        from services import downloader
+
+        self.downloader = downloader
+
+    def test_reintenta_el_handshake_y_acaba_bien(self):
+        import urllib.error
+
+        d = self.downloader.Downloader()
+        exito = object()
+        with mock.patch.object(self.downloader.urllib.request, "urlopen",
+                               side_effect=[urllib.error.URLError("handshake"),
+                                            exito]) as abrir, \
+                mock.patch.object(self.downloader, "RETRY_DELAY", 0):
+            self.assertIs(d._connect("https://x/asset.zip"), exito)
+        self.assertEqual(abrir.call_count, 2)
+
+    def test_http_error_no_se_reintenta(self):
+        import urllib.error
+
+        d = self.downloader.Downloader()
+        error = urllib.error.HTTPError("https://x", 404, "Not Found", {}, None)
+        with mock.patch.object(self.downloader.urllib.request, "urlopen",
+                               side_effect=error) as abrir:
+            with self.assertRaises(urllib.error.HTTPError):
+                d._connect("https://x")
+        self.assertEqual(abrir.call_count, 1)
+
+    def test_cancelar_corta_los_reintentos(self):
+        import urllib.error
+
+        d = self.downloader.Downloader()
+        d.cancel()
+        with mock.patch.object(self.downloader.urllib.request, "urlopen",
+                               side_effect=urllib.error.URLError("x")) as abrir:
+            with self.assertRaises(urllib.error.URLError):
+                d._connect("https://x")
+        self.assertEqual(abrir.call_count, 1)
