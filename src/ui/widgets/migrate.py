@@ -500,26 +500,8 @@ class MigrateView(QWidget):
         board_lay.addWidget(self.right_card, 1)
         lay.addLayout(board_lay)
 
-        # El resumen y la explicación, en color de texto normal: son datos y
-        # ayuda que hay que leer, y en Muted sobre el gris quedaban apagados.
-        self.summary = QLabel("")
-        self.summary.setToolTip(tr(
-            "How many add-ons were found, how many are compatible, how many "
-            "you should review and how many cannot be copied."))
-        lay.addWidget(self.summary)
-
-        for text in (
-            "Copy the add-ons (and extensions) of one installed version to "
-            "another, checking first whether they are compatible.",
-            # No hay interruptor de "activar tras copiar": el estado se imita
-            # del origen (lo activado se activa, lo apagado se queda apagado).
-            "Add-ons keep the state they had in the source: the ones that were "
-            "enabled there are enabled here too.",
-        ):
-            label = QLabel(tr(text))
-            label.setWordWrap(True)
-            lay.addWidget(label)
-
+        # Los botones van pegados a las tarjetas (debajo), y el resumen y la
+        # explicación quedan debajo de ellos: primero actuar, luego el detalle.
         actions = QHBoxLayout()
         self.select_all_btn = CardButton(
             tr("Select all"),
@@ -540,6 +522,27 @@ class MigrateView(QWidget):
             self.apply)
         actions.addWidget(self.copy_btn)
         lay.addLayout(actions)
+
+        # El resumen y la explicación, en color de texto normal: son datos y
+        # ayuda que hay que leer, y en Muted sobre el gris quedaban apagados.
+        self.summary = QLabel("")
+        self.summary.setToolTip(tr(
+            "How many add-ons were found, how many are compatible, how many "
+            "you should review and how many cannot be copied."))
+        lay.addWidget(self.summary)
+
+        for text in (
+            "Copy the add-ons (and extensions) of one installed version to "
+            "another, checking first whether they are compatible.",
+            # No hay interruptor de "activar tras copiar": el estado se imita
+            # del origen (lo activado se activa, lo apagado se queda apagado).
+            "Add-ons keep the state they had in the source: the ones that were "
+            "enabled there are enabled here too.",
+        ):
+            label = QLabel(tr(text))
+            label.setWordWrap(True)
+            lay.addWidget(label)
+
         # El estirón al final deja la página más alta que las tarjetas: es el
         # hueco donde cae su sombra (y evita que se estiren a lo alto).
         lay.addStretch()
