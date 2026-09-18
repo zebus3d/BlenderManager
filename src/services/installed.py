@@ -53,12 +53,37 @@ def write_marker(folder, build) -> None:
     })
 
 
+def _is_dir(path) -> bool:
+    """``Path.is_dir`` tolerando rutas sin permiso.
+
+    En Python 3.12 ``is_dir()``/``is_file()`` **lanzan** ``PermissionError``
+    cuando falta permiso para *recorrer* la ruta (solo ignoran ENOENT/ENOTDIR).
+    Al escanear una carpeta amplia (el home, sin ir más lejos) aparece
+    ``~/.gvfs``, un montaje FUSE que no deja ni hacer ``stat``: la excepción
+    subía hasta la interfaz y salía un "Error inesperado" solo por una carpeta
+    ilegible. Para escanear, un error del sistema de archivos es simplemente
+    "aquí no hay una instalación de Blender".
+    """
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+def _is_file(path) -> bool:
+    """Igual que ``_is_dir``, pero para ficheros."""
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def read_marker(folder) -> dict:
     """Lee el marcador ``.blendermanager.json`` de una build
     instalada.
     """
     path = Path(folder) / MARKER_NAME
-    if not path.is_file():
+    if not _is_file(path):
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -121,18 +146,18 @@ def _executable_for(directory: Path, platform: str, depth: int = 1):
     sin tope acabaríamos recorriendo el árbol entero de Blender —miles de
     archivos— desde el hilo de la interfaz.
     """
-    if not directory.is_dir():
+    if not _is_dir(directory):
         return None
     if platform == "windows":
         candidate = directory / "blender.exe"
     elif platform == "darwin":
         # En macOS el binario va dentro del bundle .app.
         candidate = directory / "Blender.app" / "Contents" / "MacOS" / "Blender"
-        if not candidate.is_file():
+        if not _is_file(candidate):
             candidate = directory / "blender"
     else:
         candidate = directory / "blender"
-    if candidate.is_file():
+    if _is_file(candidate):
         return candidate
     if depth <= 0:
         return None
@@ -142,7 +167,7 @@ def _executable_for(directory: Path, platform: str, depth: int = 1):
     except OSError:
         return None
     for child in children:
-        if child.is_dir():
+        if _is_dir(child):
             found = _executable_for(child, platform, depth - 1)
             if found is not None:
                 return found
@@ -152,10 +177,15 @@ def _executable_for(directory: Path, platform: str, depth: int = 1):
 def _scan_root(root: Path, platform: str):
     """Escanea una sola carpeta y devuelve sus instalaciones sin ordenar."""
     results = []
-    if not root.is_dir():
+    if not _is_dir(root):
         return results
-    for entry in sorted(root.iterdir()):
-        if not entry.is_dir():
+    try:
+        entries = sorted(root.iterdir())
+    except OSError:
+        # Sin permiso para listar la carpeta: no hay nada que sacar de aquí.
+        return results
+    for entry in entries:
+        if not _is_dir(entry):
             continue
         match = VERSION_RE.search(entry.name)
         marker = read_marker(entry)

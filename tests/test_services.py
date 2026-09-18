@@ -213,6 +213,35 @@ class InstalledTests(unittest.TestCase):
     def test_scan_missing_folder(self):
         self.assertEqual(installed.scan("/nonexistent/path/xyz", "linux"), [])
 
+    def test_scan_ignora_carpetas_sin_permiso(self):
+        # Al apuntar al home del usuario aparece ~/.gvfs (montaje FUSE): en
+        # Python 3.12 ``is_dir()``/``is_file()`` lanzan PermissionError al no
+        # poder recorrerla, y eso tumbaba la app entera. Se simula ese
+        # comportamiento para no depender de la version de Python del CI.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".gvfs").mkdir()
+            (root / "blender-5.2.1-linux-x64").mkdir()
+            (root / "blender-5.2.1-linux-x64" / "blender").write_text("#!/bin/sh\n")
+
+            real_is_dir, real_is_file = Path.is_dir, Path.is_file
+
+            def is_dir(path):
+                if ".gvfs" in str(path):
+                    raise PermissionError(13, "Permiso denegado", str(path))
+                return real_is_dir(path)
+
+            def is_file(path):
+                if ".gvfs" in str(path):
+                    raise PermissionError(13, "Permiso denegado", str(path))
+                return real_is_file(path)
+
+            with mock.patch.object(Path, "is_dir", is_dir), \
+                    mock.patch.object(Path, "is_file", is_file):
+                results = installed.scan(root, "linux")
+            # La carpeta ilegible se ignora; la build válida se encuentra igual.
+            self.assertEqual([entry.version for entry in results], ["5.2.1"])
+
     def test_scan_folders_une_las_dos_carpetas(self):
         # Las LTS pueden vivir en otra carpeta: hay que ver las dos.
         with tempfile.TemporaryDirectory() as tmp:
