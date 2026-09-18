@@ -341,31 +341,25 @@ _TRANSLATIONS = {
         "destination folder.":
             "Carpeta solo para las versiones LTS.\n"
             "Déjala vacía para usar la carpeta de destino.",
-        "Look for Blender in other folders":
-            "Buscar Blender en otras carpetas",
+        "Look for Blender in an extra folder":
+            "Buscar Blender en una carpeta extra",
         "BlenderManager only looks inside its download folder. If you also "
         "have Blender installed or unzipped somewhere else (another drive, a "
-        "portable copy...), add that folder here and it will show up in "
-        "Installed. It is only read: downloads keep going to the destination "
-        "folder.":
+        "portable copy...), point this to that folder and those versions will "
+        "show up in Installed. It is only read: downloads keep going to the "
+        "destination folder.":
             "BlenderManager solo mira dentro de su carpeta de descargas. Si "
             "además tienes Blender instalado o descomprimido en otro sitio "
-            "(otro disco, una copia portable...), añade esa carpeta aquí y "
-            "aparecerá en Instaladas. Solo se lee: las descargas siguen yendo "
-            "a la carpeta de destino.",
-        "Add extra folder...": "Añadir carpeta extra...",
-        "Pick a folder that contains your installed Blender versions, one per "
-        "subfolder.":
-            "Elige la carpeta que contiene tus Blender, cada uno en su "
-            "subcarpeta.",
+            "(otro disco, una copia portable...), apunta aquí a esa carpeta y "
+            "esas versiones aparecerán en Instaladas. Solo se lee: las "
+            "descargas siguen yendo a la carpeta de destino.",
+        "Your own Blender folder": "Tu carpeta de Blender",
         "Choose a folder with Blender versions":
             "Elige una carpeta con versiones de Blender",
         "Folder with your own Blender versions.\nEach version has to be in its "
         "own subfolder.":
             "Carpeta con tus propias versiones de Blender.\n"
             "Cada versión tiene que estar en su propia subcarpeta.",
-        "Choose another folder": "Elegir otra carpeta",
-        "Stop looking in this folder": "Dejar de buscar en esta carpeta",
         "Delete the downloaded .zip/.tar.xz after extracting it.\nSaves disk "
         "space; you can download it again if you need it.":
             "Borra el .zip/.tar.xz descargado tras extraerlo.\n"
