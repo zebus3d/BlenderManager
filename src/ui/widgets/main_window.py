@@ -85,9 +85,10 @@ ARCH_LABELS = ["x86_64", "arm64"]
 LANGUAGE_IDS = {"auto": "Automatic", "en": "English", "es": "Spanish"}
 MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
 
-# Alto de la fila de filtros (la que lleva las pestañas de canal). Se usa
-# también en Ajustes para que sus pestañas queden a la misma altura.
-FILTERS_HEIGHT = 44
+# Alto de la fila de filtros (la que lleva las pestañas de canal). Vive en el
+# tema porque Ajustes y Migración lo usan para dejar sus pestañas a la misma
+# altura que las de canal.
+FILTERS_HEIGHT = t.FILTERS_HEIGHT
 # Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
 ZOOM_STEP = 0.1
 
@@ -644,6 +645,9 @@ class MainWindow(QWidget):
                     tr("System"))
         tabs.addTab(self._settings_tab(self._settings_updates_card()),
                     tr("Updates"))
+        # ``ensurePolished`` hace que el alto salga con el QSS ya aplicado; sin
+        # él la medida es de antes de vestir y la fila queda 2 px alta.
+        tabs.tabBar().ensurePolished()
         bar_height = tabs.tabBar().sizeHint().height()
         outer.setContentsMargins(0, max(0, FILTERS_HEIGHT - bar_height), 0, 0)
         outer.addWidget(tabs, 1)
@@ -656,7 +660,9 @@ class MainWindow(QWidget):
         de Migración); el mínimo de la ventana lo fija la pestaña más alta.
         """
         page = QWidget()
-        page.setObjectName("SettingsPage")
+        # El contenido va oscuro (como las listas) y la tira de las pestañas se
+        # queda el gris de panel; de ahí que la página tenga su propio objectName.
+        page.setObjectName("SettingsTabPage")
         lay = QVBoxLayout(page)
         lay.setContentsMargins(24, 20, 24, 20)
         lay.setSpacing(16)

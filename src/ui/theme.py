@@ -33,9 +33,11 @@ CARD_DIM_ALT = "#202020"  # por descargar (oscura)
 ROW_ALT = "#2A2A2A"     # instalada (oscura)
 SURFACE_ALT = "#3D3D3D"  # hover / contornos suaves
 BORDER = "#3D3D3D"
-# Tarjeta **encima de un canvas gris** (las pestañas de Migración tienen el
-# canvas en SURFACE y las tarjetas un escalón por encima). Comparte valor con
-# SURFACE_ALT a propósito: es el mismo escalón de profundidad del tema.
+# Tarjeta **encima de un canvas gris**, un escalón por encima de SURFACE.
+# Comparte valor con SURFACE_ALT a propósito: es el mismo escalón de
+# profundidad del tema. Hoy no lo usa ninguna vista (Migración y Ajustes
+# pasaron a fondo oscuro con tarjetas en SURFACE), pero se queda como parte de
+# la escala de grises.
 SURFACE_HIGH = "#3D3D3D"
 
 # --- Texto ---
@@ -62,6 +64,12 @@ INFO_DISC = "#45729B"       # disco del icono de información
 
 # Colores con alfa (para QSS: rgba)
 OVERLAY = "rgba(0,0,0,0.6)"
+
+# --- Métricas de la interfaz ---
+# Alto de la fila de filtros (la de las pestañas de canal). Migración y Ajustes
+# lo usan para bajar su tira de pestañas y que las tres filas terminen a la
+# misma altura al cambiar de vista.
+FILTERS_HEIGHT = 44
 
 # --- Tipografía ---
 FONT_SIZE = 13
