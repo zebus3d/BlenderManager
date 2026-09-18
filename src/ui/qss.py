@@ -245,9 +245,9 @@ def build_qss() -> str:
        cuenta: es un QWidget pelado y, si no, la regla global de QWidget le
        pone el BG oscuro y rompe la unificación. */
     QWidget#MigrateHeader {{ background-color: {t.SURFACE}; }}
-    QTabWidget#MigrateTabs {{ background-color: {t.SURFACE}; }}
-    QTabWidget#MigrateTabs QTabBar {{ background-color: {t.SURFACE}; }}
-    QTabWidget#MigrateTabs QTabBar::tab {{
+    QTabWidget#MigrateTabs, QTabWidget#SettingsTabs {{ background-color: {t.SURFACE}; }}
+    QTabWidget#MigrateTabs QTabBar, QTabWidget#SettingsTabs QTabBar {{ background-color: {t.SURFACE}; }}
+    QTabWidget#MigrateTabs QTabBar::tab, QTabWidget#SettingsTabs QTabBar::tab {{
         background-color: {t.FILTER};
         color: {t.MUTED};
         border: 1px solid rgba(0,0,0,0.45);
@@ -258,16 +258,16 @@ def build_qss() -> str:
         margin-right: 3px;
         font-weight: bold;
     }}
-    QTabWidget#MigrateTabs QTabBar::tab:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
-    QTabWidget#MigrateTabs QTabBar::tab:selected {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
+    QTabWidget#MigrateTabs QTabBar::tab:hover, QTabWidget#SettingsTabs QTabBar::tab:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
+    QTabWidget#MigrateTabs QTabBar::tab:selected, QTabWidget#SettingsTabs QTabBar::tab:selected {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
     /* Alinea la primera pestaña con el padding interno del canvas (24 px, el
        mismo que la cabecera): si no, el texto de la pestaña queda pegado al
        borde y descuadra con las tarjetas de debajo. */
-    QTabWidget#MigrateTabs QTabBar::tab:first {{ margin-left: 24px; }}
+    QTabWidget#MigrateTabs QTabBar::tab:first, QTabWidget#SettingsTabs QTabBar::tab:first {{ margin-left: 24px; }}
 
     /* El pane es la única parte del QTabWidget que pinta fondo; las páginas se
        pintan el suyo (un QWidget pelado no siempre deja pasar el del pane). */
-    QTabWidget#MigrateTabs::pane {{
+    QTabWidget#MigrateTabs::pane, QTabWidget#SettingsTabs::pane {{
         border: none;
         border-top: 1px solid {t.SURFACE_ALT};
         background-color: {t.SURFACE};
@@ -283,12 +283,8 @@ def build_qss() -> str:
     QWidget#MigrateView QFrame#AddonRow[zebra="true"] {{ background-color: {t.CARD_DIM_ALT}; }}
 
     /* --- Ajustes: el mismo efecto de capas que Migración ---
-       Fondo gris (SURFACE) en el scroll, su viewport y la página, y las
-       tarjetas un escalón por encima (SURFACE_HIGH) con sombra (la pone
-       `_settings_card`). El viewport del QScrollArea es un QWidget que, si no,
-       pinta el BG global y rompería la unificación. */
-    QScrollArea#SettingsScroll {{ background-color: {t.SURFACE}; }}
-    QScrollArea#SettingsScroll QWidget#qt_scrollarea_viewport {{ background-color: {t.SURFACE}; }}
+       Fondo gris (SURFACE) en cada página de pestaña y las tarjetas un escalón
+       por encima (SURFACE_HIGH) con sombra (la pone `_settings_card`). */
     QWidget#SettingsPage {{ background-color: {t.SURFACE}; }}
     QWidget#SettingsPage QFrame#SettingsCard {{ background-color: {t.SURFACE_HIGH}; }}
 

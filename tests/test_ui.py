@@ -656,6 +656,24 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.set_view("settings")
         self.assertEqual(window.view, "store")
 
+    def test_ajustes_en_pestanas(self):
+        from PySide6.QtWidgets import QTabWidget
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        tabs = window.findChild(QTabWidget, "SettingsTabs")
+        self.assertIsNotNone(tabs)
+        # Un tema por pestaña, y todos los controles siguen existiendo aunque
+        # su pestaña no sea la activa.
+        self.assertEqual(tabs.count(), 5)
+        for control in (window.dest_input, window.lts_switch, window.extra_switch,
+                        window.archive_switch, window.language_combo,
+                        window.reset_zoom_slider, window.args_input,
+                        window.close_tray_switch, window.autostart_switch,
+                        window.update_switch, window.periodic_switch):
+            self.assertIsNotNone(control)
+
     def test_el_buscador_va_pegado_al_boton_de_refrescar(self):
         from ui.widgets.buttons import IconFlatButton
         from ui.widgets.main_window import MainWindow

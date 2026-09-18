@@ -68,8 +68,11 @@ _TRANSLATIONS = {
             "Se canceló la petición de permiso.",
         "The folder still could not be made writable.":
             "No se pudo dar permiso de escritura a esa carpeta.",
-        "General": "General",
         "Downloads": "Descargas",
+        "Interface": "Interfaz",
+        "Launch": "Lanzamiento",
+        "System": "Sistema",
+        "Updates": "Actualizaciones",
         "Language": "Idioma",
         "Automatic": "Automático",
         "English": "Inglés",
