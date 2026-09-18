@@ -71,6 +71,28 @@ def build_qss() -> str:
     QPushButton#Pill:checked {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
     QPushButton#Pill:disabled {{ color: rgba(230,230,230,0.35); }}
 
+    /* --- Pestañas de canal (filtros excluyentes) ---
+       Sin páginas debajo, así que se redondean por los cuatro lados y se leen
+       como un selector de pestañas en lugar de solapas que esperan un panel. */
+    /* El QTabBar es un QWidget pelado y, si no, pinta el BG del tema (el más
+       oscuro) y tapa el gris de la fila entre pestaña y pestaña. */
+    QTabBar#ChannelTabs {{ background: transparent; }}
+    QTabBar#ChannelTabs::tab {{
+        background-color: {t.FILTER};
+        border: 1px solid rgba(0,0,0,0.35);
+        /* Redondeadas arriba y rectas abajo: así se leen como pestañas y no
+           como botones. */
+        border-bottom: none;
+        border-top-left-radius: 6px;
+        border-top-right-radius: 6px;
+        padding: 4px 12px;
+        margin-right: 4px;
+        color: {t.TEXT};
+        font-weight: bold;
+    }}
+    QTabBar#ChannelTabs::tab:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
+    QTabBar#ChannelTabs::tab:selected {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
+
     /* --- Barra lateral --- */
     QPushButton#SideButton {{
         background-color: {t.BUTTON};

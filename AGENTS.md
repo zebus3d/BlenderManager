@@ -182,12 +182,17 @@ minor** (`v1.3.0`).
   `CardButton`) y añadiendo la regla al QSS. Ojo con la especificidad: en QSS
   `#Card[installed="true"]` y `#Card:hover` empatan, y gana la última; por eso
   los `:hover` van al final del bloque.
-- **Las filas de la ventana no se ocultan enteras, se les esconde el contenido.**
-  La fila de filtros mide 44 px fijos: si se hace `setVisible(False)` sobre
-  `self.filters` al entrar a Ajustes o Migración, el contenido sube esos 44 px y
-  la interfaz da un salto. Se deja la fila puesta y se ocultan sus hijos
-  (`_set_filters_content_visible`). Lo vigila
-  `test_set_view_migrate_oculta_el_contenido_de_los_filtros`.
+- **La fila de filtros vive con las listas, no es global.** Tienda (Nube) e
+  Instaladas (Local) comparten un contenedor (`_build_lists_view`) con la fila de
+  44 px encima y un sub-stack debajo; Migración y Ajustes son páginas del stack
+  principal y no llevan filtros. Antes la fila era global y se reservaba ocultando
+  su contenido para que la interfaz no diera un salto de 44 px al cambiar de
+  vista; ahora desaparece con las listas. Lo vigila
+  `test_los_filtros_viven_con_las_listas`.
+- **Los canales (Todas, LTS, Estable, Diarias, Experimentales, Favoritos) son
+  pestañas, no pastillas.** Son excluyentes, así que van en un `QTabBar`
+  (`#ChannelTabs`); no tiene páginas: al cambiar de pestaña se refiltra la lista
+  de debajo. La lista de canales está en la constante `CHANNELS`.
 - **Con QSS, un fondo en una subclase de `QWidget` no se pinta** salvo
   `setAttribute(Qt.WA_StyledBackground, True)`. `MigrateView` lo necesita para
   su gris; sin ello, los huecos que no pinta nadie (p. ej. la fila de pestañas a

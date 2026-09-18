@@ -692,24 +692,26 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             18)
 
     def test_recuerda_el_filtro_al_volver_a_abrir(self):
-        from ui.widgets.main_window import MainWindow
+        from ui.widgets.main_window import CHANNELS, MainWindow
 
         # Primera sesión: el usuario deja el filtro en Favoritos.
         primera = MainWindow()
         primera.set_channel("favorites")
         self.assertEqual(primera.settings.channel, "favorites")
 
-        # Al volver a abrir, sigue en Favoritos y con su pastilla marcada.
+        # Al volver a abrir, sigue en Favoritos y con su pestaña seleccionada.
         segunda = MainWindow()
         self.assertEqual(segunda.channel, "favorites")
-        self.assertTrue(segunda._channel_buttons["favorites"].isChecked())
-        self.assertFalse(segunda._channel_buttons["all"].isChecked())
+        index = next(i for i, (key, _) in enumerate(CHANNELS)
+                     if key == "favorites")
+        self.assertEqual(segunda.channel_tabs.currentIndex(), index)
 
-    def test_hay_pastilla_de_favoritos(self):
-        from ui.widgets.main_window import MainWindow
+    def test_hay_pestana_de_favoritos(self):
+        from ui.widgets.main_window import CHANNELS, MainWindow
 
         window = MainWindow()
-        self.assertIn("favorites", window._channel_buttons)
+        self.assertIn("favorites", [key for key, _ in CHANNELS])
+        self.assertEqual(window.channel_tabs.count(), len(CHANNELS))
 
     def test_la_estrella_marca_y_desmarca(self):
         from ui.widgets.buttons import StarButton
@@ -1951,15 +1953,16 @@ class TooltipTests(SettingsIsolated, unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def test_los_filtros_tienen_tooltip_y_explican_la_lts(self):
-        from ui.widgets.main_window import MainWindow
+        from ui.widgets.main_window import CHANNELS, MainWindow
 
         window = MainWindow()
-        for key, button in window._channel_buttons.items():
-            self.assertTrue(button.toolTip(), key)
-        lts = window._channel_buttons["lts"].toolTip()
-        self.assertIn("LTS", lts)
+        for index, (key, _) in enumerate(CHANNELS):
+            self.assertTrue(window.channel_tabs.tabToolTip(index), key)
+        lts = next(i for i, (key, _) in enumerate(CHANNELS) if key == "lts")
+        tip = window.channel_tabs.tabToolTip(lts)
+        self.assertIn("LTS", tip)
         # Multi-línea: el tooltip explica, no es una etiqueta de dos palabras.
-        self.assertIn("\n", lts)
+        self.assertIn("\n", tip)
 
     def test_los_controles_principales_tienen_tooltip(self):
         from ui.widgets.main_window import MainWindow
@@ -2773,29 +2776,29 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         # La verde también lleva tooltip: dice que no hay nada que revisar.
         self.assertIn("destination version", _status_tooltip(plan))
 
-    def test_set_view_migrate_oculta_el_contenido_de_los_filtros(self):
-        """La fila de filtros se reserva, no se oculta entera.
+    def test_los_filtros_viven_con_las_listas(self):
+        """La fila de filtros solo está en Local y Nube.
 
-        Ocultarla entera (lo que se hacía antes) sube el contenido 44 px y la
-        interfaz pega un salto al cambiar de vista. Ahora se queda la fila con
-        su alto y solo se esconde su contenido.
+        Antes era global y en Migración/Ajustes se reservaba ocultando su
+        contenido para que la interfaz no diera un salto de 44 px; ahora vive
+        con las listas, así que en Migración desaparece con ellas.
         """
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
         window.migrate_view.set_installed([])
         window.set_view("store")
+        self.assertTrue(window.filters.isVisibleTo(window))
         self.assertFalse(window.grid_btn.isHidden())
 
         window.set_view("migrate")
         self.assertEqual(window.view, "migrate")
-        self.assertFalse(window.filters.isHidden())   # la fila sigue puesta
-        self.assertTrue(window.grid_btn.isHidden())   # pero sin contenido
+        self.assertFalse(window.filters.isVisibleTo(window))
         self.assertFalse(window._zoom_enabled())
 
-        # Y al volver, el contenido reaparece.
+        # Y al volver, los filtros reaparecen.
         window.set_view("store")
-        self.assertFalse(window.grid_btn.isHidden())
+        self.assertTrue(window.filters.isVisibleTo(window))
 
 
 if __name__ == "__main__":

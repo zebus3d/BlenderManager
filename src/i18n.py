@@ -17,8 +17,8 @@ _TRANSLATIONS = {
     "es": {
         "Blender Manager": "Gestor de Blender",
         "Blender Downloads Manager": "Gestor de descargas de Blender",
-        "Store": "Tienda",
-        "Installed": "Instaladas",
+        "Cloud": "Nube",
+        "Local": "Local",
         "Settings": "Ajustes",
         "Refresh": "Actualizar",
         "Search...": "Buscar...",
@@ -82,13 +82,13 @@ _TRANSLATIONS = {
         "No": "No",
         "Launch options": "Opciones de lanzamiento",
         "Launch arguments": "Argumentos de lanzamiento",
-        "Installed versions": "Versiones instaladas",
-        "Installed build": "Instalada",
-        "No installed versions found": "No se encontraron versiones instaladas",
+        "Local versions": "Versiones locales",
+        "Local build": "Local",
+        "No local versions found": "No se encontraron versiones locales",
         "Try clearing the search or another channel filter.":
             "Prueba a borrar la búsqueda o a cambiar el filtro de canal.",
-        "Download one from the store to see it here.":
-            "Descarga alguna desde la tienda y aparecerá aquí.",
+        "Download one from the cloud to see it here.":
+            "Descarga alguna desde la nube y aparecerá aquí.",
         "Download complete": "Descarga completada",
         "Download failed": "Fallo en la descarga",
         "Extraction complete": "Extracción completada",
@@ -109,8 +109,8 @@ _TRANSLATIONS = {
         "Unknown": "Desconocido",
         "Added by BlenderManager": "Añadido por Gestor de Blender",
         "No executable found": "No se encontró el ejecutable",
-        "Show the store": "Muestra la tienda de compilaciones",
-        "Show installed versions": "Muestra las versiones instaladas",
+        "Show the cloud": "Muestra las compilaciones de la nube",
+        "Show local versions": "Muestra tus versiones locales",
         "Open settings": "Abre los ajustes",
         "Refresh the list of builds": "Actualiza la lista de compilaciones",
         "Search builds by version or branch": "Busca compilaciones por versión o rama",
@@ -332,8 +332,8 @@ _TRANSLATIONS = {
             "Silicon y equipos ARM.",
         "Show the versions you already have on this computer.":
             "Muestra las versiones que ya tienes en este equipo.",
-        "Show the builds you can download from Blender.":
-            "Muestra las compilaciones que puedes descargar de Blender.",
+        "Show the builds you can download from the cloud.":
+            "Muestra las compilaciones que puedes descargar de la nube.",
         "Settings.":
             "Ajustes.",
         "Folder where the Blender versions you download are stored.\nEach "
@@ -349,13 +349,13 @@ _TRANSLATIONS = {
         "BlenderManager only looks inside its download folder. If you also "
         "have Blender installed or unzipped somewhere else (another drive, a "
         "portable copy...), point this to that folder and those versions will "
-        "show up in Installed. It is only read: downloads keep going to the "
+        "show up in Local. It is only read: downloads keep going to the "
         "destination folder.":
             "BlenderManager solo mira dentro de su carpeta de descargas. Si "
             "además tienes Blender instalado o descomprimido en otro sitio "
             "(otro disco, una copia portable...), apunta aquí a esa carpeta y "
-            "esas versiones aparecerán en Instaladas. Solo se lee: las "
-            "descargas siguen yendo a la carpeta de destino.",
+            "esas versiones aparecerán en Local. Solo se lee: las descargas "
+            "siguen yendo a la carpeta de destino.",
         "Your own Blender folder": "Tu carpeta de Blender",
         "Choose a folder with Blender versions":
             "Elige una carpeta con versiones de Blender",
