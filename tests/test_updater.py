@@ -382,11 +382,19 @@ class MacosUpdateTests(unittest.TestCase):
         (bundle / "Contents" / "MacOS").mkdir(parents=True)
         return bundle / "Contents" / "MacOS" / "BlenderManager"
 
-    def _zip_con_app(self, base):
+    def _zip(self, base):
+        # El contenido da igual: la extracción (ditto) se mockea, porque en
+        # Linux no existe.
         archive = base / "BlenderManager-macos.zip"
-        with zipfile.ZipFile(archive, "w") as zf:
-            zf.writestr("BlenderManager.app/Contents/MacOS/BlenderManager", "bin")
+        archive.write_bytes(b"zip")
         return archive
+
+    @staticmethod
+    def _extrae_app(_zip_path, dest):
+        """Simula `ditto -x -k`: deja el Blender.app dentro del staging."""
+        app = Path(dest) / "BlenderManager.app"
+        (app / "Contents" / "MacOS").mkdir(parents=True)
+        (app / "Contents" / "MacOS" / "BlenderManager").write_text("bin")
 
     def test_app_bundle_detecta_el_bundle(self):
         from pathlib import Path as _Path
@@ -399,20 +407,26 @@ class MacosUpdateTests(unittest.TestCase):
         self.assertIsNone(
             updater._app_bundle("/Applications/Foo/Contents/MacOS/Bar"))
 
-    def test_aplica_con_un_helper(self):
+    def test_aplica_con_un_helper_y_extrae_con_ditto(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             exe = self._fake_bundle(base)
-            archive = self._zip_con_app(base)
+            archive = self._zip(base)
             updates = base / "updates"
             with mock.patch.object(updater.sys, "executable", str(exe)), \
                     mock.patch.object(updater, "updates_dir", return_value=updates), \
+                    mock.patch.object(updater.macos_dmg, "extract_zip",
+                                      side_effect=self._extrae_app) as extraer, \
+                    mock.patch.object(updater, "extract") as extractor_python, \
                     mock.patch.object(updater, "_open_fallback") as fallback, \
                     mock.patch.object(updater.subprocess, "Popen") as popen:
                 ok = updater._apply_macos(archive)
 
             self.assertTrue(ok)
             fallback.assert_not_called()
+            # Se extrae con ditto, NO con zipfile (que rompe el bundle).
+            extraer.assert_called_once()
+            extractor_python.assert_not_called()
             popen.assert_called_once()
             # El helper espera al PID, mueve, copia con ditto y relanza.
             script = next(updates.rglob("apply-update.sh"))
@@ -426,7 +440,7 @@ class MacosUpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             exe = self._fake_bundle(base)
-            archive = self._zip_con_app(base)
+            archive = self._zip(base)
             with mock.patch.object(updater.sys, "executable", str(exe)), \
                     mock.patch.object(updater.os, "access", return_value=False), \
                     mock.patch.object(updater, "_open_fallback") as fallback:
@@ -439,12 +453,11 @@ class MacosUpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             exe = self._fake_bundle(base)
-            archive = base / "raro.zip"
-            with zipfile.ZipFile(archive, "w") as zf:
-                zf.writestr("leeme.txt", "no hay app")
+            archive = self._zip(base)
             with mock.patch.object(updater.sys, "executable", str(exe)), \
                     mock.patch.object(updater, "updates_dir",
                                       return_value=base / "updates"), \
+                    mock.patch.object(updater.macos_dmg, "extract_zip"), \
                     mock.patch.object(updater, "_open_fallback") as fallback:
                 ok = updater._apply_macos(archive)
 

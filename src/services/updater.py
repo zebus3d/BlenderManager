@@ -35,7 +35,7 @@ from pathlib import Path
 
 import version
 from paths import APP_DIR
-from services import opener, tls
+from services import macos_dmg, opener, tls
 from services.downloader import log
 from services.extractor import extract
 from services.settings import cache_dir, write_json_atomic
@@ -460,14 +460,17 @@ def _apply_macos(archive: Path) -> bool:
 
     staging = updates_dir() / f"macos-{int(time.time())}"
     try:
-        folder = extract(archive, staging)
+        # Con ditto, NO con zipfile: Python pierde los bits de ejecución y los
+        # enlaces del bundle, y el .app extraído no arranca. Es justo el fallo
+        # que reportó un usuario de Mac ("reemplaza pero no abre").
+        macos_dmg.extract_zip(archive, staging)
     except Exception as error:
         log(f"macos update extract failed: {error}")
         shutil.rmtree(staging, ignore_errors=True)
         _open_fallback(archive)
         return False
 
-    candidates = [folder] if folder.suffix == ".app" else list(folder.rglob("*.app"))
+    candidates = list(staging.rglob("*.app"))
     if not candidates or not candidates[0].is_dir():
         log("macos update: el zip no trae ningún .app")
         shutil.rmtree(staging, ignore_errors=True)
@@ -484,17 +487,27 @@ def _apply_macos(archive: Path) -> bool:
         f'PID={os.getpid()}\n'
         f'BUNDLE="{bundle}"\n'
         f'NEW="{new_app}"\n'
+        f'EXE="$NEW/Contents/MacOS/{EXE_NAME}"\n'
         'while kill -0 "$PID" 2>/dev/null; do sleep 0.5; done\n'
         '/bin/sleep 1\n'
+        # El bundle nuevo tiene que traer el ejecutable con permisos. Si no
+        # (p. ej. se extrajo perdiendo los bits), no se toca nada y se relanza
+        # el viejo. Este es el fallo real que reportó un usuario de Mac:
+        # "reemplaza pero no abre" al extraer el zip con zipfile.
+        'if [ ! -x "$EXE" ]; then /usr/bin/open "$BUNDLE"; exit 1; fi\n'
         '/bin/rm -rf "$BUNDLE.old"\n'
-        # Si algo falla, se deja el bundle como estaba y se relanza el viejo:
-        # mejor eso que dejar al usuario sin app.
         '/bin/mv "$BUNDLE" "$BUNDLE.old" || { /usr/bin/open "$BUNDLE"; exit 1; }\n'
         '/usr/bin/ditto "$NEW" "$BUNDLE" '
         '|| { /bin/mv "$BUNDLE.old" "$BUNDLE"; /usr/bin/open "$BUNDLE"; exit 1; }\n'
-        '/usr/bin/xattr -dr com.apple.quarantine "$BUNDLE" 2>/dev/null\n'
-        '/bin/rm -rf "$BUNDLE.old"\n'
-        '/usr/bin/open "$BUNDLE"\n',
+        # -cr: quita TODOS los atributos (cuarentena y provenance); solo con la
+        # cuarentena a veces Gatekeeper sigue quejandose.
+        '/usr/bin/xattr -cr "$BUNDLE" 2>/dev/null\n'
+        # Si el nuevo bundle no llega a abrir, se deja el viejo en su sitio: el
+        # .old no se borra hasta que el nuevo arranca.
+        '/usr/bin/open "$BUNDLE" '
+        '|| { /bin/rm -rf "$BUNDLE"; /bin/mv "$BUNDLE.old" "$BUNDLE"; '
+        '/usr/bin/open "$BUNDLE"; exit 1; }\n'
+        '/bin/rm -rf "$BUNDLE.old"\n',
         encoding="utf-8")
     try:
         script.chmod(0o755)
