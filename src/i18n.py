@@ -341,6 +341,27 @@ _TRANSLATIONS = {
         "destination folder.":
             "Carpeta solo para las versiones LTS.\n"
             "Déjala vacía para usar la carpeta de destino.",
+        "Other folders with installed versions":
+            "Otras carpetas con versiones instaladas",
+        "BlenderManager only looks for Blender inside its download folder. "
+        "Add any folder where you already keep your own Blender versions and "
+        "they will show up as installed.":
+            "BlenderManager solo busca Blender en su carpeta de descargas. "
+            "Añade aquí cualquier carpeta donde ya tengas tus propias versiones "
+            "de Blender y aparecerán como instaladas.",
+        "Add folder...": "Añadir carpeta...",
+        "Pick a folder that contains your installed Blender versions, one per "
+        "subfolder.":
+            "Elige una carpeta que contenga tus versiones de Blender "
+            "instaladas, cada una en su subcarpeta.",
+        "Choose a folder with Blender versions":
+            "Elige una carpeta con versiones de Blender",
+        "Folder with your own Blender versions.\nEach version has to be in its "
+        "own subfolder.":
+            "Carpeta con tus propias versiones de Blender.\n"
+            "Cada versión tiene que estar en su propia subcarpeta.",
+        "Choose another folder": "Elegir otra carpeta",
+        "Stop looking in this folder": "Dejar de buscar en esta carpeta",
         "Delete the downloaded .zip/.tar.xz after extracting it.\nSaves disk "
         "space; you can download it again if you need it.":
             "Borra el .zip/.tar.xz descargado tras extraerlo.\n"
