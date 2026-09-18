@@ -1078,3 +1078,26 @@ class MacosDmgTests(unittest.TestCase):
             self.assertFalse(macos_dmg.available())
         with mock.patch.object(macos_dmg.sys, "platform", "darwin"):
             self.assertTrue(macos_dmg.available())
+
+
+class DefaultDestinationTests(unittest.TestCase):
+    """La carpeta propuesta la primera vez depende del sistema."""
+
+    def test_usa_downloads_si_no_hay_descargas(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(settings_module.Path, "home",
+                                   return_value=Path(tmp)):
+                self.assertEqual(settings_module.default_destination(),
+                                 Path(tmp) / "Downloads" / "Blenders")
+
+    def test_respeta_la_descargas_localizada(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "Descargas").mkdir()
+            with mock.patch.object(settings_module.Path, "home",
+                                   return_value=Path(tmp)):
+                self.assertEqual(settings_module.default_destination(),
+                                 Path(tmp) / "Descargas" / "Blenders")
