@@ -519,6 +519,27 @@ class SettingsTests(unittest.TestCase):
             dest_folder="/tmp/datos", lts_folder="/tmp/datos", separate_lts=True)
         self.assertEqual(settings.folders(), ["/tmp/datos"])
 
+    def test_las_carpetas_extra_se_escanean(self):
+        settings = settings_module.Settings(
+            dest_folder="/tmp/datos",
+            extra_folders=["/tmp/viejos", " /tmp/otros "])
+        # Se suman al destino (y a las LTS), sin duplicar rutas ni colar vacías.
+        self.assertEqual(settings.folders(),
+                         ["/tmp/datos", "/tmp/viejos", "/tmp/otros"])
+
+    def test_carpetas_extra_igual_al_destino_no_se_repite(self):
+        settings = settings_module.Settings(
+            dest_folder="/tmp/datos",
+            extra_folders=["/tmp/datos", "/tmp/otros", ""])
+        self.assertEqual(settings.folders(), ["/tmp/datos", "/tmp/otros"])
+
+    def test_las_carpetas_extra_se_guardan(self):
+        settings = settings_module.Settings()
+        settings.extra_folders = ["/tmp/viejos"]
+        settings.save()
+        self.assertEqual(settings_module.Settings.load().extra_folders,
+                         ["/tmp/viejos"])
+
     def test_favoritos_se_marcan_y_se_guardan(self):
         settings = settings_module.Settings()
         self.assertTrue(settings.set_favorite("v45|4.5.13", True))
