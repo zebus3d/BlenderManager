@@ -70,8 +70,18 @@ def cache_dir() -> Path:
 
 
 def default_destination() -> Path:
-    """Carpeta de descargas propuesta la primera vez."""
-    return Path.home() / "Descargas" / "Blenders"
+    """Carpeta de descargas propuesta la primera vez.
+
+    El nombre de la carpeta de descargas depende del sistema: en Windows y macOS
+    es siempre ``Downloads`` (no se traduce), pero en Linux los directorios XDG
+    del usuario pueden estar en su idioma (``Descargas`` en español). Se prefiere
+    la que exista de verdad; si no hay ninguna, ``Downloads``.
+    """
+    home = Path.home()
+    downloads = home / "Downloads"
+    if not downloads.exists() and (home / "Descargas").exists():
+        downloads = home / "Descargas"
+    return downloads / "Blenders"
 
 
 # Zoom con el que arranca la rejilla y valor de fábrica del "restablecer".
