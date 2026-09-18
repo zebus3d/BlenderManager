@@ -182,6 +182,17 @@ minor** (`v1.3.0`).
   `CardButton`) y añadiendo la regla al QSS. Ojo con la especificidad: en QSS
   `#Card[installed="true"]` y `#Card:hover` empatan, y gana la última; por eso
   los `:hover` van al final del bloque.
+- **Las filas de la ventana no se ocultan enteras, se les esconde el contenido.**
+  La fila de filtros mide 44 px fijos: si se hace `setVisible(False)` sobre
+  `self.filters` al entrar a Ajustes o Migración, el contenido sube esos 44 px y
+  la interfaz da un salto. Se deja la fila puesta y se ocultan sus hijos
+  (`_set_filters_content_visible`). Lo vigila
+  `test_set_view_migrate_oculta_el_contenido_de_los_filtros`.
+- **Con QSS, un fondo en una subclase de `QWidget` no se pinta** salvo
+  `setAttribute(Qt.WA_StyledBackground, True)`. `MigrateView` lo necesita para
+  su gris; sin ello, los huecos que no pinta nadie (p. ej. la fila de pestañas a
+  la derecha de las solapas) dejaban ver el fondo oscuro de detrás. Un `QWidget`
+  *directo* (no subclase) sí pinta el fondo del QSS sin ese atributo.
 - **Nada de importar Qt en `services/`, `model/`, `i18n.py` ni `paths.py`.**
   Esa capa es independiente de la UI (es lo que permitió el port); si necesita
   avisar de algo, expone funciones puras o callbacks.

@@ -1,0 +1,543 @@
+"""Tests de la migración de addons entre versiones de Blender.
+
+Todo es disco y funciones puras: no se lanza ningún Blender (eso vive en
+``services.blender_runner`` y se prueba con ``subprocess`` mockeado en
+``test_services.py``). Se montan carpetas de configuración de mentira con
+addons legacy y extensiones reales (ficheros de texto).
+"""
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from services import blender_config as bc
+
+
+def _config(root, version="4.5", platform="linux"):
+    """``BlenderConfig`` apuntando a una carpeta temporal."""
+    root = Path(root)
+    return bc.BlenderConfig(
+        version=version,
+        root=root,
+        platform=platform,
+        config_dir=root / "config",
+        scripts_dir=root / "scripts",
+        extensions_dir=root / "extensions",
+    )
+
+
+def _legacy_addon(config, module, bl_info: str, name=None):
+    """Crea ``scripts/addons/<module>/__init__.py``."""
+    folder = config.addons_dir / module
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "__init__.py").write_text(bl_info, encoding="utf-8")
+    return folder
+
+
+def _extension(config, repo, addon_id, manifest: str):
+    """Crea ``extensions/<repo>/<id>/blender_manifest.toml``."""
+    folder = config.extensions_dir / repo / addon_id
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / bc.MANIFEST_NAME).write_text(manifest, encoding="utf-8")
+    return folder
+
+
+class ConfigPathsTest(unittest.TestCase):
+    def test_config_base_por_plataforma(self):
+        env = {"APPDATA": "/appdata", "XDG_CONFIG_HOME": "/xdg"}
+        self.assertEqual(bc.config_base("linux", env), Path("/xdg/blender"))
+        self.assertEqual(bc.config_base("windows", env),
+                         Path("/appdata/Blender Foundation/Blender"))
+        home = Path.home()
+        self.assertEqual(bc.config_base("darwin", env),
+                         home / "Library/Application Support/Blender")
+
+    def test_config_for_normaliza_a_serie(self):
+        config = bc.config_for("5.2.1", "linux", {"XDG_CONFIG_HOME": "/xdg"})
+        self.assertEqual(config.version, "5.2")
+        self.assertEqual(config.root, Path("/xdg/blender/5.2"))
+        self.assertEqual(config.config_dir, Path("/xdg/blender/5.2/config"))
+        self.assertEqual(config.extensions_dir,
+                         Path("/xdg/blender/5.2/extensions"))
+
+    def test_config_for_respeta_variables_de_entorno(self):
+        env = {
+            "BLENDER_USER_CONFIG": "/cfg",
+            "BLENDER_USER_SCRIPTS": "/scripts",
+            "BLENDER_USER_EXTENSIONS": "/exts",
+        }
+        config = bc.config_for("4.5", "linux", env)
+        self.assertEqual(config.config_dir, Path("/cfg"))
+        self.assertEqual(config.scripts_dir, Path("/scripts"))
+        self.assertEqual(config.extensions_dir, Path("/exts"))
+        # Los addons legacy cuelgan de la carpeta de scripts apuntada.
+        self.assertEqual(config.addons_dir, Path("/scripts/addons"))
+
+    def test_config_for_resources_reemplaza_toda_la_version(self):
+        config = bc.config_for("4.5", "linux", {"BLENDER_USER_RESOURCES": "/res"})
+        self.assertEqual(config.root, Path("/res"))
+        self.assertEqual(config.config_dir, Path("/res/config"))
+
+    def test_python_for_version_conocido_y_desconocido(self):
+        self.assertEqual(bc.python_for_version("5.2.1"), "3.13")
+        self.assertEqual(bc.python_for_version("4.5.3"), "3.11")
+        self.assertEqual(bc.python_for_version("2.79"), "")
+
+
+class BlInfoTest(unittest.TestCase):
+    def test_lee_bl_info_literal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            init = Path(tmp) / "__init__.py"
+            init.write_text(
+                'bl_info = {"name": "Test", "version": (1, 2, 3), '
+                '"blender": (4, 5, 0)}\n',
+                encoding="utf-8")
+            info = bc.read_bl_info(init)
+            self.assertEqual(info["name"], "Test")
+            self.assertEqual(info["blender"], (4, 5, 0))
+
+    def test_plan_b_por_regex_si_no_es_literal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            init = Path(tmp) / "__init__.py"
+            init.write_text(
+                "import os\n"
+                "VERSION = os.environ.get('V', '5.0.0')\n"
+                'bl_info = {"name": "Dyn", "blender": (4, 2, 0), '
+                '"version": VERSION}\n',
+                encoding="utf-8")
+            info = bc.read_bl_info(init)
+            # No se puede evaluar (VERSION no es literal), pero el regex lo saca.
+            self.assertEqual(info.get("blender"), [4, 2, 0])
+
+    def test_sin_bl_info_devuelve_vacio(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            init = Path(tmp) / "__init__.py"
+            init.write_text("print('hola')\n", encoding="utf-8")
+            self.assertEqual(bc.read_bl_info(init), {})
+
+
+class AddonsInTest(unittest.TestCase):
+    def test_encuentra_legacy_y_extensiones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config(tmp)
+            _legacy_addon(config, "old_addon",
+                          'bl_info = {"name": "Old", "version": (2, 0), '
+                          '"blender": (3, 6, 0)}\n')
+            _extension(config, "user_default", "MatPlus",
+                       'schema_version = "1.0.0"\nid = "MatPlus"\n'
+                       'name = "MatPlus"\nversion = "1.3.0"\n'
+                       'blender_version_min = "4.5.0"\n'
+                       'tags = ["Paint"]\n')
+            addons = bc.addons_in(config)
+            by_module = {addon.module: addon for addon in addons}
+            self.assertIn("old_addon", by_module)
+            self.assertIn("bl_ext.user_default.MatPlus", by_module)
+            self.assertEqual(by_module["old_addon"].min_version, "3.6.0")
+            self.assertEqual(
+                by_module["bl_ext.user_default.MatPlus"].min_version, "4.5.0")
+            self.assertEqual(by_module["old_addon"].kind, "legacy")
+            self.assertEqual(by_module["bl_ext.user_default.MatPlus"].kind,
+                             "extension")
+
+    def test_repositorio_remoto_tambien_se_escanea(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config(tmp)
+            _extension(config, "blender_org", "kitsu",
+                       'id = "kitsu"\nname = "Kitsu"\nversion = "1.0.0"\n'
+                       'blender_version_min = "4.2.0"\n')
+            addons = bc.addons_in(config)
+            self.assertEqual([a.module for a in addons],
+                             ["bl_ext.blender_org.kitsu"])
+
+    def test_ignora_carpetas_sin_metadatos(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config(tmp)
+            (config.addons_dir / "no_addon").mkdir(parents=True)
+            (config.extensions_dir / ".cache").mkdir(parents=True)
+            self.assertEqual(bc.addons_in(config), [])
+
+
+class CompatReportTest(unittest.TestCase):
+    def _addon(self, **kwargs):
+        base = dict(kind="extension", module="bl_ext.user_default.x",
+                    name="X", version="1.0.0", min_version="", max_version="",
+                    path=Path("/tmp/x"))
+        base.update(kwargs)
+        return bc.Addon(**base)
+
+    def test_compatible(self):
+        addon = self._addon(min_version="4.2.0")
+        self.assertEqual(bc.compat_report(addon, "5.2.1"), (bc.OK, ""))
+
+    def test_requiere_version_mas_nueva(self):
+        addon = self._addon(min_version="5.3.0")
+        self.assertEqual(bc.compat_report(addon, "5.2.1"),
+                         (bc.BLOCKED, bc.REASON_REQUIRES_NEWER))
+
+    def test_no_soporta_la_version_destino(self):
+        addon = self._addon(min_version="4.2.0", max_version="5.0.0")
+        self.assertEqual(bc.compat_report(addon, "5.2.1"),
+                         (bc.BLOCKED, bc.REASON_TOO_NEW))
+
+    def test_plataforma_no_publicada(self):
+        addon = self._addon(min_version="4.2.0",
+                            platforms=("windows-x64", "macos-arm64"))
+        self.assertEqual(bc.compat_report(addon, "5.2.1", "linux", "x86_64"),
+                         (bc.BLOCKED, bc.REASON_PLATFORM))
+        self.assertEqual(bc.compat_report(addon, "5.2.1", "windows", "amd64"),
+                         (bc.OK, ""))
+
+    def test_avisa_de_wheels_de_otro_python(self):
+        addon = self._addon(min_version="4.2.0",
+                            wheels=("numpy-1.26-cp311-cp311-linux_x86_64.whl",))
+        self.assertEqual(bc.compat_report(addon, "5.2.1", "linux", "x86_64",
+                                          "3.13"),
+                         (bc.WARN, bc.REASON_WHEEL_ABI))
+
+    def test_avisa_si_no_declara_version(self):
+        addon = self._addon()
+        self.assertEqual(bc.compat_report(addon, "5.2.1"),
+                         (bc.WARN, bc.REASON_UNKNOWN_VERSION))
+
+
+class WheelTest(unittest.TestCase):
+    def test_cp_distinto_choca(self):
+        self.assertTrue(bc.wheel_conflict(["a-1-cp311-cp311-linux_x86_64.whl"],
+                                          "3.13"))
+
+    def test_cp_igual_no_choca(self):
+        self.assertFalse(bc.wheel_conflict(["a-1-cp313-cp313-linux_x86_64.whl"],
+                                           "3.13"))
+
+    def test_python_puro_y_abi_estable_no_chocan(self):
+        self.assertFalse(bc.wheel_conflict(["a-1-py3-none-any.whl"], "3.13"))
+        self.assertFalse(bc.wheel_conflict(["a-1-cp39-abi3-linux_x86_64.whl"],
+                                           "3.13"))
+
+    def test_sin_python_destino_no_avisa(self):
+        self.assertFalse(bc.wheel_conflict(["a-1-cp39-cp39-linux_x86_64.whl"],
+                                           ""))
+
+
+class PlanMigrationTest(unittest.TestCase):
+    def test_plan_marca_incompatibles_y_destinos(self):
+        with tempfile.TemporaryDirectory() as source_tmp, \
+                tempfile.TemporaryDirectory() as target_tmp:
+            source = _config(source_tmp, "4.5")
+            target = _config(target_tmp, "5.3")
+            _legacy_addon(source, "viejo",
+                          'bl_info = {"name": "Viejo", "version": (1, 0), '
+                          '"blender": (3, 6, 0)}\n')
+            _legacy_addon(source, "nuevo",
+                          'bl_info = {"name": "Nuevo", "version": (1, 0), '
+                          '"blender": (6, 0, 0)}\n')
+            _extension(source, "user_default", "matplus",
+                       'id = "matplus"\nname = "MatPlus"\nversion = "1.0.0"\n'
+                       'blender_version_min = "4.5.0"\n')
+            plans = bc.plan_migration(source, target, "linux", "x86_64", "3.13")
+            by_module = {plan.addon.module: plan for plan in plans}
+            self.assertEqual(by_module["viejo"].status, bc.OK)
+            self.assertTrue(by_module["viejo"].selected)
+            self.assertEqual(
+                by_module["viejo"].destination,
+                target.addons_dir / "viejo")
+            self.assertEqual(by_module["nuevo"].status, bc.BLOCKED)
+            self.assertFalse(by_module["nuevo"].selected)
+            self.assertTrue(
+                by_module["nuevo"].destination.name == "nuevo")
+            # Las extensiones van al repositorio local del destino.
+            self.assertEqual(
+                by_module["bl_ext.user_default.matplus"].destination,
+                target.extensions_dir / "user_default" / "matplus")
+            self.assertEqual(
+                by_module["bl_ext.user_default.matplus"].enable_module,
+                "bl_ext.user_default.matplus")
+
+
+class ApplyMigrationTest(unittest.TestCase):
+    def _plan(self, addon, destination, selected=True):
+        status, reason = bc.compat_report(addon, "5.3")
+        return bc.AddonPlan(addon=addon, status=status, reason=reason,
+                            destination=Path(destination), selected=selected)
+
+    def _addon(self, path, module="x"):
+        return bc.Addon(kind="legacy", module=module, name="X", version="1.0",
+                        min_version="4.0.0", max_version="", path=Path(path))
+
+    def test_dry_run_no_toca_el_disco(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("x", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            plan = self._plan(self._addon(source), target.addons_dir / "addon")
+            result = bc.apply_migration([plan], target, dry_run=True)
+            self.assertTrue(result.dry_run)
+            self.assertEqual(len(result.copied), 1)
+            self.assertFalse(plan.destination.exists())
+            self.assertIsNone(result.marker)
+
+    def test_copia_y_escribe_marcador(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("hola", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            plan = self._plan(self._addon(source), target.addons_dir / "addon")
+            result = bc.apply_migration([plan], target)
+            self.assertEqual(len(result.copied), 1)
+            self.assertEqual((plan.destination / "a.py").read_text(), "hola")
+            self.assertEqual(result.modules, ["x"])
+            self.assertTrue(result.marker.is_file())
+            payload = json.loads(result.marker.read_text(encoding="utf-8"))
+            self.assertEqual(payload["version"], "4.5")
+
+    def test_aparta_lo_que_ya_existe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            destination = target.addons_dir / "addon"
+            destination.mkdir(parents=True)
+            (destination / "a.py").write_text("viejo", encoding="utf-8")
+            plan = self._plan(self._addon(source), destination)
+            result = bc.apply_migration([plan], target)
+            self.assertEqual(len(result.backed_up), 1)
+            self.assertEqual((destination / "a.py").read_text(), "nuevo")
+            self.assertEqual((result.backed_up[0] / "a.py").read_text(), "viejo")
+
+    def test_backup_reutilizable_no_acumula(self):
+        """Migrar varias veces no puede dejar un '.bak' por intento.
+
+        Los usuarios migran más de una vez (y a veces al revés), así que el
+        respaldo es el del **último** cambio, no un histórico que llene el disco
+        sin que nadie lo vea.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("v3", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            destination = target.addons_dir / "addon"
+            destination.mkdir(parents=True)
+            (destination / "a.py").write_text("v1", encoding="utf-8")
+            plan = self._plan(self._addon(source), destination)
+            bc.apply_migration([plan], target)   # v1 -> v3 (bak v1)
+            (destination / "a.py").write_text("v2", encoding="utf-8")
+            bc.apply_migration([plan], target)   # v2 -> v3 (bak v2)
+            backups = [p for p in destination.parent.iterdir()
+                       if "blendermanager-bak" in p.name]
+            self.assertEqual(len(backups), 1)
+            self.assertEqual((backups[0] / "a.py").read_text(), "v2")
+
+    def test_undo_restaura_el_backup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            destination = target.addons_dir / "addon"
+            destination.mkdir(parents=True)
+            (destination / "a.py").write_text("viejo", encoding="utf-8")
+            plan = self._plan(self._addon(source), destination)
+            bc.apply_migration([plan], target)
+            self.assertEqual((destination / "a.py").read_text(), "nuevo")
+            result = bc.undo_migration(target)
+            self.assertEqual(len(result.restored), 1)
+            self.assertEqual((destination / "a.py").read_text(), "viejo")
+
+    def test_undo_borra_lo_que_no_tenia_backup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            plan = self._plan(self._addon(source), target.addons_dir / "addon")
+            bc.apply_migration([plan], target)
+            result = bc.undo_migration(target)
+            self.assertEqual(len(result.removed), 1)
+            self.assertFalse(plan.destination.exists())
+
+    def test_undo_sin_marcador_no_hace_nada(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = _config(Path(tmp) / "target")
+            result = bc.undo_migration(target)
+            self.assertFalse(result.marker_found)
+            self.assertEqual(result.restored, [])
+
+    def test_undo_una_sola_vez(self):
+        """Un segundo deshacer no puede volver a tocar nada (doble clic)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            plan = self._plan(self._addon(source), target.addons_dir / "addon")
+            bc.apply_migration([plan], target)
+            first = bc.undo_migration(target)
+            second = bc.undo_migration(target)
+            self.assertTrue(first.marker_found)
+            self.assertFalse(second.marker_found)
+            self.assertEqual(second.removed, [])
+
+    def test_no_copia_los_no_seleccionados(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            target = _config(Path(tmp) / "target")
+            plan = self._plan(self._addon(source), target.addons_dir / "addon",
+                              selected=False)
+            result = bc.apply_migration([plan], target)
+            self.assertEqual(result.copied, [])
+            self.assertEqual(result.skipped, [plan])
+
+
+class PreferenceTest(unittest.TestCase):
+    def _config(self, tmp, version):
+        root = Path(tmp) / version
+        return bc.BlenderConfig(version, root, "linux", root / "config",
+                                root / "scripts", root / "extensions")
+
+    def test_plan_marca_startup_como_no_seleccionado(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5")
+            target = self._config(tmp, "5.3")
+            source.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"P")
+            (source.config_dir / "startup.blend").write_bytes(b"S")
+            items = {item.key: item for item in bc.preference_plan(source, target)}
+            self.assertTrue(items["userpref"].exists)
+            self.assertTrue(items["userpref"].selected)
+            self.assertTrue(items["startup"].exists)
+            # El startup no llega marcado: es la escena por defecto.
+            self.assertFalse(items["startup"].selected)
+
+    def test_plan_avisa_si_pisa_lo_que_ya_hay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5")
+            target = self._config(tmp, "5.3")
+            source.config_dir.mkdir(parents=True)
+            target.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
+            (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
+            items = {item.key: item for item in bc.preference_plan(source, target)}
+            self.assertTrue(items["userpref"].overwrites)
+
+    def test_plan_sin_ficheros_en_origen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5")
+            target = self._config(tmp, "5.3")
+            items = bc.preference_plan(source, target)
+            self.assertFalse(any(item.exists for item in items))
+
+    def test_aplicar_copia_y_respalda(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5")
+            target = self._config(tmp, "5.3")
+            source.config_dir.mkdir(parents=True)
+            target.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
+            (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
+            items = bc.preference_plan(source, target)
+            result = bc.apply_preferences(items, target)
+            self.assertEqual(len(result.copied), 1)
+            self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
+                             b"NUEVO")
+            self.assertEqual(len(result.backed_up), 1)
+            self.assertEqual(result.backed_up[0].read_bytes(), b"VIEJO")
+
+    def test_dry_run_no_toca_nada(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "4.5")
+            target = self._config(tmp, "5.3")
+            source.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
+            items = bc.preference_plan(source, target)
+            result = bc.apply_preferences(items, target, dry_run=True)
+            self.assertEqual(len(result.copied), 1)
+            self.assertFalse((target.config_dir / "userpref.blend").exists())
+
+
+class FactoryResetTest(unittest.TestCase):
+    def _config(self, tmp, version):
+        root = Path(tmp) / version
+        return bc.BlenderConfig(version, root, "linux", root / "config",
+                                root / "scripts", root / "extensions")
+
+    def _config_with_prefs(self, tmp, version):
+        config = self._config(tmp, version)
+        config.config_dir.mkdir(parents=True)
+        (config.config_dir / "userpref.blend").write_bytes(b"MIO")
+        return config
+
+    def test_snapshot_aparta_la_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            snapshot = bc.snapshot_config(config, label="v5.3")
+            self.assertIsNotNone(snapshot)
+            self.assertFalse(config.config_dir.exists())
+            self.assertEqual((snapshot / "userpref.blend").read_bytes(), b"MIO")
+
+    def test_snapshot_sin_config_no_hace_nada(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp, "5.3")
+            self.assertIsNone(bc.snapshot_config(config))
+
+    def test_restaurar_devuelve_la_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            snapshot = bc.snapshot_config(config, label="v5.3")
+            # Blender recrea una config "limpia"
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"FABRICA")
+            aside = bc.restore_snapshot(config, snapshot)
+            self.assertEqual((config.config_dir / "userpref.blend").read_bytes(),
+                             b"MIO")
+            # La limpia se aparta, no se pierde (se puede deshacer).
+            self.assertIsNotNone(aside)
+            self.assertEqual((aside / "userpref.blend").read_bytes(), b"FABRICA")
+
+    def test_varias_snapshots_y_orden(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            first = bc.snapshot_config(config, label="a")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"DOS")
+            second = bc.snapshot_config(config, label="b")
+            shots = bc.snapshots_for(config)
+            self.assertEqual(len(shots), 2)
+            # La más nueva va primero.
+            self.assertEqual(shots[0], second)
+            self.assertIn(first, shots)
+
+    def test_borrar_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            snapshot = bc.snapshot_config(config, label="a")
+            self.assertTrue(bc.delete_snapshot(snapshot))
+            self.assertEqual(bc.snapshots_for(config), [])
+
+    def test_sin_snapshots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp, "5.3")
+            self.assertEqual(bc.snapshots_for(config), [])
+
+
+class SummaryTest(unittest.TestCase):
+    def test_cuenta_por_estado(self):
+        addon = bc.Addon(kind="legacy", module="x", name="X", version="",
+                         min_version="", max_version="", path=Path("/tmp/x"))
+        plans = [
+            bc.AddonPlan(addon, bc.OK, "", Path("/a")),
+            bc.AddonPlan(addon, bc.WARN, bc.REASON_UNKNOWN_VERSION, Path("/b")),
+            bc.AddonPlan(addon, bc.WARN, bc.REASON_WHEEL_ABI, Path("/c")),
+            bc.AddonPlan(addon, bc.BLOCKED, bc.REASON_PLATFORM, Path("/d")),
+        ]
+        self.assertEqual(bc.summary_counts(plans),
+                         {bc.OK: 1, bc.WARN: 2, bc.BLOCKED: 1})
+
+
+if __name__ == "__main__":
+    unittest.main()

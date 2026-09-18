@@ -20,3 +20,5 @@ HOME = "\uf015"
 INFO = "\uf129"     # "i" suelta (el circulo azul lo pinta el .kv)
 STAR = "\uf005"     # estrella de favorito
 DOWNLOAD = "\uf019"  # flecha hacia abajo (descargar)
+MIGRATE = "\uf362"  # flechas izquierda-derecha (migrar entre versiones)
+ARROW_RIGHT = "\uf061"  # flecha hacia la derecha (sentido de la migración)

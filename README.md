@@ -56,6 +56,25 @@ need to install anything.
   that Blender series (reversible from Settings). It does not nag about a version
   you already have (even one you downloaded as a copy), and it stays quiet until
   something is actually newer.
+- **Migrate add-ons between versions**: a transfer board shows the add-ons of
+  one installed version on the left and where each one lands on the right, with a
+  compatibility verdict **before** copying anything (minimum/maximum Blender
+  version, supported platforms and Python-version wheels). Incompatible ones
+  cannot be selected. It copies with a reusable backup and **keeps the enabled
+  state they had in the source** (the ones that were on there are turned on here
+  too, headless via Blender), and the whole last migration is **undoable**.
+- **Copy your preferences** (`userpref.blend`) to another version, in the same
+  view. The startup file is offered separately and off by default (it replaces
+  your default scene), it warns if the destination Blender is running, and it
+  keeps a backup of what it replaces.
+- **Pick preferences one by one**: the app compares your settings against
+  Blender's factory defaults and lists only what you actually changed (GPU,
+  audio and temp paths are shown separately and left off). They are read
+  automatically from the source version, applied key by key, and any that no
+  longer exist in the destination version are reported instead of failing.
+- **Factory settings, reversibly**: put any version back to a clean state and
+  your settings are saved aside so you can **restore them later** — or delete
+  them for good. It is the folder-moving trick you would do by hand, made safe.
 - **Blender runs detached**: closing the manager does **not** close the Blender
   instances you launched from it.
 - **Release notes one click away**: every build card has a small blue **i** that

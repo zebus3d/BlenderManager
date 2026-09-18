@@ -74,6 +74,7 @@ from ui.widgets.cards import (
     logo_shadow,
 )
 from ui.widgets.dialogs import AppDialog, confirm, show_error, update_available
+from ui.widgets.migrate import MigrateView
 from ui.widgets.tray import TrayIcon
 
 PLATFORMS = {"GNU/Linux": "linux", "Windows": "windows", "macOS": "darwin"}
@@ -366,6 +367,10 @@ class MainWindow(QWidget):
         self.stack = QStackedWidget()
         self.stack.addWidget(self._build_store_view())
         self.stack.addWidget(self._build_installed_view())
+        self.migrate_view = MigrateView()
+        self.migrate_view.set_system(self.system.os_name, self.system.arch)
+        self.migrate_view.status_message.connect(self._show_message)
+        self.stack.addWidget(self.migrate_view)
         self.stack.addWidget(self._build_settings_view())
         body.addWidget(self.stack, 1)
         root.addLayout(body, 1)
@@ -375,6 +380,7 @@ class MainWindow(QWidget):
         # La vista de instaladas no se rellena sola: hay que poblarla al arrancar
         # (si no, al abrir en esa pestaña se vería vacía hasta el primer refresco).
         self._rebuild_installed()
+        self.migrate_view.set_installed(self.installed)
         self._install_shortcuts()
 
     def _install_shortcuts(self) -> None:
@@ -525,6 +531,16 @@ class MainWindow(QWidget):
             lay.addWidget(btn)
             self.side_buttons[key] = btn
         lay.addStretch()
+        # Migración va abajo (encima de Ajustes): es una herramienta puntual, no
+        # una pestaña de uso diario como la tienda o las instaladas.
+        migrate_btn = SideButton(icons.MIGRATE, tr(
+            "Copy add-ons, extensions and preferences from one Blender version "
+            "to another."))
+        migrate_btn.setFont(icon_font(20))
+        self.side_group.addButton(migrate_btn)
+        migrate_btn.clicked.connect(lambda: self.set_view("migrate"))
+        lay.addWidget(migrate_btn)
+        self.side_buttons["migrate"] = migrate_btn
         settings_btn = SideButton(icons.SETTINGS, tr("Settings."))
         settings_btn.setFont(icon_font(20))
         self.side_group.addButton(settings_btn)
@@ -554,7 +570,11 @@ class MainWindow(QWidget):
         return self.installed_scroll
 
     def _build_settings_view(self) -> QWidget:
+        # Fondo gris y tarjetas más claras encima con sombra, igual que la
+        # vista de Migración: el objectName de la página y del scroll hace que
+        # el QSS ponga el gris, y `_settings_card` la sombra.
         page = QWidget()
+        page.setObjectName("SettingsPage")
         outer = QVBoxLayout(page)
         outer.setContentsMargins(24, 20, 24, 20)
         outer.setSpacing(16)
@@ -576,6 +596,7 @@ class MainWindow(QWidget):
         # de 400 px). Con scroll, a tamaños pequeños se desplaza en vez de
         # recortar la última fila (el botón de restablecer el tamaño).
         scroll = QScrollArea()
+        scroll.setObjectName("SettingsScroll")
         scroll.setWidgetResizable(True)
         scroll.setWidget(page)
         return scroll
@@ -583,6 +604,9 @@ class MainWindow(QWidget):
     def _settings_card(self, title: str) -> tuple[QFrame, QVBoxLayout]:
         card = QFrame()
         card.setObjectName("SettingsCard")
+        # Misma sombra que las tarjetas de Migración: van sobre el gris, así se
+        # despegan en vez de fundirse con el fondo.
+        card_shadow(card)
         lay = QVBoxLayout(card)
         lay.setContentsMargins(16, 14, 16, 14)
         lay.setSpacing(10)
@@ -1019,21 +1043,40 @@ class MainWindow(QWidget):
             # El zoom en vivo solo reconstruye la vista visible, así que la
             # tienda puede haberse quedado con el tamaño viejo.
             self._rebuild_store()
+        elif view == "migrate":
+            # Las instaladas pueden haber cambiado desde la última vez.
+            self.migrate_view.set_installed(self.installed)
 
     def _set_view(self, view: str, animate: bool = True) -> None:
-        index = {"store": 0, "installed": 1, "settings": 2}.get(view, 0)
+        index = {"store": 0, "installed": 1, "migrate": 2, "settings": 3}.get(view, 0)
         self.stack.setCurrentIndex(index)
         for key, btn in self.side_buttons.items():
             btn.setChecked(key == view)
-        show_filters = view != "settings"
-        self.filters.setVisible(show_filters)
+        # La migración y los ajustes no son listas de compilaciones: ni filtros
+        # ni buscador. PERO la fila de filtros (44 px fijos) se deja puesta y
+        # solo se oculta su contenido: si se escondiera entera, el contenido
+        # subiría esos 44 px y la interfaz pegaría un salto al cambiar de vista.
+        show_filters = view not in ("settings", "migrate")
+        self._set_filters_content_visible(show_filters)
         self.header_tools.setVisible(show_filters)
-        self.zoom_box.setVisible(view != "settings" and self.layout_mode == "grid")
+        self.zoom_box.setVisible(show_filters and self.layout_mode == "grid")
+
+    def _set_filters_content_visible(self, visible: bool) -> None:
+        """Oculta el contenido de la fila de filtros, no la fila.
+
+        Se recorren los hijos directos (las pastillas, los botones de vista y
+        los desplegables); el estirón del layout no es un widget y no molesta.
+        La fila se queda con su alto, que es lo que evita el salto.
+        """
+        for child in self.filters.findChildren(
+                QWidget, options=Qt.FindDirectChildrenOnly):
+            child.setVisible(visible)
 
     def set_layout_mode(self, mode: str) -> None:
         """Cambia entre rejilla y lista y recuerda la elección."""
         self.layout_mode = mode
-        self.zoom_box.setVisible(self.view != "settings" and mode == "grid")
+        self.zoom_box.setVisible(
+            self.view not in ("settings", "migrate") and mode == "grid")
         (self.grid_btn if mode == "grid" else self.list_btn).setChecked(True)
         self.settings.layout_mode = mode
         self.settings.save()
@@ -1074,8 +1117,9 @@ class MainWindow(QWidget):
         self.settings.save()
 
     def _zoom_enabled(self) -> bool:
-        """El zoom solo pinta algo en rejilla y fuera de los ajustes."""
-        return self.view != "settings" and self.layout_mode == "grid"
+        """El zoom solo pinta algo en rejilla y fuera de ajustes/migración."""
+        return (self.view not in ("settings", "migrate")
+                and self.layout_mode == "grid")
 
     def _set_zoom_value(self, value: float) -> None:
         """Fija el zoom pasando por el slider, para que UI y valor no se separen.
@@ -1432,6 +1476,7 @@ class MainWindow(QWidget):
                                                         self.platform)
         self._recompute_updates()
         self._rebuild_installed()
+        self.migrate_view.set_installed(self.installed)
 
     def _recompute_updates(self) -> None:
         """Recalcula qué instaladas tienen parche o serie nueva disponible.

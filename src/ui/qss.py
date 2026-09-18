@@ -218,6 +218,76 @@ def build_qss() -> str:
         border-radius: 10px;
         border: 1px solid rgba(0,0,0,0.35);
     }}
+    /* Filas de addons de la vista de migración. */
+    QFrame#AddonRow {{
+        background-color: {t.SURFACE};
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.35);
+    }}
+    QFrame#AddonRow[zebra="true"] {{ background-color: {t.ROW_ALT}; }}
+
+    /* --- Casilla de verificación (migración) ---
+       El cuadro y la palomita los pinta ``CheckPill`` con QPainter: por QSS no
+       se puede (la regla global de ``QWidget`` hereda sobre el ``::indicator``
+       y Qt descarta su ``image``). Aquí solo se deja el color del texto. */
+    QCheckBox {{ color: {t.TEXT}; spacing: 8px; }}
+
+    /* --- Migración: fondo gris unificado y pestañas ---
+       Toda la vista (cabecera + canvas de las pestañas) va del mismo gris
+       (SURFACE), de modo que arriba y abajo forman un solo bloque; encima van
+       las tarjetas (SURFACE_HIGH) con sombra. Las solapas de las pestañas sí
+       son oscuras, para que se lean como pestañas y no se fundan con el gris. */
+    QWidget#MigrateView {{ background-color: {t.SURFACE}; }}
+    /* La cabecera (título + tarjeta de versiones) se pinta el gris por su
+       cuenta: es un QWidget pelado y, si no, la regla global de QWidget le
+       pone el BG oscuro y rompe la unificación. */
+    QWidget#MigrateHeader {{ background-color: {t.SURFACE}; }}
+    QTabWidget#MigrateTabs {{ background-color: {t.SURFACE}; }}
+    QTabWidget#MigrateTabs QTabBar {{ background-color: {t.SURFACE}; }}
+    QTabWidget#MigrateTabs QTabBar::tab {{
+        background-color: {t.FILTER};
+        color: {t.MUTED};
+        border: 1px solid rgba(0,0,0,0.45);
+        border-bottom: none;
+        border-top-left-radius: 6px;
+        border-top-right-radius: 6px;
+        padding: 6px 16px;
+        margin-right: 3px;
+        font-weight: bold;
+    }}
+    QTabWidget#MigrateTabs QTabBar::tab:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
+    QTabWidget#MigrateTabs QTabBar::tab:selected {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
+    /* Alinea la primera pestaña con el padding interno del canvas (24 px, el
+       mismo que la cabecera): si no, el texto de la pestaña queda pegado al
+       borde y descuadra con las tarjetas de debajo. */
+    QTabWidget#MigrateTabs QTabBar::tab:first {{ margin-left: 24px; }}
+
+    /* El pane es la única parte del QTabWidget que pinta fondo; las páginas se
+       pintan el suyo (un QWidget pelado no siempre deja pasar el del pane). */
+    QTabWidget#MigrateTabs::pane {{
+        border: none;
+        border-top: 1px solid {t.SURFACE_ALT};
+        background-color: {t.SURFACE};
+        top: -1px;
+    }}
+    QWidget#MigratePage {{ background-color: {t.SURFACE}; }}
+    /* Especificidad: `QWidget#MigrateView QWidget` (id+tipo+tipo) ganaría a
+       `QFrame#SettingsCard` (id+tipo); por eso las tarjetas se declaran con el
+       mismo prefijo. Aplica a TODA la vista (cabecera incluida), porque el
+       fondo ahora es gris también arriba. */
+    QWidget#MigrateView QFrame#SettingsCard {{ background-color: {t.SURFACE_HIGH}; }}
+    QWidget#MigrateView QFrame#AddonRow {{ background-color: {t.CARD_DIM}; }}
+    QWidget#MigrateView QFrame#AddonRow[zebra="true"] {{ background-color: {t.CARD_DIM_ALT}; }}
+
+    /* --- Ajustes: el mismo efecto de capas que Migración ---
+       Fondo gris (SURFACE) en el scroll, su viewport y la página, y las
+       tarjetas un escalón por encima (SURFACE_HIGH) con sombra (la pone
+       `_settings_card`). El viewport del QScrollArea es un QWidget que, si no,
+       pinta el BG global y rompería la unificación. */
+    QScrollArea#SettingsScroll {{ background-color: {t.SURFACE}; }}
+    QScrollArea#SettingsScroll QWidget#qt_scrollarea_viewport {{ background-color: {t.SURFACE}; }}
+    QWidget#SettingsPage {{ background-color: {t.SURFACE}; }}
+    QWidget#SettingsPage QFrame#SettingsCard {{ background-color: {t.SURFACE_HIGH}; }}
 
     /* --- Campos de texto --- */
     QLineEdit {{
@@ -303,6 +373,7 @@ def build_qss() -> str:
     QLabel#Warning {{ color: {t.WARNING}; font-weight: bold; }}
     QLabel#Info {{ color: {t.INFO_TEXT}; font-weight: bold; }}
     QLabel#Success {{ color: {t.SUCCESS_TEXT}; font-weight: bold; }}
+    QLabel#Danger {{ color: {t.DANGER_EDGE}; font-weight: bold; }}
     QLabel#Title {{ font-size: 16px; font-weight: bold; }}
     QLabel#HeaderTitle {{ font-size: 19px; font-weight: bold; }}
     QLabel#FieldLabel {{ color: {t.MUTED}; font-size: 12px; }}
