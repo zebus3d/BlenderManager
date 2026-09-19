@@ -95,18 +95,8 @@ _TRANSLATIONS = {
             "Las compilaciones {type} van ahora a {folder}",
         "That folder is already in the list.":
             "Esa carpeta ya está en la lista.",
-        "This folder is inside another one in the list, so its versions are "
-        "already being found.":
-            "Esta carpeta está dentro de otra de la lista, así que sus "
-            "versiones ya se encuentran.",
-        "A folder already in the list is inside this one. Remove it first, or "
-        "pick another folder.":
-            "Una carpeta de la lista está dentro de esta. Quítala antes, o "
-            "elige otra carpeta.",
         "Added as read-only: that folder does not allow writing.":
             "Añadida en solo lectura: esa carpeta no deja escribir.",
-        "This is the only folder left. Add another one before removing it.":
-            "Es la única carpeta que queda. Añade otra antes de quitarla.",
         "Remove {folder} from the list?":
             "¿Quitar {folder} de la lista?",
         "Nothing is deleted from disk: the versions there just stop being "
@@ -279,8 +269,18 @@ _TRANSLATIONS = {
         "Moving {name} ({done} of {total})":
             "Moviendo {name} ({done} de {total})",
         "{moved} versions moved": "{moved} versiones movidas",
-        "{failed} versions could not be moved":
-            "No se han podido mover {failed} versiones",
+        "{failed} versions could not be moved.":
+            "No se han podido mover {failed} versiones.",
+        "Remove": "Quitar",
+        "Show only one kind of build at a time.\n"
+        "\"All\" mixes them; the rest narrow the list down.":
+            "Enseña un solo tipo de compilación a la vez.\n"
+            "«Todas» las mezcla; el resto acotan la lista.",
+        "Pick a source and a destination version here, then use the tabs to "
+        "copy add-ons, individual settings or the whole preferences file.":
+            "Elige aquí una versión de origen y otra de destino, y luego usa "
+            "las pestañas para copiar addons, ajustes sueltos o el fichero de "
+            "preferencias entero.",
         "Interface": "Interfaz",
         "Launch": "Lanzamiento",
         "System": "Sistema",
