@@ -10,6 +10,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from services import blender_config as bc
 
@@ -210,6 +211,39 @@ class WheelTest(unittest.TestCase):
         self.assertFalse(bc.wheel_conflict(["a-1-cp313-cp313-linux_x86_64.whl"],
                                            "3.13"))
 
+    def test_un_paquete_con_wheels_para_varios_python_no_choca(self):
+        """El caso real de MatPlus: Pillow para 3.11 **y** para 3.13.
+
+        Una extensión bien empaquetada trae un wheel por versión de Python y
+        Blender instala el que le toca. Mirar wheel a wheel marcaba estas
+        extensiones siempre, apuntases a la versión que apuntases.
+        """
+        wheels = [
+            "./wheels/pillow-11.1.0-cp311-cp311-manylinux_2_28_x86_64.whl",
+            "./wheels/pillow-11.1.0-cp313-cp313-manylinux_2_28_x86_64.whl",
+        ]
+        self.assertEqual(bc.wheel_problem(wheels, "3.13"), "")
+        self.assertEqual(bc.wheel_problem(wheels, "3.11"), "")
+        # Y con un Python que no cubre ninguno de los dos, sí avisa.
+        self.assertEqual(bc.wheel_problem(wheels, "3.10"), "pillow")
+
+    def test_solo_avisa_del_paquete_que_falla(self):
+        wheels = [
+            "./wheels/pillow-11.1.0-cp313-cp313-manylinux_2_28_x86_64.whl",
+            "./wheels/numpy-2.2.3-cp311-cp311-manylinux_2_17_x86_64.whl",
+            "./wheels/send2trash-1.8-py3-none-any.whl",
+        ]
+        self.assertEqual(bc.wheel_problem(wheels, "3.13"), "numpy")
+
+    def test_el_mismo_paquete_en_varias_plataformas_no_choca(self):
+        """Un wheel por plataforma, todos del mismo Python: no hay conflicto."""
+        wheels = [
+            "numpy-2.2.3-cp313-cp313-win_amd64.whl",
+            "numpy-2.2.3-cp313-cp313-macosx_11_0_arm64.whl",
+            "numpy-2.2.3-cp313-cp313-manylinux_2_17_x86_64.whl",
+        ]
+        self.assertEqual(bc.wheel_problem(wheels, "3.13"), "")
+
     def test_python_puro_y_abi_estable_no_chocan(self):
         self.assertFalse(bc.wheel_conflict(["a-1-py3-none-any.whl"], "3.13"))
         self.assertFalse(bc.wheel_conflict(["a-1-cp39-abi3-linux_x86_64.whl"],
@@ -218,6 +252,21 @@ class WheelTest(unittest.TestCase):
     def test_sin_python_destino_no_avisa(self):
         self.assertFalse(bc.wheel_conflict(["a-1-cp39-cp39-linux_x86_64.whl"],
                                            ""))
+
+    def test_el_plan_dice_que_paquete_falla(self):
+        """El aviso tiene que poder nombrar al culpable y al Python destino."""
+        addon = bc.Addon(
+            kind="extension", module="bl_ext.user_default.x", name="X",
+            version="1.0.0", min_version="4.2.0", max_version="",
+            path=Path("/tmp/x"),
+            wheels=("./wheels/numpy-2.2.3-cp311-cp311-linux_x86_64.whl",))
+        source = _config("/tmp/origen", version="5.2")
+        target = _config("/tmp/destino", version="5.3")
+        with mock.patch.object(bc, "addons_in", return_value=[addon]):
+            plan = bc.plan_migration(source, target, "linux", "x86_64", "3.13")[0]
+        self.assertEqual(plan.reason, bc.REASON_WHEEL_ABI)
+        self.assertEqual(plan.detail, "numpy")
+        self.assertEqual(plan.target_python, "3.13")
 
 
 class PlanMigrationTest(unittest.TestCase):

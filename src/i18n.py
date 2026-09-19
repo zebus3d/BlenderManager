@@ -455,17 +455,26 @@ _TRANSLATIONS = {
             "Todavía no soporta Blender {version}.",
         "It is not published for this system.":
             "No está publicado para este sistema.",
-        "Its dependencies are built for another Python version.":
-            "Sus dependencias están compiladas para otra versión de Python.",
+        "{package} has no build for Python {python}, which the destination "
+        "version uses.":
+            "{package} no trae una compilación para Python {python}, que es "
+            "el que usa la versión de destino.",
+        "{package} has no build for the Python of the destination version.":
+            "{package} no trae una compilación para el Python de la versión "
+            "de destino.",
+        "One of its dependencies has no build for the Python of the "
+        "destination version.":
+            "Una de sus dependencias no trae una compilación para el Python "
+            "de la versión de destino.",
         "It does not state a minimum version.":
             "No indica una versión mínima.",
         # Cómo revisar un addon marcado "Review" (el motivo solo no basta).
         "Copy it and enable it in the destination version. If it fails to "
-        "load, it needs a build of the add-on made for that Blender "
-        "(its compiled dependencies do not match).":
-            "Cópialo y actívalo en la versión de destino. Si no carga, "
-            "necesitas una compilación del addon hecha para ese Blender (sus "
-            "dependencias compiladas no coinciden).",
+        "load, ask its author for a build that includes that dependency "
+        "for this Python.":
+            "Cópialo y actívalo en la versión de destino. Si no carga, pídele "
+            "a su autor una compilación que incluya esa dependencia para este "
+            "Python.",
         "The add-on does not say which Blender it works with. Copy it and "
         "test its panel or operators in the destination version; if they "
         "fail, leave it disabled.":
