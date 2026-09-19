@@ -37,3 +37,35 @@ class I18nTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CoberturaTests(unittest.TestCase):
+    """Que no se cuele una cadena sin traducir al español.
+
+    Se leen las llamadas a ``tr("...")`` con ``ast``, que junta solo las
+    cadenas partidas en varias líneas: buscarlas con ``grep`` no vale, porque
+    en el código van troceadas y la clave es el texto ya unido (justo el error
+    que hace que una traducción no enganche y el usuario vea inglés suelto).
+    """
+
+    def test_todas_las_cadenas_tienen_traduccion(self):
+        import ast
+        from pathlib import Path
+
+        spanish = i18n._TRANSLATIONS["es"]
+        missing = []
+        root = Path(__file__).resolve().parents[1] / "src"
+        for path in sorted(root.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id == "tr" and node.args):
+                    continue
+                first = node.args[0]
+                if not (isinstance(first, ast.Constant)
+                        and isinstance(first.value, str) and first.value):
+                    continue
+                if first.value not in spanish:
+                    missing.append(f"{path.name}:{node.lineno} {first.value!r}")
+        self.assertEqual(missing, [], "\n".join(missing))

@@ -514,7 +514,8 @@ class MainWindow(QWidget):
         self.channel_tabs.setDrawBase(False)
         self.channel_tabs.setUsesScrollButtons(False)
         self.channel_tabs.setToolTip(tr(
-            "Show only one kind of build at a time."))
+            "Show only one kind of build at a time.\n"
+            "\"All\" mixes them; the rest narrow the list down."))
         for index, (key, label) in enumerate(CHANNELS):
             self.channel_tabs.addTab(tr(label))
             self.channel_tabs.setTabToolTip(index, tr(CHANNEL_TOOLTIPS[key]))
@@ -2020,16 +2021,6 @@ class MainWindow(QWidget):
             show_info(self, tr("Folders"),
                       tr("That folder is already in the list."))
             return
-        if problem == "inside":
-            show_error(self, tr("Folders"), tr(
-                "This folder is inside another one in the list, so its "
-                "versions are already being found."))
-            return
-        if problem == "contains":
-            show_error(self, tr("Folders"), tr(
-                "A folder already in the list is inside this one. Remove it "
-                "first, or pick another folder."))
-            return
 
         writable = not _write_problem(folder)
         types = channels.orphan_types(self.settings.folders) if writable else []
@@ -2044,6 +2035,14 @@ class MainWindow(QWidget):
     def _folder_problem(self, candidate: str) -> str:
         """Por qué no se puede añadir esa carpeta, o "" si sí se puede.
 
+        Lo único que se rechaza es **la misma carpeta dos veces**. Anidar sí se
+        permite, y es una petición razonable: tener ``Blender 3D`` de raíz y
+        ``Blender 3D/Experimentales`` dentro es de las formas más naturales de
+        organizarse. No duplica nada porque ``installed._scan_root`` solo mira
+        los hijos **directos** de cada raíz y descarta los que no parecen una
+        build, así que la carpeta hija no se cuenta dos veces (lo fija
+        ``test_una_subcarpeta_no_duplica_las_versiones``).
+
         Se compara con ``resolve()`` y no por texto: si no, en Windows
         ``C:\\Blender`` y ``c:\\blender`` entrarían como dos carpetas
         distintas y todas sus versiones saldrían duplicadas en Local.
@@ -2056,13 +2055,8 @@ class MainWindow(QWidget):
 
         target = resolved(candidate)
         for folder in self.settings.folders:
-            existing = resolved(folder.path)
-            if existing == target:
+            if resolved(folder.path) == target:
                 return "duplicate"
-            if existing in target.parents:
-                return "inside"
-            if target in existing.parents:
-                return "contains"
         return ""
 
     def _on_folder_type_toggled(self, path: str, build_type: str,
@@ -2113,6 +2107,13 @@ class MainWindow(QWidget):
         folder.writable = writable
         if not writable:
             folder.types = []
+        elif not folder.types:
+            # Al abrir el candado se le devuelven los tipos que no tenga nadie.
+            # Antes se quedaba vacía, así que cerrar y volver a abrir dejaba la
+            # carpeta sin recibir nada --y si era la única, la aplicación sin
+            # sitio donde descargar-- sin que el usuario hubiera tocado ninguna
+            # casilla. Es la misma regla que al añadir una carpeta nueva.
+            folder.types = channels.orphan_types(self.settings.folders)
         self._save_folders()
         row = self.folder_rows.get(channels.normalize_path(path))
         if row is not None:
@@ -2127,11 +2128,6 @@ class MainWindow(QWidget):
         """Quita una carpeta de la lista (sin tocar el disco)."""
         folder = self.settings.folder_for(path)
         if folder is None:
-            return
-        if len(self.settings.folders) == 1:
-            show_error(self, tr("Folders"), tr(
-                "This is the only folder left. Add another one before "
-                "removing it."))
             return
         if not confirm(self, tr("Remove folder"),
                        tr("Remove {folder} from the list?", folder=path)

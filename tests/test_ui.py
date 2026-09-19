@@ -960,6 +960,117 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(window.settings.folders_hint_shown)
         self.assertTrue(settings_service.Settings.load().folders_hint_shown)
 
+    def test_una_subcarpeta_de_otra_se_puede_anadir(self):
+        """Tener la raíz y una subcarpeta dentro es un reparto legítimo.
+
+        Es lo que pidió un usuario: ``Blender 3D`` de raíz y
+        ``Blender 3D/Experimentales`` para las ramas. Antes se rechazaba con
+        "sus versiones ya se encuentran", que además era falso.
+        """
+        import tempfile
+        from pathlib import Path as _Path
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = _Path(tmp) / "Blender 3D"
+            dentro = raiz / "Experimentales"
+            dentro.mkdir(parents=True)
+            window.settings.folders = [self._folder(raiz, ["stable"])]
+            self.assertEqual(window._folder_problem(str(dentro)), "")
+            # La misma carpeta dos veces sí se sigue rechazando.
+            self.assertEqual(window._folder_problem(str(raiz)), "duplicate")
+
+    def test_una_subcarpeta_no_duplica_las_versiones(self):
+        """El escaneo de la raíz solo mira sus hijos directos.
+
+        Por eso anidar no cuenta ninguna build dos veces, que era el motivo por
+        el que se prohibía.
+        """
+        import tempfile
+        from pathlib import Path as _Path
+
+        from services import channels
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = _Path(tmp) / "Blender 3D"
+            dentro = raiz / "Experimentales"
+            (raiz / "blender-5.2.1-linux-x64").mkdir(parents=True)
+            (dentro / "blender-5.3.0-linux-x64").mkdir(parents=True)
+            window.settings.folders = [
+                self._folder(raiz, [channels.TYPE_LTS, channels.TYPE_STABLE,
+                                    channels.TYPE_DAILY]),
+                self._folder(dentro, [channels.TYPE_EXPERIMENTAL]),
+            ]
+            window.refresh_installed()
+            self.assertEqual(sorted(e.version for e in window.installed),
+                             ["5.2.1", "5.3.0"])
+
+    def test_reabrir_el_candado_devuelve_los_tipos(self):
+        """Cerrar y abrir el candado no puede dejar la carpeta sin nada.
+
+        Antes, cerrarlo vaciaba las casillas y abrirlo no las devolvía: quien
+        lo probara con su única carpeta se quedaba sin sitio donde descargar
+        sin haber tocado ninguna casilla.
+        """
+        from services import channels
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.settings.folders = [
+            self._folder("/tmp/datos", channels.BUILD_TYPES)]
+        window._rebuild_folder_rows()
+        window._on_folder_writable_toggled("/tmp/datos", False)
+        self.assertEqual(window.settings.folders[0].types, [])
+        window._on_folder_writable_toggled("/tmp/datos", True)
+        self.assertEqual(window.settings.folders[0].types,
+                         list(channels.BUILD_TYPES))
+        self.assertEqual(channels.orphan_types(window.settings.folders), [])
+
+    def test_reabrir_el_candado_no_roba_tipos_a_otra_carpeta(self):
+        """Solo recupera los que no tenga nadie."""
+        from services import channels
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.settings.folders = [
+            self._folder("/tmp/datos", [channels.TYPE_LTS]),
+            self._folder("/tmp/otra", [channels.TYPE_STABLE]),
+        ]
+        window._rebuild_folder_rows()
+        window._on_folder_writable_toggled("/tmp/datos", False)
+        # Mientras estaba cerrada, otra carpeta se queda con las LTS.
+        window.settings.folders[1].types = [channels.TYPE_STABLE,
+                                            channels.TYPE_LTS]
+        window._on_folder_writable_toggled("/tmp/datos", True)
+        self.assertNotIn(channels.TYPE_LTS, window.settings.folders[0].types)
+        self.assertIn(channels.TYPE_LTS, window.settings.folders[1].types)
+
+    def test_se_puede_quitar_la_ultima_carpeta(self):
+        """Sin esto el usuario se quedaba encerrado: ni cambiarla ni quitarla."""
+        from unittest import mock
+
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        ruta = window.settings.folders[0].path
+        with mock.patch.object(main_window, "confirm", return_value=True):
+            window._on_folder_remove_requested(ruta)
+        self.assertEqual(window.settings.folders, [])
+
+    def test_una_lista_vacia_a_proposito_no_se_repone(self):
+        """Reponer una carpeta que acaban de quitar es deshacer su decisión."""
+        from services import settings as settings_service
+
+        settings = settings_service.Settings.load()
+        settings.folders = []
+        settings.save()
+        self.assertEqual(settings_service.Settings.load().folders, [])
+
     def test_una_carpeta_con_todo_enseña_el_modo_simple(self):
         """Con una sola carpeta, Ajustes se ve como siempre.
 

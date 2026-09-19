@@ -88,7 +88,18 @@ Reglas que no hay que romper:
   sobre un `settings.json` editado a mano (gana el primero).
 - **`writable=False` implica `types=[]`.** No se descarga donde no se escribe;
   cerrar el candado apaga las casillas. Así las casillas dicen *qué se descarga
-  aquí* y el candado *si se puede tocar algo aquí*, sin solaparse.
+  aquí* y el candado *si se puede tocar algo aquí*, sin solaparse. **Al volver a
+  abrirlo se le devuelven los tipos huérfanos** (la misma regla que al añadir una
+  carpeta): sin eso, cerrar y abrir dejaba la carpeta sin recibir nada y, si era
+  la única, la app sin sitio donde descargar.
+- **Anidar carpetas se permite.** Tener `Blender 3D` de raíz y
+  `Blender 3D/Experimentales` dentro es un reparto natural, y no duplica nada
+  porque `_scan_root` solo mira los hijos **directos** de cada raíz. Lo único
+  que se rechaza al añadir es la misma carpeta dos veces.
+- **Se puede quitar la última carpeta.** Negarlo encerraba al usuario: no podía
+  cambiarla ni quitarla. Una lista vacía a propósito (la clave `folders` existe
+  pero está vacía) **no se repone** al arrancar; solo se pone la de fábrica
+  cuando no hay `settings.json`.
 - **Solo lectura significa que la app no escribe NADA ahí**: ni descarga, ni
   borra, ni renombra, ni limpia `.part`. Dejar borrar pero no instalar sería
   incoherente. Lanzar y migrar sí funcionan (la migración escribe en la config

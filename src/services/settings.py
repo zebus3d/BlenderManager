@@ -409,9 +409,12 @@ class Settings:
             settings.folders_hint_shown = bool(data.get("folders_hint_shown"))
         else:
             settings.folders = clean_folders(data.get("folders"))
-        if not settings.folders:
+        if not settings.folders and "folders" not in data:
             # Primer arranque (o fichero irrecuperable): una sola carpeta que
             # se queda con todo, que es como se comportaba la app de siempre.
+            # Si la clave **existe** y está vacía es que el usuario quitó todas
+            # sus carpetas a propósito: reponerle una sería deshacer lo que
+            # acaba de hacer. La interfaz ya avisa de que así no se descarga.
             settings.folders = [Folder(path=str(default_destination()),
                                        types=list(channels.BUILD_TYPES),
                                        writable=True)]
