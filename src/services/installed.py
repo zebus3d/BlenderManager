@@ -206,6 +206,11 @@ def _scan_root(root: Path, platform: str):
                 executable=executable,
                 build_hash=str(marker.get("hash") or ""),
                 branch=str(marker.get("branch") or ""),
+                # El marcador ya guardaba el "risk" desde el principio, pero
+                # hasta ahora se tiraba: con él, saber si algo es una diaria o
+                # una LTS deja de ser una heurística sobre el nombre.
+                risk=str(marker.get("risk") or ""),
+                root=root,
             )
         )
     return results

@@ -66,10 +66,11 @@ def _clean_previous_session(settings) -> None:
     quedaba en el caché para siempre. Hay un test que comprueba que se llaman.
     """
     updater.cleanup_staging()
-    # Puede haber descargas a medias en la carpeta de destino y, si las LTS se
-    # guardan aparte, también en la suya.
-    for folder in settings.scan_roots():
-        updater.cleanup_partials(folder)
+    # Solo en las carpetas donde se descarga: un ``.part`` no puede aparecer en
+    # una carpeta que solo se escanea, y en una con el candado cerrado no
+    # tenemos permiso para borrar nada (ni queremos).
+    for folder in settings.install_folders():
+        updater.cleanup_partials(folder.path)
 
 
 def _install_exception_hook() -> None:
