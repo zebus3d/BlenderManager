@@ -68,7 +68,7 @@ def _clean_previous_session(settings) -> None:
     updater.cleanup_staging()
     # Puede haber descargas a medias en la carpeta de destino y, si las LTS se
     # guardan aparte, también en la suya.
-    for folder in settings.folders():
+    for folder in settings.scan_roots():
         updater.cleanup_partials(folder)
 
 

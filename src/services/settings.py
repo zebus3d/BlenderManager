@@ -290,7 +290,7 @@ class Settings:
             return lts
         return self.dest_folder
 
-    def folders(self) -> list[str]:
+    def scan_roots(self) -> list[str]:
         """Todas las carpetas donde puede haber versiones instaladas.
 
         Si las LTS viven aparte hay que escanear las dos. La carpeta LTS se
