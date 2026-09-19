@@ -71,6 +71,44 @@ El canal `"favorites"` lo resuelven las mismas funciones puras que el resto
 `favorites`; ahí no se excluyen las experimentales, porque manda lo que el
 usuario haya marcado. **No lo filtres en la UI.**
 
+## Biblioteca de carpetas
+
+Las versiones ya no viven en "una carpeta y dos satélites". `settings.folders` es
+una lista de `Folder(path, types, writable)`, y **`services/channels.py` es la
+única definición** de qué tipo es una compilación (`type_of_build` para la
+tienda, `type_from_marker`/`type_of_installed` para las instaladas). Antes esa
+respuesta estaba en cuatro sitios; ahora de ella depende **en qué carpeta se
+escriben cientos de MB**, así que no puede volver a duplicarse.
+
+Reglas que no hay que romper:
+
+- **Cada tipo tiene un único dueño.** Marcar LTS en una carpeta se lo quita a la
+  que lo tuviera. Eso es lo que hace que `resolve_destination` sea un solo
+  escalón y que el destino nunca sea ambiguo. `clean_folders` lo impone también
+  sobre un `settings.json` editado a mano (gana el primero).
+- **`writable=False` implica `types=[]`.** No se descarga donde no se escribe;
+  cerrar el candado apaga las casillas. Así las casillas dicen *qué se descarga
+  aquí* y el candado *si se puede tocar algo aquí*, sin solaparse.
+- **Solo lectura significa que la app no escribe NADA ahí**: ni descarga, ni
+  borra, ni renombra, ni limpia `.part`. Dejar borrar pero no instalar sería
+  incoherente. Lanzar y migrar sí funcionan (la migración escribe en la config
+  de Blender, `~/.config/blender/<serie>`, no en la carpeta de instalación).
+- **`destination_for` puede devolver `""`**: nadie recibe ese tipo. Hay que
+  decírselo al usuario (`_no_folder_for`), nunca caer en una carpeta cualquiera.
+  Al extraer se usa `archive.parent`, no se vuelve a preguntar: `Path("")` es el
+  directorio actual y extraeríamos dentro de la app.
+- **`organizer.move_build`: el origen no se borra hasta que el destino está
+  completo y en su sitio.** Nada de `shutil.move` a pelo entre discos (copia y
+  borra; si falla a mitad deja el destino incompleto y el origen tocado). Lo
+  demuestra `test_un_fallo_a_media_copia_no_toca_el_origen`.
+- **La migración del esquema 1 no mueve un byte.** `folders_from_legacy` decide
+  la carpeta de las LTS **antes** que la de siempre, porque la exclusión mutua es
+  "el primero se lo queda". `_legacy_mirror` sigue escribiendo los campos viejos
+  por si alguien instala una versión anterior.
+- **Nada de modales en el arranque.** El aviso de bienvenida a las carpetas se
+  enseña una vez (`folders_hint_shown`) y el fixture de los tests lo trae ya
+  marcado: un modal durante `MainWindow()` cuelga la suite entera.
+
 ## Idiomas: cuáles valdría la pena añadir
 
 Hoy hay **es/en** (375 claves en `src/i18n.py`). Si algún día se amplía, esta es
