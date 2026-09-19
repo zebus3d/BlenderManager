@@ -18,7 +18,7 @@ from dataclasses import asdict, fields
 
 from model.build import Build
 from services.downloader import log
-from services import tls
+from services import channels, tls
 from services.settings import cache_dir, write_json_atomic
 
 API_URL = "https://builder.blender.org/download/daily/?format=json&v=2"
@@ -194,18 +194,19 @@ def filter_builds(builds, channel: str, search: str = "", favorites=()):
         selected = [build for build in builds if build.experimental]
     else:
         selected = [build for build in builds if not build.experimental]
-        if channel == "lts":
-            # Solo las versiones con soporte de larga duración.
-            selected = [build for build in selected if build.is_lts]
-        elif channel == "stable":
-            # Estables que no son LTS.
+        # La clasificación vive en ``services.channels`` porque de ella depende
+        # también a qué carpeta se descarga cada compilación: si aquí dijera
+        # una cosa y allí otra, una build podría salir en la pestaña "Diarias"
+        # y aterrizar en la carpeta de las LTS.
+        if channel in (channels.TYPE_LTS, channels.TYPE_STABLE,
+                       channels.TYPE_DAILY):
             selected = [build for build in selected
-                        if build.risk == "stable" and not build.is_lts]
+                        if channels.type_of_build(build) == channel]
         elif channel == "lts_stable":
             # LTS y estables a la vez (todo lo estable).
-            selected = [build for build in selected if build.risk == "stable"]
-        elif channel == "daily":
-            selected = [build for build in selected if build.risk != "stable"]
+            selected = [build for build in selected
+                        if channels.type_of_build(build) in (
+                            channels.TYPE_LTS, channels.TYPE_STABLE)]
     text = (search or "").strip().lower()
     if text:
         selected = [

@@ -16,6 +16,7 @@ from collections import namedtuple
 from pathlib import Path
 
 from model.build import InstalledBuild, minor_of, version_tuple
+from services import channels
 
 # Actualización disponible para una versión instalada.
 #   kind == "patch":  misma serie con parche más nuevo (5.2.0 -> 5.2.2).
@@ -275,15 +276,11 @@ def is_version_installed(installed, version: str) -> bool:
 def is_experimental(entry) -> bool:
     """True si la instalación viene de una rama experimental.
 
-    Las ramas normales se llaman ``main`` (diarias) o ``v45``, ``v52``...
-    (estables). Cualquier otro nombre es una rama de funciones nuevas. Las
-    instalaciones antiguas no tienen rama anotada (``""``), así que se tratan
-    como normales.
+    La regla está en ``services.channels`` para que sea la misma que decide en
+    qué carpeta se instala una experimental; aquí solo queda el envoltorio,
+    porque ``available_updates`` y los tests lo llaman por su nombre.
     """
-    branch = (entry.branch or "").strip()
-    if not branch:
-        return False
-    return branch != "main" and not branch.startswith("v")
+    return channels.type_of_installed(entry) == channels.TYPE_EXPERIMENTAL
 
 
 def filter_installed(entries, channel: str, search: str = "", favorites=()):
@@ -291,8 +288,10 @@ def filter_installed(entries, channel: str, search: str = "", favorites=()):
 
     Es el equivalente de ``api.filter_builds`` para la pestaña de instaladas:
     las experimentales solo salen en su canal y el resto de canales las
-    excluyen. Como las instaladas no guardan el "riesgo" de la compilación, lo
-    deducimos de su nombre (las diarias llevan 'alpha', 'beta' o 'main').
+    excluyen. Clasificar una instalada es más difícil que una de la tienda
+    (no tenemos delante la respuesta de la API), así que la regla vive en
+    ``services.channels``, que usa el marcador que dejamos al instalar y, solo
+    cuando falta, adivina por la rama y el nombre de la carpeta.
 
     Los favoritos comparten clave con la tienda
     (``model.build.favorite_key``), así que marcar una versión en la tienda la
@@ -305,16 +304,10 @@ def filter_installed(entries, channel: str, search: str = "", favorites=()):
         selected = [entry for entry in entries if is_experimental(entry)]
     else:
         selected = [entry for entry in entries if not is_experimental(entry)]
-        if channel == "lts":
-            selected = [entry for entry in selected if entry.is_lts]
-        elif channel == "stable":
-            selected = [entry for entry in selected if not entry.is_lts]
-        elif channel == "daily":
-            tokens = ("alpha", "beta", "main")
-            selected = [
-                entry for entry in selected
-                if any(token in entry.name.lower() for token in tokens)
-            ]
+        if channel in (channels.TYPE_LTS, channels.TYPE_STABLE,
+                       channels.TYPE_DAILY):
+            selected = [entry for entry in selected
+                        if channels.type_of_installed(entry) == channel]
     # "all" y "lts_stable" muestran todas las que no son experimentales.
     text = (search or "").strip().lower()
     if text:
@@ -326,19 +319,14 @@ def filter_installed(entries, channel: str, search: str = "", favorites=()):
 
 
 def _is_stable_install(entry) -> bool:
-    """True si la instalación es una versión estable (no diaria/alfa).
+    """True si la instalación es una versión estable o LTS (no diaria/alfa).
 
-    Los marcadores guardan la rama, y las diarias la llaman ``main``. Las
-    instalaciones antiguas (o sin marcador) no traen rama: se dan por estables,
-    que es lo razonable. Las ramas experimentales quedan fuera.
+    Lo usa ``available_updates``: solo tiene sentido ofrecer el salto de serie
+    a quien va por el canal estable. Envoltorio de ``services.channels`` para
+    no tener dos definiciones de "esto es una diaria".
     """
-    branch = (entry.branch or "").strip()
-    if branch == "main":
-        return False
-    if branch and not branch.startswith("v"):
-        return False
-    name = (entry.name or "").lower()
-    return not any(token in name for token in ("alpha", "beta", "daily"))
+    return channels.type_of_installed(entry) in (channels.TYPE_LTS,
+                                                 channels.TYPE_STABLE)
 
 
 def _minor_tuple(version: str):
