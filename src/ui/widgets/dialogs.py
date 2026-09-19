@@ -138,7 +138,16 @@ def show_info(parent, title: str, message: str) -> None:
 class ProgressDialog(AppDialog):
     """Diálogo con barra de progreso propia (descarga de actualizaciones)."""
 
-    def __init__(self, parent=None, title: str = "", message: str = ""):
+    def __init__(self, parent=None, title: str = "", message: str = "",
+                 primary_text: str | None = None,
+                 secondary_text: str | None = None):
+        """``primary_text``/``secondary_text`` cambian los botones.
+
+        Por defecto son los de la actualización de la app, que es para lo que
+        nació este diálogo. Pasar ``""`` como ``primary_text`` **no crea** el
+        botón principal: lo usa el progreso de mover carpetas, donde la única
+        acción posible mientras corre es cancelar.
+        """
         super().__init__(parent, title, message)
 
         from PySide6.QtWidgets import QProgressBar
@@ -150,9 +159,13 @@ class ProgressDialog(AppDialog):
         # Este se inserta antes de la fila de botones (que ya existe al final).
         layout = self.layout()
         layout.insertWidget(layout.count() - 1, self.progress)
-        self._primary = self.add_button(tr("Update"), variant="accent")
-        self._secondary = self.add_button(tr("Later"))
-        self._secondary.clicked.connect(self.reject)
+        primary = tr("Update") if primary_text is None else primary_text
+        secondary = tr("Later") if secondary_text is None else secondary_text
+        self._primary = (self.add_button(primary, variant="accent")
+                         if primary else None)
+        self._secondary = self.add_button(secondary) if secondary else None
+        if self._secondary is not None:
+            self._secondary.clicked.connect(self.reject)
 
     def set_progress(self, value: int) -> None:
         """Mueve la barra de progreso (0-100)."""

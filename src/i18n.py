@@ -68,6 +68,219 @@ _TRANSLATIONS = {
         "The folder still could not be made writable.":
             "No se pudo dar permiso de escritura a esa carpeta.",
         "Downloads": "Descargas",
+        # --- Biblioteca de carpetas (Ajustes > Carpetas) ---
+        "Folders": "Carpetas",
+        "Folder contents": "Contenido de la carpeta",
+        "Add folder": "Añadir carpeta",
+        "Remove folder": "Quitar carpeta",
+        "Separate by channel...": "Separar por canales...",
+        "Not found": "No encontrada",
+        "Blender versions you download are stored here, each one in its own "
+        "subfolder.":
+            "Aquí se guardan las versiones de Blender que descargas, cada una "
+            "en su propia subcarpeta.",
+        "Each download goes to the folder that takes it. "
+        "Locked folders are only scanned.":
+            "Cada descarga va a la carpeta que la recibe. "
+            "Las del candado cerrado solo se miran.",
+        "No folder for: {types}. Those builds cannot be downloaded until you "
+        "tick one.":
+            "Ninguna carpeta recibe: {types}. Esas compilaciones no se pueden "
+            "descargar hasta que marques una.",
+        "New downloads go to: {folder}":
+            "Las descargas nuevas van a: {folder}",
+        "No folder is set to receive downloads.":
+            "No hay ninguna carpeta que reciba descargas.",
+        "{type} builds now go to {folder}":
+            "Las compilaciones {type} van ahora a {folder}",
+        "That folder is already in the list.":
+            "Esa carpeta ya está en la lista.",
+        "This folder is inside another one in the list, so its versions are "
+        "already being found.":
+            "Esta carpeta está dentro de otra de la lista, así que sus "
+            "versiones ya se encuentran.",
+        "A folder already in the list is inside this one. Remove it first, or "
+        "pick another folder.":
+            "Una carpeta de la lista está dentro de esta. Quítala antes, o "
+            "elige otra carpeta.",
+        "Added as read-only: that folder does not allow writing.":
+            "Añadida en solo lectura: esa carpeta no deja escribir.",
+        "This is the only folder left. Add another one before removing it.":
+            "Es la única carpeta que queda. Añade otra antes de quitarla.",
+        "Remove {folder} from the list?":
+            "¿Quitar {folder} de la lista?",
+        "Nothing is deleted from disk: the versions there just stop being "
+        "shown.":
+            "No se borra nada del disco: sus versiones solo dejan de verse.",
+        "Choose which folders your Blender versions live in, and which ones "
+        "receive each kind of build.":
+            "Elige en qué carpetas viven tus versiones de Blender y cuál "
+            "recibe cada tipo de compilación.",
+        "Add a folder where you already have Blender versions, or where you "
+        "want to download them.":
+            "Añade una carpeta donde ya tengas versiones de Blender, o donde "
+            "quieras descargarlas.",
+        "Add a second folder and choose what goes in each one: for example "
+        "the LTS versions on a fast drive and the rest on a big one.":
+            "Añade una segunda carpeta y elige qué va en cada una: por "
+            "ejemplo las LTS en un disco rápido y el resto en uno grande.",
+        "This folder is not reachable right now.\n"
+        "It usually means the drive is unplugged or the network share\n"
+        "is down. It is kept in the list so you do not lose its\n"
+        "settings; its versions come back when the folder does.":
+            "Ahora mismo no se puede llegar a esta carpeta.\n"
+            "Suele ser que la unidad está desconectada o que el recurso de "
+            "red\nno responde. Se mantiene en la lista para no perder su "
+            "configuración;\nsus versiones vuelven cuando vuelva la carpeta.",
+        "Stop using this folder.\n"
+        "Nothing is deleted from disk: its Blender versions simply stop\n"
+        "being listed, and you can add the folder again whenever you want.\n"
+        "Any build types it was taking will need a new folder.":
+            "Deja de usar esta carpeta.\n"
+            "No se borra nada del disco: sus versiones de Blender solo dejan\n"
+            "de listarse, y puedes volver a añadirla cuando quieras.\n"
+            "Los tipos que recibía necesitarán otra carpeta.",
+        "The lock is open: this folder can receive downloads, and the app may\n"
+        "delete or rename the versions inside it.\n"
+        "Click to close it.":
+            "El candado está abierto: esta carpeta puede recibir descargas, y "
+            "la\naplicación puede borrar o renombrar las versiones que hay "
+            "dentro.\nPulsa para cerrarlo.",
+        "The lock is closed: the app never writes anything here.\n"
+        "The versions inside are still listed, launched and used to migrate\n"
+        "add-ons, but nothing is downloaded, deleted or renamed in this folder.\n"
+        "Click to open it.":
+            "El candado está cerrado: la aplicación no escribe nada aquí.\n"
+            "Sus versiones se siguen viendo, lanzando y usando para migrar\n"
+            "addons, pero aquí no se descarga, ni se borra, ni se renombra "
+            "nada.\nPulsa para abrirlo.",
+        "LTS: versions with two years of support, for work that has to keep\n"
+        "opening years from now.\n"
+        "Tick this and every LTS you download lands in this folder.\n"
+        "Only one folder can take them.":
+            "LTS: versiones con dos años de soporte, para trabajos que tienen "
+            "que\nseguir abriéndose dentro de unos años.\n"
+            "Márcalo y todas las LTS que descargues caerán en esta carpeta.\n"
+            "Solo una carpeta puede quedárselas.",
+        "Stable: the normal releases of Blender, the ones most people use.\n"
+        "Tick this and every stable release you download lands in this folder.\n"
+        "Only one folder can take them.":
+            "Estables: las versiones normales de Blender, las que usa casi "
+            "todo el mundo.\nMárcalo y todas las estables que descargues "
+            "caerán en esta carpeta.\nSolo una carpeta puede quedárselas.",
+        "Daily: builds made every day from the branch in development.\n"
+        "They bring the newest features and they can break; they also pile up\n"
+        "fast, so many people keep them on a big drive.\n"
+        "Only one folder can take them.":
+            "Diarias: compilaciones que se hacen cada día de la rama en "
+            "desarrollo.\nTraen lo más nuevo y pueden fallar; además se "
+            "acumulan rápido, así que\nmucha gente las guarda en un disco "
+            "grande.\nSolo una carpeta puede quedárselas.",
+        "Experimental: branches with features that are not in any release yet.\n"
+        "Blender rarely publishes them, so this is usually empty.\n"
+        "Only one folder can take them.":
+            "Experimentales: ramas con funciones que aún no están en ninguna "
+            "versión.\nBlender casi nunca las publica, así que esto suele "
+            "estar vacío.\nSolo una carpeta puede quedárselas.",
+        # --- Reorganizar al cambiar lo que recibe una carpeta ---
+        "There are {count} versions here that this folder no longer takes:":
+            "Hay {count} versiones aquí que esta carpeta ya no recibe:",
+        "You can move them to the folder that takes them, or leave them where "
+        "they are.":
+            "Puedes moverlas a la carpeta que sí las recibe, o dejarlas donde "
+            "están.",
+        "Leave them here": "Dejarlas aquí",
+        "Move them": "Moverlas",
+        "Nothing is moved.\n"
+        "Those versions stay in this folder and keep showing up in Local.\n"
+        "Only new downloads follow the boxes you just ticked.":
+            "No se mueve nada.\n"
+            "Esas versiones se quedan en esta carpeta y se siguen viendo en "
+            "Local.\nSolo las descargas nuevas siguen las casillas que acabas "
+            "de marcar.",
+        "Each version is moved to the folder that takes its kind of build.\n"
+        "Nothing is deleted: a version is only removed from here once the "
+        "copy is complete.\n"
+        "With big folders on another drive this takes a while.":
+            "Cada versión se mueve a la carpeta que recibe su tipo.\n"
+            "No se borra nada: una versión solo se quita de aquí cuando la "
+            "copia\nestá completa.\n"
+            "Con carpetas grandes en otro disco esto tarda un rato.",
+        "This version is in a read-only folder.":
+            "Esta versión está en una carpeta de solo lectura.",
+        "Open the lock in Settings > Folders, or use your file manager.":
+            "Abre el candado en Ajustes > Carpetas, o usa tu gestor de "
+            "archivos.",
+        "No folder is set to receive {type} builds.":
+            "No hay ninguna carpeta que reciba compilaciones {type}.",
+        "Open Settings and tick {type} on the folder where you want them.":
+            "Abre Ajustes y marca {type} en la carpeta donde las quieras.",
+        "Open folder settings": "Abrir ajustes de carpetas",
+        "Takes you to Settings > Folders, where you choose which folder\n"
+        "receives each kind of build.":
+            "Te lleva a Ajustes > Carpetas, donde eliges qué carpeta\n"
+            "recibe cada tipo de compilación.",
+        "Start Blender {version} as if it were freshly installed. Its current "
+        "settings are saved aside and can be put back.":
+            "Arranca Blender {version} como si acabaras de instalarlo. Tus "
+            "ajustes actuales se guardan aparte y se pueden recuperar.",
+        "Useful when something misbehaves and you want to find out why: if the "
+        "problem disappears on a clean Blender, it comes from your settings or "
+        "add-ons, not from Blender itself. From there you put your settings "
+        "back and enable things one at a time until it breaks again. It is "
+        "also the fair way to report a bug, and a way to record a tutorial "
+        "with the interface everyone else sees. Nothing is lost: your settings "
+        "are saved aside and go back with one click.":
+            "Sirve para descartar: si algo va mal y con un Blender limpio deja "
+            "de pasar, el problema está en tus ajustes o en tus addons, no en "
+            "Blender. A partir de ahí recuperas tus ajustes y vas activando "
+            "cosas de una en una hasta que vuelve a fallar. También es la "
+            "forma honesta de reportar un error, y la manera de grabar un "
+            "tutorial con la interfaz que ve todo el mundo. No pierdes nada: "
+            "tus ajustes quedan guardados aparte y vuelven con un clic.",
+        "This version was reset to factory settings from this app on {date}, "
+        "so these are the factory ones. Your previous settings are saved "
+        "aside: you can put them back in the \"Factory settings\" tab.":
+            "Esta versión se restableció a valores de fábrica desde esta "
+            "aplicación el {date}, así que estos son los de fábrica. Tus "
+            "ajustes anteriores están guardados aparte: puedes recuperarlos "
+            "en la pestaña «Valores de fábrica».",
+        "Your Blender folders": "Tus carpetas de Blender",
+        "Nothing has changed on disk and you do not have to set up anything: "
+        "your versions are still in {folder} and keep working exactly as "
+        "before.":
+            "No ha cambiado nada en el disco y no tienes que configurar nada: "
+            "tus versiones siguen en {folder} y funcionan exactamente igual "
+            "que antes.",
+        "What is new is that you can now add more folders and choose what goes "
+        "in each one: for example the LTS versions on a fast SSD and the daily "
+        "builds on a big drive. You can also point the app at folders where "
+        "you already had Blender, and lock them so nothing is ever written "
+        "there.":
+            "La novedad es que ya puedes añadir más carpetas y elegir qué va "
+            "en cada una: por ejemplo las LTS en un SSD rápido y las diarias "
+            "en un disco grande. También puedes señalar carpetas donde ya "
+            "tenías Blender y ponerles el candado para que nunca se escriba "
+            "nada en ellas.",
+        "Not now": "Ahora no",
+        "Show me": "Enséñamelo",
+        "Opens Settings > Folders, where you add folders and\n"
+        "tick what each one receives.":
+            "Abre Ajustes > Carpetas, donde añades carpetas y\n"
+            "marcas qué recibe cada una.",
+        "Read-only": "Solo lectura",
+        "This version lives in a folder with the lock closed.\n"
+        "You can launch it and use it to migrate add-ons, but the app\n"
+        "will not delete or rename it.":
+            "Esta versión vive en una carpeta con el candado cerrado.\n"
+            "Puedes lanzarla y usarla para migrar addons, pero la "
+            "aplicación\nno la va a borrar ni a renombrar.",
+        "Moving versions": "Moviendo versiones",
+        "Moving {name} ({done} of {total})":
+            "Moviendo {name} ({done} de {total})",
+        "{moved} versions moved": "{moved} versiones movidas",
+        "{failed} versions could not be moved":
+            "No se han podido mover {failed} versiones",
         "Interface": "Interfaz",
         "Launch": "Lanzamiento",
         "System": "Sistema",

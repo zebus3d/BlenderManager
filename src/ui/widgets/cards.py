@@ -398,7 +398,7 @@ class InstalledCard(_HoverCard, QFrame):
     rename_requested = Signal(object, str)    # entry, nombre nuevo
 
     def __init__(self, entry, zebra: bool, marked: bool = False, parent=None,
-                 update=None):
+                 update=None, read_only: bool = False):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -422,9 +422,19 @@ class InstalledCard(_HoverCard, QFrame):
         title.renamed.connect(
             lambda name: self.rename_requested.emit(self.entry, name))
         text_col.addWidget(title)
-        meta = ElidedLabel(f"Blender {entry.version}   ·   {entry.path}",
-                           Qt.ElideRight)
+        # El "solo lectura" se cuela en la línea que YA existe, no en una fila
+        # nueva: la tarjeta tiene que seguir midiendo 68 px como las de la
+        # tienda (hay un test que lo vigila).
+        detail = f"Blender {entry.version}   ·   {entry.path}"
+        if read_only:
+            detail += "   ·   " + tr("Read-only")
+        meta = ElidedLabel(detail, Qt.ElideRight)
         meta.setObjectName("Muted")
+        if read_only:
+            meta.setToolTip(tr(
+                "This version lives in a folder with the lock closed.\n"
+                "You can launch it and use it to migrate add-ons, but the app\n"
+                "will not delete or rename it."))
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 

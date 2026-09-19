@@ -260,6 +260,27 @@ def build_qss() -> str:
     }}
     QFrame#AddonRow[zebra="true"] {{ background-color: {t.ROW_ALT}; }}
 
+    /* --- Biblioteca de carpetas (Ajustes > Carpetas) ---
+       Las filas viven DENTRO de una tarjeta SURFACE, así que bajan un escalón
+       igual que las de add-ons de Migración; si no, no se distinguirían del
+       fondo de la tarjeta. El scroll y su contenido van transparentes: un
+       QScrollArea pinta el BG por su cuenta y cortaría la tarjeta. */
+    QFrame#FolderRow {{
+        background-color: {t.CARD_DIM};
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.35);
+    }}
+    QFrame#FolderRow[zebra="true"] {{ background-color: {t.CARD_DIM_ALT}; }}
+    QFrame#FolderRow[missing="true"] {{ border: 1px solid {t.WARNING}; }}
+    QScrollArea#FolderList {{ background: transparent; border: none; }}
+    QScrollArea#FolderList > QWidget > QWidget {{ background: transparent; }}
+    QWidget#FolderListBody {{ background: transparent; }}
+    /* El candado cerrado, en ámbar: que "aquí no se escribe" se vea de un
+       vistazo y no haya que pasar el ratón por encima para enterarse. */
+    QPushButton#CardButton[writable="false"] {{
+        color: {t.WARNING};
+    }}
+
     /* --- Casilla de verificación (migración) ---
        El cuadro y la palomita los pinta ``CheckPill`` con QPainter: por QSS no
        se puede (la regla global de ``QWidget`` hereda sobre el ``::indicator``

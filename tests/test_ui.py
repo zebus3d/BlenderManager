@@ -53,8 +53,14 @@ class SettingsIsolated:
         config = Path(self._config_dir.name)
         destino = config / "Blenders"
         destino.mkdir()
+        # ``folders_hint_shown`` va a True a propósito: este settings.json es
+        # del esquema viejo, así que al cargarlo se migra y la ventana querría
+        # enseñar el aviso de bienvenida a la biblioteca de carpetas. Es un
+        # modal, y un modal en el arranque cuelga la suite entera (justo lo que
+        # avisa el comentario de la red, más abajo).
         (config / "settings.json").write_text(
-            json.dumps({"dest_folder": str(destino)}), encoding="utf-8")
+            json.dumps({"dest_folder": str(destino),
+                        "folders_hint_shown": True}), encoding="utf-8")
         patch = mock.patch.object(settings_service, "config_dir",
                                   return_value=config)
         patch.start()
@@ -511,6 +517,28 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
                    for i in range(window.store_grid.count())}
         self.assertEqual(len(alturas), 1, alturas)
 
+    def test_la_insignia_de_solo_lectura_no_cambia_el_alto(self):
+        """Va en la línea que ya existe, no en una fila nueva.
+
+        Si creciera, al cambiar de pestaña las tarjetas bailarían de tamaño
+        (que es lo que vigila el test de al lado).
+        """
+        from pathlib import Path
+
+        from i18n import tr
+        from model.build import InstalledBuild
+        from ui.widgets.cards import InstalledCard
+        from ui.widgets.labels import ElidedLabel
+
+        entry = InstalledBuild(name="blender-5.2.1", path=Path("/tmp/b"),
+                               version="5.2.1", branch="v52")
+        normal = InstalledCard(entry, False)
+        bloqueada = InstalledCard(entry, False, read_only=True)
+        self.assertEqual(normal.height(), bloqueada.height())
+        # Y se nota que está bloqueada.
+        textos = [w.text() for w in bloqueada.findChildren(ElidedLabel)]
+        self.assertTrue(any(tr("Read-only") in t for t in textos), textos)
+
     def test_las_instaladas_miden_como_las_de_la_tienda(self):
         """Al cambiar de pestaña las tarjetas no pueden bailar de tamaño.
 
@@ -671,8 +699,9 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertIsNotNone(tabs)
         # Un tema por pestaña, y todos los controles siguen existiendo aunque
         # su pestaña no sea la activa.
-        self.assertEqual(tabs.count(), 5)
-        for control in (window.dest_input, window.lts_switch, window.extra_switch,
+        self.assertEqual(tabs.count(), 6)
+        for control in (window.dest_input, window.folder_list,
+                        window.add_folder_btn,
                         window.archive_switch, window.language_combo,
                         window.reset_zoom_slider, window.args_input,
                         window.close_tray_switch, window.autostart_switch,
@@ -874,41 +903,151 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         # Sin barra de scroll: las 3 filas se ven enteras.
         self.assertEqual(window.store_scroll.verticalScrollBar().maximum(), 0)
 
+    def _folder(self, path, types=(), writable=True):
+        from services import settings as settings_service
+
+        return settings_service.Folder(path=str(path), types=list(types),
+                                       writable=writable)
+
     def test_las_lts_van_a_su_carpeta_si_esta_configurada(self):
+        """El caso que motivó todo: las LTS al SSD, el resto al disco lento."""
+        from services import channels
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        window.settings.dest_folder = "/tmp/datos"
-        window.settings.lts_folder = "/tmp/ssd"
-        window.settings.separate_lts = True
+        window.settings.folders = [
+            self._folder("/tmp/ssd", [channels.TYPE_LTS]),
+            self._folder("/tmp/datos", [channels.TYPE_STABLE,
+                                        channels.TYPE_DAILY,
+                                        channels.TYPE_EXPERIMENTAL]),
+        ]
         lts = _build("4.5.13", "v45", "stable")
         otra = _build("5.1.2", "v51", "stable")
         self.assertEqual(window._destination_for(lts), "/tmp/ssd")
         self.assertEqual(window._destination_for(otra), "/tmp/datos")
 
-    def test_el_interruptor_activa_la_carpeta_lts(self):
+    def test_un_tipo_sin_carpeta_no_tiene_destino(self):
+        from services import channels
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        # Arranca apagado: la carpeta de las LTS ni se enseña.
-        self.assertTrue(window.lts_row.isHidden())
+        window.settings.folders = [self._folder("/tmp/ssd", [channels.TYPE_LTS])]
+        self.assertEqual(
+            window._destination_for(_build("5.1.2", "v51", "stable")), "")
 
-        window.lts_input.setText("/tmp/ssd-lts")
-        window.lts_switch.setChecked(True)
-        self.assertTrue(window.settings.separate_lts)
-        self.assertEqual(window.settings.lts_folder, "/tmp/ssd-lts")
-        self.assertFalse(window.lts_row.isHidden())
+    def test_el_aviso_de_carpetas_se_enseña_una_sola_vez(self):
+        """Presentación de la biblioteca a quien viene de una versión vieja.
 
-        window.lts_switch.setChecked(False)
-        self.assertFalse(window.settings.separate_lts)
-        self.assertTrue(window.lts_row.isHidden())
-        # La ruta no se pierde al apagarlo.
-        self.assertEqual(window.settings.lts_folder, "/tmp/ssd-lts")
+        **No se construye la ventana con el aviso pendiente**: el arranque
+        programa el modal con un QTimer y cualquier test posterior que corra el
+        bucle de eventos lo dispararía, colgando la suite (es el mismo fallo
+        que ya avisa el mixin ``SettingsIsolated``). Se fuerza el estado sobre
+        una ventana ya montada y se llama al método a mano.
+        """
+        from unittest import mock
 
-    def test_escanea_las_dos_carpetas(self):
+        from services import settings as settings_service
+        from ui.widgets import main_window
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.settings.folders_hint_shown = False
+        with mock.patch.object(main_window, "AppDialog") as dialogo:
+            dialogo.return_value.exec.return_value = 0
+            window._show_folders_hint()
+        self.assertTrue(dialogo.called)
+        # Queda marcado y guardado, así que no vuelve a salir nunca.
+        self.assertTrue(window.settings.folders_hint_shown)
+        self.assertTrue(settings_service.Settings.load().folders_hint_shown)
+
+    def test_una_carpeta_con_todo_enseña_el_modo_simple(self):
+        """Con una sola carpeta, Ajustes se ve como siempre.
+
+        Es lo que hace que quien no quiera separar nada no estrene un concepto
+        que no ha pedido.
+        """
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        self.assertEqual(len(window.settings.folders), 1)
+        self.assertFalse(window._branched())
+        self.assertFalse(window.simple_box.isHidden())
+        self.assertTrue(window.folder_list.isHidden())
+
+    def test_con_dos_carpetas_aparece_la_lista(self):
+        from services import channels
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.settings.folders = [
+            self._folder("/tmp/ssd", [channels.TYPE_LTS]),
+            self._folder("/tmp/datos", [channels.TYPE_STABLE,
+                                        channels.TYPE_DAILY,
+                                        channels.TYPE_EXPERIMENTAL]),
+        ]
+        window._rebuild_folder_rows()
+        self.assertTrue(window._branched())
+        self.assertTrue(window.simple_box.isHidden())
+        self.assertFalse(window.folder_list.isHidden())
+        self.assertEqual(len(window.folder_rows), 2)
+
+    def test_marcar_un_tipo_se_lo_quita_a_la_otra_carpeta(self):
+        """Cada tipo tiene un dueño: si no, el destino sería ambiguo."""
+        from services import channels
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.settings.folders = [
+            self._folder("/tmp/ssd", [channels.TYPE_LTS]),
+            self._folder("/tmp/datos", [channels.TYPE_STABLE]),
+        ]
+        window._rebuild_folder_rows()
+        fila = window.folder_rows[channels.normalize_path("/tmp/datos")]
+        fila.checks[channels.TYPE_LTS].setChecked(True)
+        self.assertEqual(window.settings.folders[0].types, [])
+        self.assertEqual(window.settings.folders[1].types,
+                         [channels.TYPE_LTS, channels.TYPE_STABLE])
+        # Y la otra fila se entera (sin reconstruir la lista entera).
+        otra = window.folder_rows[channels.normalize_path("/tmp/ssd")]
+        self.assertFalse(otra.checks[channels.TYPE_LTS].isChecked())
+
+    def test_cerrar_el_candado_apaga_las_casillas(self):
+        """No se puede descargar donde la aplicación no escribe."""
+        from services import channels
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.settings.folders = [
+            self._folder("/tmp/ssd", [channels.TYPE_LTS]),
+            self._folder("/tmp/datos", [channels.TYPE_STABLE]),
+        ]
+        window._rebuild_folder_rows()
+        fila = window.folder_rows[channels.normalize_path("/tmp/ssd")]
+        fila.write_toggle.setChecked(False)
+        self.assertFalse(window.settings.folders[0].writable)
+        self.assertEqual(window.settings.folders[0].types, [])
+        self.assertFalse(fila.checks[channels.TYPE_LTS].isEnabled())
+        self.assertFalse(fila.checks[channels.TYPE_LTS].isChecked())
+
+    def test_un_tipo_sin_dueño_se_avisa_en_la_tarjeta(self):
+        from services import channels
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.settings.folders = [self._folder("/tmp/ssd", [channels.TYPE_LTS])]
+        window._rebuild_folder_rows()
+        from i18n import tr
+        from ui.widgets.folders import TYPE_LABELS
+
+        self.assertFalse(window.folders_warning.isHidden())
+        self.assertIn(tr(TYPE_LABELS[channels.TYPE_DAILY]),
+                      window.folders_warning.text())
+
+    def test_escanea_todas_las_carpetas(self):
         import tempfile
         from pathlib import Path
 
+        from services import channels
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -918,39 +1057,42 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             lts = base / "lts"
             (principal / "blender-5.1.2-linux-x64").mkdir(parents=True)
             (lts / "blender-4.5.13-linux-x64").mkdir(parents=True)
-            window.settings.dest_folder = str(principal)
-            window.settings.lts_folder = str(lts)
-            window.settings.separate_lts = True
+            window.settings.folders = [
+                self._folder(principal, [channels.TYPE_STABLE,
+                                         channels.TYPE_DAILY,
+                                         channels.TYPE_EXPERIMENTAL]),
+                self._folder(lts, [channels.TYPE_LTS]),
+            ]
             window.refresh_installed()
             self.assertEqual([e.version for e in window.installed],
                              ["5.1.2", "4.5.13"])
 
-    def test_la_carpeta_extra_busca_solo_si_esta_activada(self):
+    def test_una_carpeta_de_solo_lectura_se_escanea_pero_no_recibe(self):
+        """Es lo que antes era la "carpeta extra"."""
         import tempfile
         from pathlib import Path
 
+        from services import channels
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
         with tempfile.TemporaryDirectory() as tmp:
-            extra = Path(tmp) / "mis-blenders"
-            (extra / "blender-5.0.1-linux-x64").mkdir(parents=True)
-            # Arranca apagada (como las LTS aparte): la fila ni se enseña.
-            self.assertTrue(window.extra_row.isHidden())
-            window.extra_switch.setChecked(True)
-            self.assertFalse(window.extra_row.isHidden())
-            self.assertTrue(window.settings.use_extra_folder)
-            window.extra_input.setText(str(extra))
-            # Se escanea esa carpeta aunque no sea la de descargas.
-            self.assertEqual(window.settings.extra_folder, str(extra))
+            base = Path(tmp)
+            principal = base / "principal"
+            mios = base / "mis-blenders"
+            principal.mkdir()
+            (mios / "blender-5.0.1-linux-x64").mkdir(parents=True)
+            window.settings.folders = [
+                self._folder(principal, channels.BUILD_TYPES),
+                self._folder(mios, [], writable=False),
+            ]
+            window.refresh_installed()
+            # Sus versiones se ven...
             self.assertEqual([e.version for e in window.installed], ["5.0.1"])
-            # Apagarla deja de escanear, pero la ruta se recuerda.
-            window.extra_switch.setChecked(False)
-            self.assertTrue(window.extra_row.isHidden())
-            self.assertFalse(window.settings.use_extra_folder)
-            self.assertEqual(window.settings.extra_folder, str(extra))
-            self.assertEqual(window.installed, [])
-
+            # ...pero ahí no baja nada.
+            self.assertEqual(
+                window._destination_for(_build("5.0.2", "v50", "stable")),
+                str(principal))
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class BlenderUpdateTests(SettingsIsolated, unittest.TestCase):
@@ -1977,13 +2119,46 @@ class TooltipTests(SettingsIsolated, unittest.TestCase):
             window.grid_btn, window.list_btn, window.search_input,
             window.platform_combo, window.arch_combo,
             window.zoom_slider, window.reset_zoom_slider,
-            window.dest_input, window.lts_input, window.lts_switch,
+            window.dest_input, window.split_btn, window.add_folder_btn,
             window.archive_switch, window.language_combo,
             window.args_input, window.update_switch, window.periodic_switch,
             window.update_interval_combo,
         ]
         for control in controles:
             self.assertTrue(control.toolTip(), type(control).__name__)
+
+    def test_los_controles_de_una_carpeta_tienen_tooltip(self):
+        """Fila de la biblioteca: casillas, candado y papelera.
+
+        Es la pantalla con más controles pequeños y sin etiqueta de la app, así
+        que es donde más falta hace que cada uno se explique solo.
+        """
+        from services import channels, settings as settings_service
+        from ui.widgets.folders import FolderRow
+
+        folder = settings_service.Folder("/tmp/ssd", [channels.TYPE_LTS])
+        row = FolderRow(folder)
+        controles = list(row.checks.values()) + [row.write_toggle]
+        from ui.widgets.buttons import CardButton
+
+        controles += list(row.findChildren(CardButton))
+        for control in controles:
+            tip = control.toolTip()
+            self.assertTrue(tip, type(control).__name__)
+            # Descriptivos de verdad, no una repetición de la etiqueta.
+            self.assertGreater(len(tip), 25, tip)
+
+    def test_el_candado_dice_cosas_distintas_en_cada_estado(self):
+        from services import channels, settings as settings_service
+        from ui.widgets.folders import FolderRow
+
+        folder = settings_service.Folder("/tmp/ssd", [channels.TYPE_LTS])
+        row = FolderRow(folder)
+        abierto = row.write_toggle.toolTip()
+        row.write_toggle.setChecked(False)
+        cerrado = row.write_toggle.toolTip()
+        self.assertTrue(abierto and cerrado)
+        self.assertNotEqual(abierto, cerrado)
 
     def test_los_botones_de_las_tarjetas_tienen_tooltip(self):
         from pathlib import Path
