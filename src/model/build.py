@@ -116,6 +116,17 @@ class InstalledBuild:
     # para reconocer las ramas experimentales ("geometry-nodes", etc.). Vacío
     # en instalaciones antiguas, que se tratan como normales.
     branch: str = ""
+    # "Riesgo" que dio la API al instalarla ("stable", "alpha", "candidate"),
+    # también del marcador. Es la respuesta buena a "¿qué tipo es esto?": sin
+    # él hay que adivinar por la rama y el nombre (ver ``services.channels``).
+    risk: str = ""
+    # Carpeta de la biblioteca de la que salió esta instalación. Con ella se
+    # sabe si vive en una carpeta con el candado cerrado y si encaja con lo que
+    # esa carpeta recibe. ``None`` en un escaneo suelto.
+    # OJO: es un ``Path``, que no es serializable a JSON. Hoy no se cachean las
+    # instaladas (el caché de ``api`` es solo de ``Build``); si algún día se
+    # hace, hay que convertirlo a texto.
+    root: Optional[Path] = None
 
     @property
     def is_lts(self) -> bool:

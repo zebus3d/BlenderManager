@@ -10,7 +10,7 @@ from pathlib import Path
 
 import services.settings as settings_module
 from model.build import Build, favorite_key
-from services import api, detector, elevate, installed, macos_dmg, tls
+from services import api, channels, detector, elevate, installed, macos_dmg, tls
 from services.extractor import extract, is_archive
 
 
@@ -460,6 +460,139 @@ class ExtractorTests(unittest.TestCase):
                 extract(archive_path, Path(tmp) / "out")
 
 
+class SettingsMigrationTests(unittest.TestCase):
+    """Pasar del esquema viejo (tres campos sueltos) a la biblioteca.
+
+    La regla que vigilan todos estos tests es una: **no se mueve ni un byte**.
+    Cada carpeta que se escaneaba se sigue escaneando y cada tipo acaba en la
+    misma carpeta en la que acababa antes; lo único que cambia es cómo se
+    escribe en el JSON.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self._original = settings_module.config_dir
+        settings_module.config_dir = lambda: Path(self.tmp.name)
+
+    def tearDown(self):
+        settings_module.config_dir = self._original
+        self.tmp.cleanup()
+
+    def _viejo(self, **campos):
+        """Escribe un settings.json del esquema 1 y devuelve lo que se cargó."""
+        data = {"dest_folder": "/tmp/datos"}
+        data.update(campos)
+        (Path(self.tmp.name) / "settings.json").write_text(
+            json.dumps(data), encoding="utf-8")
+        return settings_module.Settings.load()
+
+    def test_solo_carpeta_de_destino(self):
+        loaded = self._viejo()
+        self.assertEqual(len(loaded.folders), 1)
+        self.assertEqual(loaded.folders[0].path, "/tmp/datos")
+        self.assertEqual(loaded.folders[0].types, list(channels.BUILD_TYPES))
+
+    def test_lts_separadas_el_caso_del_ssd(self):
+        loaded = self._viejo(lts_folder="/tmp/ssd", separate_lts=True)
+        self.assertEqual([f.path for f in loaded.folders],
+                         ["/tmp/datos", "/tmp/ssd"])
+        # La de siempre se queda con todo MENOS las LTS, que es exactamente lo
+        # que hacía destination_for(is_lts).
+        self.assertEqual(loaded.folders[0].types,
+                         [channels.TYPE_STABLE, channels.TYPE_DAILY,
+                          channels.TYPE_EXPERIMENTAL])
+        self.assertEqual(loaded.folders[1].types, [channels.TYPE_LTS])
+        self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
+                         "/tmp/ssd")
+
+    def test_lts_con_el_interruptor_apagado_solo_se_escanea(self):
+        loaded = self._viejo(lts_folder="/tmp/ssd", separate_lts=False)
+        self.assertEqual(loaded.folders[1].types, [])
+        self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
+                         "/tmp/datos")
+        # Pero se sigue mirando: las LTS ya instaladas ahí no desaparecen.
+        self.assertIn("/tmp/ssd", loaded.scan_roots())
+
+    def test_lts_apuntando_al_destino_no_es_separar(self):
+        """Si las dos rutas son la misma no hay nada separado.
+
+        Sin mirarlo, el dedup se llevaba la segunda entrada y las LTS se
+        quedaban sin ninguna carpeta que las recibiera.
+        """
+        loaded = self._viejo(lts_folder="/tmp/datos", separate_lts=True)
+        self.assertEqual(len(loaded.folders), 1)
+        self.assertEqual(loaded.folders[0].types, list(channels.BUILD_TYPES))
+        self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
+                         "/tmp/datos")
+
+    def test_carpeta_extra_encendida_entra_con_el_candado_cerrado(self):
+        loaded = self._viejo(extra_folder="/tmp/viejos", use_extra_folder=True)
+        self.assertEqual(loaded.folders[1].path, "/tmp/viejos")
+        self.assertFalse(loaded.folders[1].writable)
+        self.assertEqual(loaded.folders[1].types, [])
+
+    def test_carpeta_extra_apagada_desaparece(self):
+        loaded = self._viejo(extra_folder="/tmp/viejos", use_extra_folder=False)
+        self.assertEqual([f.path for f in loaded.folders], ["/tmp/datos"])
+
+    def test_sin_dest_folder_se_usa_el_de_fabrica(self):
+        loaded = self._viejo(dest_folder="")
+        self.assertEqual(loaded.folders[0].path,
+                         str(settings_module.default_destination()))
+
+    def test_no_se_vuelve_a_migrar(self):
+        """Cargar, guardar y volver a cargar deja la lista igual.
+
+        Es para lo que sirve ``settings_version``: sin él, alguien que borrase
+        todas sus carpetas se las vería reaparecer en el siguiente arranque.
+        """
+        primera = self._viejo(lts_folder="/tmp/ssd", separate_lts=True)
+        primera.save()
+        segunda = settings_module.Settings.load()
+        self.assertEqual([(f.path, f.types, f.writable) for f in segunda.folders],
+                         [(f.path, f.types, f.writable) for f in primera.folders])
+        # Y si el usuario se queda con una sola, no se le añaden de vuelta.
+        segunda.folders = [segunda.folders[0]]
+        segunda.save()
+        self.assertEqual(len(settings_module.Settings.load().folders), 1)
+
+    def test_el_aviso_solo_lo_ve_quien_viene_del_esquema_viejo(self):
+        """Marca para presentar la biblioteca de carpetas una sola vez.
+
+        Una instalación nueva no ve nada: la pantalla se comporta igual que
+        siempre y no hay novedad que explicar.
+        """
+        # Esquema viejo sin la marca: hay que avisar.
+        self.assertFalse(self._viejo().folders_hint_shown)
+        # Esquema viejo que ya la vio: no se repite.
+        self.assertTrue(self._viejo(folders_hint_shown=True).folders_hint_shown)
+        # Sin fichero (instalación nueva): nada que explicar.
+        (Path(self.tmp.name) / "settings.json").unlink()
+        self.assertTrue(settings_module.Settings.load().folders_hint_shown)
+
+    def test_se_escriben_los_campos_viejos_por_si_hay_downgrade(self):
+        """Una versión anterior de la app tiene que seguir arrancando bien."""
+        loaded = self._viejo(lts_folder="/tmp/ssd", separate_lts=True,
+                             extra_folder="/tmp/viejos", use_extra_folder=True)
+        loaded.save()
+        data = json.loads(
+            (Path(self.tmp.name) / "settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["dest_folder"], "/tmp/datos")
+        self.assertEqual(data["lts_folder"], "/tmp/ssd")
+        self.assertTrue(data["separate_lts"])
+        self.assertEqual(data["extra_folder"], "/tmp/viejos")
+        self.assertTrue(data["use_extra_folder"])
+
+    def test_el_espejo_no_inventa_lts_separadas(self):
+        loaded = self._viejo()
+        loaded.save()
+        data = json.loads(
+            (Path(self.tmp.name) / "settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["dest_folder"], "/tmp/datos")
+        self.assertEqual(data["lts_folder"], "")
+        self.assertFalse(data["separate_lts"])
+
+
 class SettingsTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -470,11 +603,27 @@ class SettingsTests(unittest.TestCase):
         settings_module.config_dir = self._original
         self.tmp.cleanup()
 
+    def _build(self, version="5.2.1", branch="v52", risk="stable",
+               experimental=False):
+        from model.build import Build
+
+        return Build(version=version, branch=branch, risk=risk,
+                     platform="linux", arch="x86_64", url="",
+                     filename="x.tar.xz", experimental=experimental)
+
+    def _carpeta(self, path, types=(), writable=True):
+        return settings_module.Folder(path=path, types=list(types),
+                                      writable=writable)
+
     def test_roundtrip(self):
         settings = settings_module.Settings(
-            dest_folder="/tmp/blenders",
-            lts_folder="/tmp/blenders-lts",
-            separate_lts=True,
+            folders=[
+                self._carpeta("/tmp/ssd", [channels.TYPE_LTS,
+                                           channels.TYPE_STABLE]),
+                self._carpeta("/tmp/datos", [channels.TYPE_DAILY,
+                                             channels.TYPE_EXPERIMENTAL]),
+                self._carpeta("/tmp/viejos", [], writable=False),
+            ],
             language="es",
             delete_archive=False,
             launch_args="--background",
@@ -489,9 +638,13 @@ class SettingsTests(unittest.TestCase):
         )
         settings.save()
         loaded = settings_module.Settings.load()
-        self.assertEqual(loaded.dest_folder, "/tmp/blenders")
-        self.assertEqual(loaded.lts_folder, "/tmp/blenders-lts")
-        self.assertTrue(loaded.separate_lts)
+        self.assertEqual(loaded.settings_version,
+                         settings_module.SETTINGS_VERSION)
+        self.assertEqual([f.path for f in loaded.folders],
+                         ["/tmp/ssd", "/tmp/datos", "/tmp/viejos"])
+        self.assertEqual(loaded.folders[0].types,
+                         [channels.TYPE_LTS, channels.TYPE_STABLE])
+        self.assertFalse(loaded.folders[2].writable)
         self.assertEqual(loaded.language, "es")
         self.assertFalse(loaded.delete_archive)
         self.assertEqual(loaded.layout_mode, "list")
@@ -506,76 +659,97 @@ class SettingsTests(unittest.TestCase):
     def test_save_is_atomic(self):
         # Tras guardar no debe quedar ningún .tmp suelto y el JSON debe ser
         # legible (la escritura va a un temporal y luego se mueve encima).
-        settings_module.Settings(dest_folder="/tmp/x").save()
+        settings_module.Settings().save()
         directory = Path(self.tmp.name)
         self.assertEqual(list(directory.glob("*.tmp")), [])
         json.loads((directory / "settings.json").read_text(encoding="utf-8"))
 
     def test_defaults_fill_destination(self):
+        """Sin fichero: una sola carpeta que se queda con todo.
+
+        Es lo que hacía la app de siempre, y lo que hace que el modo simple de
+        los ajustes se vea igual que antes.
+        """
         loaded = settings_module.Settings.load()
-        self.assertTrue(loaded.dest_folder)
+        self.assertEqual(len(loaded.folders), 1)
+        self.assertEqual(loaded.folders[0].path,
+                         str(settings_module.default_destination()))
+        self.assertEqual(loaded.folders[0].types, list(channels.BUILD_TYPES))
+        self.assertTrue(loaded.folders[0].writable)
         self.assertEqual(loaded.layout_mode, "grid")
         self.assertTrue(loaded.auto_update)
         self.assertEqual(loaded.favorites, [])
-        # Sin configurar, las LTS van con el resto.
-        self.assertEqual(loaded.lts_folder, "")
-        self.assertFalse(loaded.separate_lts)
 
     def test_las_lts_pueden_ir_a_otra_carpeta(self):
-        settings = settings_module.Settings(
-            dest_folder="/tmp/datos", lts_folder="/tmp/ssd", separate_lts=True)
-        # Solo las LTS se desvían; el resto sigue en la carpeta de siempre.
-        self.assertEqual(settings.destination_for(True), "/tmp/ssd")
-        self.assertEqual(settings.destination_for(False), "/tmp/datos")
-        self.assertEqual(settings.scan_roots(), ["/tmp/datos", "/tmp/ssd"])
+        """El caso que motivó todo: las LTS al SSD, el resto al disco lento."""
+        settings = settings_module.Settings(folders=[
+            self._carpeta("/tmp/ssd", [channels.TYPE_LTS]),
+            self._carpeta("/tmp/datos", [channels.TYPE_STABLE,
+                                         channels.TYPE_DAILY,
+                                         channels.TYPE_EXPERIMENTAL]),
+        ])
+        self.assertEqual(settings.destination_for(self._build("5.2.1", "v52")),
+                         "/tmp/ssd")
+        self.assertEqual(settings.destination_for(self._build("5.1.2", "v51")),
+                         "/tmp/datos")
+        self.assertEqual(settings.destination_for(
+            self._build("5.3.0", "main", risk="alpha")), "/tmp/datos")
+        self.assertEqual(settings.scan_roots(), ["/tmp/ssd", "/tmp/datos"])
 
-    def test_sin_separar_las_lts_todo_va_al_destino(self):
-        settings = settings_module.Settings(
-            dest_folder="/tmp/datos", lts_folder="/tmp/ssd")
-        # Apagado: la carpeta elegida se recuerda, pero no se usa para instalar.
-        self.assertEqual(settings.destination_for(True), "/tmp/datos")
-        # Aun así se escanea, para no perder las LTS ya instaladas ahí.
-        self.assertEqual(settings.scan_roots(), ["/tmp/datos", "/tmp/ssd"])
+    def test_un_tipo_sin_carpeta_no_tiene_destino(self):
+        """Nadie recibe las diarias: se dice, no se inventa un sitio."""
+        settings = settings_module.Settings(folders=[
+            self._carpeta("/tmp/ssd", [channels.TYPE_LTS]),
+        ])
+        self.assertEqual(settings.destination_for(
+            self._build("5.3.0", "main", risk="alpha")), "")
 
-    def test_carpeta_lts_vacia_no_cambia_nada(self):
-        settings = settings_module.Settings(
-            dest_folder="/tmp/datos", lts_folder="  ", separate_lts=True)
-        self.assertEqual(settings.destination_for(True), "/tmp/datos")
-        self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
-
-    def test_carpeta_lts_igual_al_destino_no_se_repite(self):
-        settings = settings_module.Settings(
-            dest_folder="/tmp/datos", lts_folder="/tmp/datos", separate_lts=True)
-        self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
-
-    def test_la_carpeta_extra_se_escanea_si_esta_activada(self):
-        settings = settings_module.Settings(
-            dest_folder="/tmp/datos", extra_folder=" /tmp/viejos ",
-            use_extra_folder=True)
-        # Se suma al destino (y a las LTS), con la ruta ya normalizada.
+    def test_una_carpeta_sin_tipos_se_escanea_pero_no_recibe(self):
+        """Es la antigua 'carpeta extra': se mira, no se descarga ahí."""
+        settings = settings_module.Settings(folders=[
+            self._carpeta("/tmp/datos", channels.BUILD_TYPES),
+            self._carpeta("/tmp/viejos", [], writable=False),
+        ])
         self.assertEqual(settings.scan_roots(), ["/tmp/datos", "/tmp/viejos"])
+        self.assertEqual([f.path for f in settings.install_folders()],
+                         ["/tmp/datos"])
+        self.assertEqual(settings.destination_for(self._build()), "/tmp/datos")
 
-    def test_la_carpeta_extra_apagada_no_se_escanea(self):
-        settings = settings_module.Settings(
-            dest_folder="/tmp/datos", extra_folder="/tmp/viejos")
-        # Apagada: no se mira, pero la ruta se recuerda (como la carpeta LTS).
-        self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
-        self.assertEqual(settings.extra_folder, "/tmp/viejos")
-
-    def test_carpeta_extra_igual_al_destino_no_se_repite(self):
-        settings = settings_module.Settings(
-            dest_folder="/tmp/datos", extra_folder="/tmp/datos",
-            use_extra_folder=True)
+    def test_carpeta_repetida_se_escanea_una_vez(self):
+        settings = settings_module.Settings(folders=[
+            self._carpeta("/tmp/datos", channels.BUILD_TYPES),
+            self._carpeta("/tmp/datos", []),
+        ])
         self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
 
-    def test_la_carpeta_extra_se_guarda(self):
-        settings = settings_module.Settings()
-        settings.extra_folder = "/tmp/viejos"
-        settings.use_extra_folder = True
-        settings.save()
-        loaded = settings_module.Settings.load()
-        self.assertEqual(loaded.extra_folder, "/tmp/viejos")
-        self.assertTrue(loaded.use_extra_folder)
+    def test_folder_for_localiza_el_candado(self):
+        settings = settings_module.Settings(folders=[
+            self._carpeta("/tmp/viejos", [], writable=False),
+        ])
+        self.assertFalse(settings.folder_for("/tmp/viejos").writable)
+        self.assertIsNone(settings.folder_for("/tmp/otra"))
+
+    def test_clean_folders_aguanta_un_json_a_mano(self):
+        """Un settings.json editado no puede tumbar la app ni crear ambigüedad."""
+        limpio = settings_module.clean_folders([
+            "no soy un dict",
+            {"types": ["lts"]},                       # sin ruta
+            {"path": "/a", "types": ["lts", "inventado"]},
+            {"path": "/b", "types": ["lts", "daily"]},  # 'lts' ya tiene dueño
+            {"path": "/A", "types": ["stable"]},        # repetida (según SO)
+            {"path": "/c", "types": ["stable"], "writable": False},
+        ])
+        self.assertEqual([f.path for f in limpio][:2], ["/a", "/b"])
+        self.assertEqual(limpio[0].types, [channels.TYPE_LTS])
+        # El segundo pierde 'lts' porque ya lo tenía el primero.
+        self.assertEqual(limpio[1].types, [channels.TYPE_DAILY])
+        # Con el candado cerrado no se recibe nada, aunque el JSON lo pida.
+        cerrada = [f for f in limpio if not f.writable][0]
+        self.assertEqual(cerrada.types, [])
+
+    def test_clean_folders_con_basura_no_revienta(self):
+        self.assertEqual(settings_module.clean_folders("hola"), [])
+        self.assertEqual(settings_module.clean_folders(None), [])
 
     def test_favoritos_se_marcan_y_se_guardan(self):
         settings = settings_module.Settings()
