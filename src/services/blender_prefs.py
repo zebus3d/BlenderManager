@@ -113,7 +113,13 @@ def walk(obj, prefix, depth=0):
         if prop.is_readonly:
             continue
         if prop.type == "ENUM":
-            OUT[path] = str(value)
+            # Un enum de varios valores llega como ``set``, y ``str()`` sobre un
+            # set NO tiene orden estable entre procesos (Python aleatoriza el
+            # hash de las cadenas). Sin ordenarlo, la misma preferencia sin
+            # tocar sale distinta en dos lecturas y el diff la da por cambiada.
+            # Hoy la única así (``edit.key_insert_channels``) no es escribible y
+            # el filtro la descarta, pero eso es suerte, no diseño.
+            OUT[path] = str(sorted(value)) if isinstance(value, set) else str(value)
         elif isinstance(value, (bool, int, float, str)):
             OUT[path] = value
 
