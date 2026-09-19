@@ -71,6 +71,39 @@ El canal `"favorites"` lo resuelven las mismas funciones puras que el resto
 `favorites`; ahí no se excluyen las experimentales, porque manda lo que el
 usuario haya marcado. **No lo filtres en la UI.**
 
+## Idiomas: cuáles valdría la pena añadir
+
+Hoy hay **es/en** (375 claves en `src/i18n.py`). Si algún día se amplía, esta es
+la lista razonada, para no elegir por intuición.
+
+El mejor dato **no** es el número de usuarios sino el esfuerzo demostrado: la
+propia Blender lleva la cuenta de sus traducciones en `locale/languages` de su
+repo (`ID:Etiqueta:ISO:PORCENTAJE`). Una comunidad que sostiene el 100% de la
+interfaz de Blender año tras año es una que también traduciría esto.
+
+- **Al 100% o casi**: español, chino simplificado, ruso, francés, catalán,
+  eslovaco, georgiano; japonés 99%, vietnamita 95%, tamil 94%, urdu 87%,
+  turco 79%, portugués (PT) 73%, suajili 73%.
+- **Grandes pero flojas**: alemán 37%, portugués (BR) 44%, italiano 45%,
+  coreano 50%, polaco 18%, **hindi 4%**.
+- **Tráfico de blender.org**: la mitad viene de 8 países — EE. UU., India, Reino
+  Unido, Alemania, Rusia, Brasil, Japón y China
+  (<https://www.blender.org/news/blender-by-the-numbers-2020/>).
+
+Cruzando las dos listas: **chino simplificado, ruso y japonés** son los únicos
+que salen arriba en ambas (comunidad enorme *y* traducción mantenida). India es
+top-8 en tráfico pero el hindi está al 4%: esos usuarios trabajan en inglés.
+Alemania y Brasil son top-8 con traducciones a medias.
+
+**Orden sugerido**: chino simplificado → ruso → japonés → portugués (BR).
+Y solo si hay alguien que se comprometa a mantenerlo: cada cadena nueva hay que
+traducirla a *todos* los idiomas activos, y un idioma a medias (frases sueltas
+en inglés) se ve peor que no tenerlo.
+
+**Antes del tercer idioma**, sacar las traducciones a `.json` por idioma: con
+dos aún se lee, pero un `i18n.py` de 774 líneas con cinco idiomas es
+ingobernable y además obliga a tocar Python para mandar una traducción.
+
 ## Comandos
 
 ```bash
