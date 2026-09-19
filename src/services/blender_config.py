@@ -452,21 +452,56 @@ def _wheel_python_tag(wheel_name: str) -> str:
     return ""
 
 
-def wheel_conflict(wheels, target_python: str) -> bool:
-    """True si algún wheel está compilado para otro Python.
+def _wheel_package(wheel_name: str) -> str:
+    """Nombre del paquete de un wheel: lo que va antes del primer guion.
 
-    Solo se mira la etiqueta de Python/ABI del nombre; la plataforma la valida
-    Blender al arrancar. Los wheels de Python puro (``py3-none-any``) y los de
-    ABI estable (``abi3``) se ignoran: valen para cualquier Python 3.
+    Un wheel se llama ``paquete-version-pytag-abitag-plattag.whl`` y en el
+    manifiesto viene con su ruta (``./wheels/pillow-11.1.0-...``), así que
+    primero nos quedamos con el nombre del fichero.
+    """
+    base = str(wheel_name).replace("\\", "/").split("/")[-1]
+    return base.split("-")[0].lower()
+
+
+def wheel_problem(wheels, target_python: str) -> str:
+    """Paquete cuyas dependencias no sirven para ``target_python``, o "".
+
+    **Se mira paquete a paquete, no wheel a wheel**, y este es el motivo: una
+    extensión bien empaquetada trae *un wheel por plataforma y por versión de
+    Python*, y Blender instala el que le toca al arrancar. MatPlus, por
+    ejemplo, declara Pillow en ``cp311`` (para Blender 4.2/5.0) y en ``cp313``
+    (para 5.1+). Avisar en cuanto **uno** no encajaba marcaba esas extensiones
+    como dudosas siempre, dijeras la versión de destino que dijeras: el aviso
+    saltaba igual apuntando a 5.2 que a 5.3, que usan el mismo Python 3.13, y
+    por eso parecía que comparaba los dos Blender entre sí. Solo hay problema
+    de verdad cuando un paquete trae wheels compilados y **ninguno** vale.
+
+    Los de Python puro (``py3-none-any``) y los de ABI estable (``abi3``) se
+    ignoran: valen para cualquier Python 3. La plataforma la valida Blender al
+    arrancar; aquí solo se mira la etiqueta de Python/ABI del nombre.
     """
     want = _python_tag(target_python)
     if not want:
-        return False
+        return ""
+    # Por paquete: las etiquetas de sus wheels compilados (los puros no cuentan).
+    tags_by_package = {}
     for name in wheels:
         tag = _wheel_python_tag(name)
-        if tag and tag != want:
-            return True
-    return False
+        if not tag:
+            continue
+        tags_by_package.setdefault(_wheel_package(name), set()).add(tag)
+    for package, tags in tags_by_package.items():
+        if want not in tags:
+            return package
+    return ""
+
+
+def wheel_conflict(wheels, target_python: str) -> bool:
+    """True si algún paquete de los wheels no sirve para ese Python.
+
+    Envoltorio de ``wheel_problem`` para cuando solo interesa el sí/no.
+    """
+    return bool(wheel_problem(wheels, target_python))
 
 
 def compat_report(addon: Addon, target_version: str, target_platform: str = "",
@@ -511,6 +546,15 @@ class AddonPlan:
     # estado que tenía (no se activa por el simple hecho de migrar): si allí
     # estaba apagado, se queda apagado, que es lo que el usuario espera.
     was_enabled: bool = False
+    # Dato suelto que acompaña al motivo, para que la interfaz pueda ser
+    # concreta en vez de genérica. Hoy solo lo usa ``REASON_WHEEL_ABI``, donde
+    # lleva el **nombre del paquete** que no encaja: decir "numpy no trae una
+    # compilación para Python 3.13" se puede accionar; "sus dependencias son de
+    # otro Python" no.
+    detail: str = ""
+    # Python que embebe la versión de destino ("3.13"), para poder nombrarlo en
+    # el aviso. Vacío si no se conoce esa serie (ver ``python_for_version``).
+    target_python: str = ""
 
     @property
     def blocked(self) -> bool:
@@ -569,10 +613,16 @@ def plan_migration(source: BlenderConfig, target: BlenderConfig,
     for addon in addons_in(source):
         status, reason = compat_report(addon, target.version, target_platform,
                                        target_arch, target_python)
+        # El paquete concreto solo se calcula cuando el motivo es el de los
+        # wheels; para el resto no hay nada que detallar.
+        detail = (wheel_problem(addon.wheels, target_python)
+                  if reason == REASON_WHEEL_ABI else "")
         plans.append(AddonPlan(
             addon=addon,
             status=status,
             reason=reason,
+            detail=detail,
+            target_python=target_python,
             destination=destination_for(addon, target),
             # Los incompatibles llegan sin marcar: nunca se copian sin querer.
             selected=status != BLOCKED,

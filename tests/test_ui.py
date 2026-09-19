@@ -2765,8 +2765,14 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         self.assertIn("test", tip.lower())          # y cómo comprobarlo
 
         wheels = bc.AddonPlan(addon, bc.WARN, bc.REASON_WHEEL_ABI,
-                              Path("/tmp/x"))
-        self.assertIn("enable it", _status_tooltip(wheels).lower())
+                              Path("/tmp/x"), detail="numpy",
+                              target_python="3.13")
+        tip = _status_tooltip(wheels)
+        self.assertIn("enable it", tip.lower())
+        # El motivo nombra al paquete culpable y al Python del destino: el
+        # texto genérico de antes se leía como si comparase los dos Blender.
+        self.assertIn("numpy", tip)
+        self.assertIn("3.13", tip)
 
     def test_compatible_explica_que_se_copia(self):
         from services import blender_config as bc

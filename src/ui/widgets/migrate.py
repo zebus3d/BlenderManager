@@ -77,7 +77,20 @@ def _reason_text(plan) -> str:
     if plan.reason == bc.REASON_PLATFORM:
         return tr("It is not published for this system.")
     if plan.reason == bc.REASON_WHEEL_ABI:
-        return tr("Its dependencies are built for another Python version.")
+        # Se nombra el paquete culpable y el Python del destino: el texto
+        # genérico de antes ("sus dependencias son de otro Python") se leía
+        # como si comparásemos las dos versiones de Blender entre sí.
+        if not plan.detail:
+            # Sin el nombre del paquete (un plan armado a mano) se dice lo
+            # mismo en genérico, pero sin fingir que sabemos cuál falla.
+            return tr("One of its dependencies has no build for the Python of "
+                      "the destination version.")
+        if plan.target_python:
+            return tr("{package} has no build for Python {python}, which the "
+                      "destination version uses.",
+                      package=plan.detail, python=plan.target_python)
+        return tr("{package} has no build for the Python of the destination "
+                  "version.", package=plan.detail)
     if plan.reason == bc.REASON_UNKNOWN_VERSION:
         return tr("It does not state a minimum version.")
     return ""
@@ -90,8 +103,8 @@ def _review_advice(plan) -> str:
     if plan.reason == bc.REASON_WHEEL_ABI:
         return tr(
             "Copy it and enable it in the destination version. If it fails to "
-            "load, it needs a build of the add-on made for that Blender "
-            "(its compiled dependencies do not match).")
+            "load, ask its author for a build that includes that dependency "
+            "for this Python.")
     if plan.reason == bc.REASON_UNKNOWN_VERSION:
         return tr(
             "The add-on does not say which Blender it works with. Copy it and "
