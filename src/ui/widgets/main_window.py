@@ -315,7 +315,7 @@ class MainWindow(QWidget):
         self.launcher = Launcher()
 
         self.builds = []
-        self.installed = installed_service.scan_folders(self.settings.folders(),
+        self.installed = installed_service.scan_folders(self.settings.scan_roots(),
                                                         self.platform)
         self.view = "installed" if self.installed else "store"
         # Actualizaciones de Blender detectadas para lo que ya tienes instalado:
@@ -1593,7 +1593,7 @@ class MainWindow(QWidget):
 
     def refresh_installed(self) -> None:
         """Vuelve a escanear las carpetas y repinta las instaladas."""
-        self.installed = installed_service.scan_folders(self.settings.folders(),
+        self.installed = installed_service.scan_folders(self.settings.scan_roots(),
                                                         self.platform)
         self._recompute_updates()
         self._rebuild_installed()

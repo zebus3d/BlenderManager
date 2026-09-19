@@ -527,7 +527,7 @@ class SettingsTests(unittest.TestCase):
         # Solo las LTS se desvían; el resto sigue en la carpeta de siempre.
         self.assertEqual(settings.destination_for(True), "/tmp/ssd")
         self.assertEqual(settings.destination_for(False), "/tmp/datos")
-        self.assertEqual(settings.folders(), ["/tmp/datos", "/tmp/ssd"])
+        self.assertEqual(settings.scan_roots(), ["/tmp/datos", "/tmp/ssd"])
 
     def test_sin_separar_las_lts_todo_va_al_destino(self):
         settings = settings_module.Settings(
@@ -535,38 +535,38 @@ class SettingsTests(unittest.TestCase):
         # Apagado: la carpeta elegida se recuerda, pero no se usa para instalar.
         self.assertEqual(settings.destination_for(True), "/tmp/datos")
         # Aun así se escanea, para no perder las LTS ya instaladas ahí.
-        self.assertEqual(settings.folders(), ["/tmp/datos", "/tmp/ssd"])
+        self.assertEqual(settings.scan_roots(), ["/tmp/datos", "/tmp/ssd"])
 
     def test_carpeta_lts_vacia_no_cambia_nada(self):
         settings = settings_module.Settings(
             dest_folder="/tmp/datos", lts_folder="  ", separate_lts=True)
         self.assertEqual(settings.destination_for(True), "/tmp/datos")
-        self.assertEqual(settings.folders(), ["/tmp/datos"])
+        self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
 
     def test_carpeta_lts_igual_al_destino_no_se_repite(self):
         settings = settings_module.Settings(
             dest_folder="/tmp/datos", lts_folder="/tmp/datos", separate_lts=True)
-        self.assertEqual(settings.folders(), ["/tmp/datos"])
+        self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
 
     def test_la_carpeta_extra_se_escanea_si_esta_activada(self):
         settings = settings_module.Settings(
             dest_folder="/tmp/datos", extra_folder=" /tmp/viejos ",
             use_extra_folder=True)
         # Se suma al destino (y a las LTS), con la ruta ya normalizada.
-        self.assertEqual(settings.folders(), ["/tmp/datos", "/tmp/viejos"])
+        self.assertEqual(settings.scan_roots(), ["/tmp/datos", "/tmp/viejos"])
 
     def test_la_carpeta_extra_apagada_no_se_escanea(self):
         settings = settings_module.Settings(
             dest_folder="/tmp/datos", extra_folder="/tmp/viejos")
         # Apagada: no se mira, pero la ruta se recuerda (como la carpeta LTS).
-        self.assertEqual(settings.folders(), ["/tmp/datos"])
+        self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
         self.assertEqual(settings.extra_folder, "/tmp/viejos")
 
     def test_carpeta_extra_igual_al_destino_no_se_repite(self):
         settings = settings_module.Settings(
             dest_folder="/tmp/datos", extra_folder="/tmp/datos",
             use_extra_folder=True)
-        self.assertEqual(settings.folders(), ["/tmp/datos"])
+        self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
 
     def test_la_carpeta_extra_se_guarda(self):
         settings = settings_module.Settings()
