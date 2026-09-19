@@ -886,13 +886,29 @@ class MigrateView(QWidget):
         env = bprefs.environment_preferences(payload["user"], payload["factory"])
         self.detail_prefs = changed + env
         if not self.detail_prefs:
-            self.detail_status.setText(tr(
-                "You have no settings changed from Blender's defaults."))
+            # Decir solo "no has cambiado nada" despista cuando el motivo es
+            # que la propia aplicación restableció esa versión: el usuario sabe
+            # que SÍ tenía ajustes y cree que el detector falla. Si hay una
+            # instantánea, se dice de dónde viene y cómo recuperarlos.
+            self.detail_status.setText(self._no_changes_message())
             self._show_detail_buttons(False)
             return
         self._fill_detail_rows()
         self._show_detail_buttons(True)
         self._refresh_plan_status()
+
+    def _no_changes_message(self) -> str:
+        """Por qué no hay nada que copiar, con la causa cuando la sabemos."""
+        base = tr("You have no settings changed from Blender's defaults.")
+        config = self.source_cfg
+        snapshots = bc.snapshots_for(config) if config is not None else []
+        if not snapshots:
+            return base
+        return base + " " + tr(
+            "This version was reset to factory settings from this app on "
+            "{date}, so these are the factory ones. Your previous settings "
+            "are saved aside: you can put them back in the \"Factory "
+            "settings\" tab.", date=snapshots[0].name)
 
     def _fill_detail_rows(self) -> None:
         self._clear_detail_rows()
@@ -985,6 +1001,22 @@ class MigrateView(QWidget):
         self.factory_hint.setWordWrap(True)
         lay.addWidget(self.factory_hint)
 
+        # Para qué sirve esto. Sin decirlo, "restablecer" suena a botón
+        # destructivo que nadie toca; y es justo lo contrario: la forma más
+        # rápida de saber si un problema es de Blender o de tu configuración.
+        why = QLabel(tr(
+            "Useful when something misbehaves and you want to find out why: "
+            "if the problem disappears on a clean Blender, it comes from your "
+            "settings or add-ons, not from Blender itself. From there you put "
+            "your settings back and enable things one at a time until it "
+            "breaks again. It is also the fair way to report a bug, and a way "
+            "to record a tutorial with the interface everyone else sees. "
+            "Nothing is lost: your settings are saved aside and go back with "
+            "one click."))
+        why.setWordWrap(True)
+        why.setObjectName("Muted")
+        lay.addWidget(why)
+
         self.factory_status = QLabel("")
         self.factory_status.setWordWrap(True)
         self.factory_status.setToolTip(tr(
@@ -1031,8 +1063,8 @@ class MigrateView(QWidget):
             return
         _, version = _entry_info(self.target_entry)
         self.factory_hint.setText(tr(
-            "Put Blender {version} back to a clean state. Its current settings "
-            "are saved aside and can be restored, unless you delete them.",
+            "Start Blender {version} as if it were freshly installed. Its "
+            "current settings are saved aside and can be put back.",
             version=version))
         snapshots = bc.snapshots_for(config)
         if snapshots:
