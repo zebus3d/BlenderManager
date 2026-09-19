@@ -145,10 +145,13 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         window.channel = "lts"
         self.assertEqual([e.name for e in window._filtered_installed()],
                          ["blender-5.2.1"])
-        # OJO: en instaladas, "estable" es "no LTS", así que incluye la diaria
-        # (a diferencia de la tienda, donde además exige risk == "stable").
+        # "Estable" es estable de verdad: la diaria de 'main' se queda fuera.
+        # Antes aquí significaba solo "no LTS", así que una alfa aparecía entre
+        # las estables; la tienda y las instaladas decían cosas distintas sobre
+        # la misma compilación (ver services/channels.py).
         window.channel = "stable"
-        self.assertEqual(len(window._filtered_installed()), 2)
+        self.assertEqual([e.name for e in window._filtered_installed()],
+                         ["blender-5.1.2"])
         window.channel = "daily"
         self.assertEqual([e.name for e in window._filtered_installed()],
                          ["blender-5.3.0-alpha"])
@@ -2783,6 +2786,19 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         plan = bc.AddonPlan(addon, bc.OK, "", Path("/tmp/x"))
         # La verde también lleva tooltip: dice que no hay nada que revisar.
         self.assertIn("destination version", _status_tooltip(plan))
+
+    def test_las_pestanas_usan_los_canales_del_servicio(self):
+        """Las claves de la barra son las de ``services.channels``.
+
+        La interfaz pone las etiquetas traducidas, pero las claves tienen que
+        ser exactamente las mismas: si aquí apareciera una que los filtros no
+        entienden, la pestaña se vería y no filtraría nada.
+        """
+        from services import channels
+        from ui.widgets import main_window
+
+        self.assertEqual(tuple(key for key, _ in main_window.CHANNELS),
+                         channels.CHANNELS)
 
     def test_los_filtros_viven_con_las_listas(self):
         """La fila de filtros solo está en Local y Nube.

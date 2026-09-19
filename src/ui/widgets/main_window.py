@@ -107,7 +107,8 @@ MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT = 880, 540
 # líneas.
 # Canales de la barra de filtros, en el orden en que se enseñan. Son
 # excluyentes (solo se ve uno a la vez), así que van en una barra de pestañas
-# y no en pastillas sueltas.
+# y no en pastillas sueltas. Aquí solo viven las **etiquetas**: las claves son
+# las de ``services.channels.CHANNELS`` y un test vigila que no se separen.
 CHANNELS = (
     ("all", "All"),
     ("lts", "LTS"),

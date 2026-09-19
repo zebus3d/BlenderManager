@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from paths import APP_DIR
+from services import channels
 
 APP_NAME = "BlenderManager"
 PORTABLE_MARKERS = ("portable", "portable.txt", ".portable")
@@ -116,10 +117,10 @@ def default_destination() -> Path:
 # slider (``reset_zoom``); esto solo es lo que se propone la primera vez.
 DEFAULT_ZOOM = 0.6
 
-# Filtros de canal que ofrece la barra. Son los que entiende
-# ``api.filter_builds``/``installed.filter_installed``; aquí solo se usan para
-# validar el que se guardó la última vez.
-CHANNELS = ("all", "lts", "stable", "daily", "experimental", "favorites")
+# Filtros de canal que ofrece la barra. Se reexportan desde ``channels``, que
+# es donde viven: aquí solo hacen falta para validar el que se guardó la última
+# vez, y tener una segunda copia era pedir que se desincronizaran.
+CHANNELS = channels.CHANNELS
 
 # Cada cuánto se comprueba si hay una versión nueva de la propia aplicación (en
 # minutos). Las comprobaciones repetidas usan el ETag de GitHub, así que cuando
