@@ -22,3 +22,6 @@ STAR = "\uf005"     # estrella de favorito
 DOWNLOAD = "\uf019"  # flecha hacia abajo (descargar)
 MIGRATE = "\uf362"  # flechas izquierda-derecha (migrar entre versiones)
 ARROW_RIGHT = "\uf061"  # flecha hacia la derecha (sentido de la migración)
+LOCK = "\uf023"        # candado cerrado (la app no escribe ahi)
+LOCK_OPEN = "\uf3c1"   # candado abierto (se puede descargar ahi)
+PLUS = "\uf067"        # anadir una carpeta a la biblioteca

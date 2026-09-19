@@ -51,10 +51,12 @@ from model.build import minor_of
 from services import (
     api,
     autostart,
+    channels,
     detector,
     elevate,
     installed as installed_service,
     macos_dmg,
+    organizer,
     opener,
     settings as settings_service,
     sources,
@@ -75,7 +77,16 @@ from ui.widgets.cards import (
     card_shadow,
     logo_shadow,
 )
-from ui.widgets.dialogs import AppDialog, confirm, show_error, update_available
+from ui.widgets.dialogs import (
+    AppDialog,
+    ProgressDialog,
+    confirm,
+    show_error,
+    show_info,
+    update_available,
+)
+from ui.widgets.folders import MAX_VISIBLE_ROWS, TYPE_LABELS, FolderRow
+from ui.widgets.labels import ElidedLabel
 from ui.widgets.migrate import MigrateView
 from ui.widgets.tray import TrayIcon
 
@@ -244,6 +255,12 @@ class MainWindow(QWidget):
     source_chosen = Signal(object, object)   # build, Source
     source_update_done = Signal(bool, str)
     release_notes_result = Signal(bool)   # abierta o no
+    folder_move_progress = Signal(int, int, str)   # hechas, total, nombre
+    folder_move_done = Signal(int, int, str)       # movidas, fallidas, error
+
+    # Índice de la pestaña "Carpetas" dentro de Ajustes (va la segunda, justo
+    # después de Descargas, porque es lo que más se toca de las dos).
+    FOLDERS_TAB = 1
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -264,17 +281,14 @@ class MainWindow(QWidget):
             self.settings.arch if self.settings.arch in ARCH_LABELS else detected_arch
         )
         self.language_label = tr(LANGUAGE_IDS.get(self.settings.language, "auto"))
-        self.dest_folder = self.settings.dest_folder
-        # Carpeta opcional solo para las LTS (por ejemplo un SSD distinto del
-        # disco de datos). La decisión de a dónde va cada build la toma
-        # ``Settings.destination_for``; aquí solo se recuerda para la interfaz.
-        self.lts_folder = self.settings.lts_folder
-        self.separate_lts = bool(self.settings.separate_lts)
-        # Carpeta extra opcional (como ``lts_folder``): donde el usuario ya
-        # tenía sus Blender (instalados a mano, una copia portable...). Solo se
-        # escanea, y solo si el interruptor está encendido.
-        self.extra_folder = self.settings.extra_folder
-        self.use_extra_folder = bool(self.settings.use_extra_folder)
+        # Las carpetas NO se copian a atributos de la ventana: la lista de
+        # ``settings.folders`` es la única fuente de verdad y las filas la leen
+        # y la escriben directamente. Los espejos de antes (``dest_folder``,
+        # ``lts_folder``...) eran cinco sitios donde el mismo dato podía
+        # quedarse viejo.
+        self.folder_rows = {}
+        self._move_dialog = None
+        self._move_cancel = None
         self.launch_args = self.settings.launch_args
         self.delete_archive = bool(self.settings.delete_archive)
         # Bandeja del sistema: dos decisiones independientes (cerrar y
@@ -371,10 +385,17 @@ class MainWindow(QWidget):
         self.update_manual.connect(self._on_update_manual)
         self.source_update_done.connect(self._on_source_update_done)
         self.release_notes_result.connect(self._on_release_notes_result)
+        self.folder_move_progress.connect(self._on_folder_move_progress)
+        self.folder_move_done.connect(self._on_folder_move_done)
         self.source_chosen.connect(self._start_download)
 
         self._build_ui()
         QTimer.singleShot(100, lambda: self.refresh(force=False))
+        # Quien venga de una versión anterior merece enterarse de que ahora
+        # puede repartir sus Blender por varias carpetas. Se enseña una sola
+        # vez y **después** de que la ventana esté montada.
+        if not self.settings.folders_hint_shown:
+            QTimer.singleShot(400, self._show_folders_hint)
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -636,8 +657,14 @@ class MainWindow(QWidget):
 
         tabs = QTabWidget()
         tabs.setObjectName("SettingsTabs")
+        self.settings_tabs = tabs
         tabs.addTab(self._settings_tab(self._settings_downloads_card()),
                     tr("Downloads"))
+        # Las carpetas van en su propia pestaña y no dentro de "Descargas":
+        # es una lista que crece, y ``_settings_tab`` no lleva scroll, así que
+        # no cabría junto a los demás controles con la ventana en su mínimo.
+        tabs.addTab(self._settings_tab(self._settings_folders_card()),
+                    tr("Folders"))
         tabs.addTab(self._settings_tab(self._settings_interface_card()),
                     tr("Interface"))
         tabs.addTab(self._settings_tab(self._settings_launch_card()),
@@ -687,88 +714,23 @@ class MainWindow(QWidget):
 
     def _settings_downloads_card(self) -> QFrame:
         card, lay = self._settings_card(tr("Downloads"))
-        lay.addWidget(QLabel(tr("Destination folder")))
+
+        # Resumen de a dónde va lo que se descargue ahora mismo. La lista de
+        # carpetas vive en su pestaña; aquí solo se dice el resultado, que es
+        # lo que interesa desde "Descargas".
+        self.dest_summary = ElidedLabel("", Qt.ElideMiddle)
+        self.dest_summary.setObjectName("Muted")
+        lay.addWidget(self.dest_summary)
+
         row = QHBoxLayout()
-        self.dest_input = QLineEdit(self.dest_folder)
-        self.dest_input.setToolTip(tr(
-            "Folder where the Blender versions you download are stored.\n"
-            "Each version goes in its own subfolder."))
-        self.dest_input.textChanged.connect(self._on_dest_changed)
-        row.addWidget(self.dest_input, 1)
-        browse = CardButton(tr("Browse..."), tooltip=tr("Choose destination folder"))
-        browse.clicked.connect(self.browse_dest)
-        row.addWidget(browse)
+        row.addStretch()
+        folders_btn = CardButton(tr("Folders"), tooltip=tr(
+            "Choose which folders your Blender versions live in, and which "
+            "ones receive each kind of build."))
+        folders_btn.clicked.connect(
+            lambda: self.settings_tabs.setCurrentIndex(self.FOLDERS_TAB))
+        row.addWidget(folders_btn)
         lay.addLayout(row)
-
-        # Versiones LTS en otra carpeta (opcional). La fila de la carpeta solo
-        # se enseña con el interruptor en "Sí"; en "No" no aparece.
-        row_lts = QHBoxLayout()
-        row_lts.addWidget(QLabel(tr("Install LTS versions in a separate folder")))
-        row_lts.addStretch()
-        self.lts_switch = SwitchPill(self.separate_lts, tooltip=tr(
-            "Keep LTS versions on another drive or folder (for example an SSD)"))
-        self.lts_switch.toggled.connect(self._on_separate_lts_toggled)
-        row_lts.addWidget(self.lts_switch)
-        lay.addLayout(row_lts)
-
-        self.lts_row = QWidget()
-        self.lts_row.setObjectName("FormRow")
-        lts_lay = QHBoxLayout(self.lts_row)
-        lts_lay.setContentsMargins(0, 0, 0, 0)
-        lts_lay.setSpacing(6)
-        self.lts_input = QLineEdit(self.lts_folder)
-        self.lts_input.setPlaceholderText(tr("Same as destination folder"))
-        self.lts_input.setToolTip(tr(
-            "Folder for the LTS versions only.\n"
-            "Leave it empty to use the destination folder."))
-        self.lts_input.textChanged.connect(self._on_lts_folder_changed)
-        lts_lay.addWidget(self.lts_input, 1)
-        lts_browse = CardButton(tr("Browse..."),
-                                tooltip=tr("Choose the folder for LTS builds"))
-        lts_browse.clicked.connect(self.browse_lts)
-        lts_lay.addWidget(lts_browse)
-        self.lts_row.setVisible(self.separate_lts)
-        lay.addWidget(self.lts_row)
-
-        # Carpeta extra: BlenderManager solo mira su carpeta de descargas, así
-        # que quien ya tenía sus Blender en otro sitio (a mano, en otro disco,
-        # una copia portable) no los veía. Igual que las LTS aparte: un
-        # interruptor y, debajo, una sola carpeta. Apagado no se escanea ni
-        # ocupa sitio; la ruta se recuerda igual.
-        extra_tip = tr(
-            "BlenderManager only looks inside its download folder. If you also "
-            "have Blender installed or unzipped somewhere else (another drive, "
-            "a portable copy...), point this to that folder and those versions "
-            "will show up in Local. It is only read: downloads keep going "
-            "to the destination folder.")
-        row_extra = QHBoxLayout()
-        extra_label = QLabel(tr("Look for Blender in an extra folder"))
-        extra_label.setToolTip(extra_tip)
-        row_extra.addWidget(extra_label)
-        row_extra.addStretch()
-        self.extra_switch = SwitchPill(self.use_extra_folder, tooltip=extra_tip)
-        self.extra_switch.toggled.connect(self._on_extra_folder_toggled)
-        row_extra.addWidget(self.extra_switch)
-        lay.addLayout(row_extra)
-
-        self.extra_row = QWidget()
-        self.extra_row.setObjectName("FormRow")
-        extra_lay = QHBoxLayout(self.extra_row)
-        extra_lay.setContentsMargins(0, 0, 0, 0)
-        extra_lay.setSpacing(6)
-        self.extra_input = QLineEdit(self.extra_folder)
-        self.extra_input.setPlaceholderText(tr("Your own Blender folder"))
-        self.extra_input.setToolTip(tr(
-            "Folder with your own Blender versions.\n"
-            "Each version has to be in its own subfolder."))
-        self.extra_input.textChanged.connect(self._on_extra_folder_changed)
-        extra_lay.addWidget(self.extra_input, 1)
-        extra_browse = CardButton(tr("Browse..."),
-                                  tooltip=tr("Choose a folder with Blender versions"))
-        extra_browse.clicked.connect(self.browse_extra_folder)
-        extra_lay.addWidget(extra_browse)
-        self.extra_row.setVisible(self.use_extra_folder)
-        lay.addWidget(self.extra_row)
 
         row2 = QHBoxLayout()
         row2.addWidget(QLabel(tr("Delete archive after extraction")))
@@ -780,7 +742,302 @@ class MainWindow(QWidget):
         self.archive_switch.toggled.connect(self._on_archive_toggled)
         row2.addWidget(self.archive_switch)
         lay.addLayout(row2)
+        self._refresh_dest_summary()
         return card
+
+    # ------------------------------------------------- biblioteca de carpetas
+    def _settings_folders_card(self) -> QFrame:
+        """Tarjeta con la biblioteca de carpetas.
+
+        Tiene dos caras y **no hay un interruptor que las cambie**: con una
+        sola carpeta que se queda con todo se ve el campo de siempre (la app no
+        estrena concepto a quien no lo ha pedido), y en cuanto hay dos aparece
+        la lista. Es un estado real —cuántas carpetas hay— y no una preferencia
+        guardada que pudiera desincronizarse de las carpetas de verdad.
+        """
+        card, lay = self._settings_card(tr("Folders"))
+
+        self.folders_hint = ElidedLabel("", Qt.ElideRight)
+        self.folders_hint.setObjectName("Muted")
+        lay.addWidget(self.folders_hint)
+
+        # Aviso de tipos sin carpeta. Es la contrapartida de no tener cadena de
+        # reservas: si nadie recibe las diarias hay que decirlo AQUÍ, y no
+        # cuando el usuario le dé a descargar una.
+        self.folders_warning = ElidedLabel("", Qt.ElideRight)
+        self.folders_warning.setObjectName("Warning")
+        lay.addWidget(self.folders_warning)
+
+        # --- modo simple: una carpeta, como siempre
+        self.simple_box = QWidget()
+        self.simple_box.setObjectName("FormRow")
+        simple = QVBoxLayout(self.simple_box)
+        simple.setContentsMargins(0, 0, 0, 0)
+        simple.setSpacing(8)
+        row = QHBoxLayout()
+        self.dest_input = QLineEdit()
+        self.dest_input.setToolTip(tr(
+            "Folder where the Blender versions you download are stored.\n"
+            "Each version goes in its own subfolder."))
+        self.dest_input.editingFinished.connect(self._on_simple_folder_changed)
+        row.addWidget(self.dest_input, 1)
+        browse = CardButton(tr("Browse..."), tooltip=tr("Choose destination folder"))
+        browse.clicked.connect(self.browse_dest)
+        row.addWidget(browse)
+        simple.addLayout(row)
+        split_row = QHBoxLayout()
+        split_row.addStretch()
+        self.split_btn = CardButton(tr("Separate by channel..."), variant="accent",
+                                    tooltip=tr(
+            "Add a second folder and choose what goes in each one: for example "
+            "the LTS versions on a fast drive and the rest on a big one."))
+        self.split_btn.clicked.connect(self.add_folder)
+        split_row.addWidget(self.split_btn)
+        simple.addLayout(split_row)
+        lay.addWidget(self.simple_box)
+
+        # --- modo ramificado: la lista de carpetas
+        self.folder_list = QScrollArea()
+        self.folder_list.setObjectName("FolderList")
+        self.folder_list.setWidgetResizable(True)
+        self.folder_list.setFrameShape(QFrame.NoFrame)
+        self.folder_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.folder_list.setMaximumHeight(
+            MAX_VISIBLE_ROWS * FolderRow.HEIGHT + (MAX_VISIBLE_ROWS - 1) * 6)
+        body = QWidget()
+        body.setObjectName("FolderListBody")
+        self.folder_body = QVBoxLayout(body)
+        self.folder_body.setContentsMargins(0, 0, 0, 0)
+        self.folder_body.setSpacing(6)
+        self.folder_body.addStretch()
+        self.folder_list.setWidget(body)
+        lay.addWidget(self.folder_list)
+
+        add_row = QHBoxLayout()
+        add_row.addStretch()
+        # Vive FUERA del scroll a propósito: con muchas carpetas seguiría a mano
+        # en vez de haber que bajar hasta el final para encontrarlo.
+        self.add_folder_btn = CardButton(tr("Add folder"), variant="accent",
+                                         tooltip=tr(
+            "Add a folder where you already have Blender versions, or where "
+            "you want to download them."))
+        self.add_folder_btn.clicked.connect(self.add_folder)
+        add_row.addWidget(self.add_folder_btn)
+        lay.addLayout(add_row)
+
+        self._rebuild_folder_rows()
+        return card
+
+    def _branched(self) -> bool:
+        """True si hay que enseñar la lista en vez del campo de siempre."""
+        folders = self.settings.folders
+        if len(folders) != 1:
+            return True
+        return sorted(folders[0].types) != sorted(channels.BUILD_TYPES)
+
+    def _rebuild_folder_rows(self) -> None:
+        """Repinta la tarjeta entera (altas, bajas y cambio de modo)."""
+        branched = self._branched()
+        self.simple_box.setVisible(not branched)
+        self.folder_list.setVisible(branched)
+        self.add_folder_btn.setVisible(branched)
+        self.folders_hint.setText(tr(
+            "Each download goes to the folder that takes it. "
+            "Locked folders are only scanned.") if branched
+            else tr("Blender versions you download are stored here, each one "
+                    "in its own subfolder."))
+
+        if not branched:
+            self.dest_input.blockSignals(True)
+            self.dest_input.setText(self.settings.folders[0].path)
+            self.dest_input.blockSignals(False)
+
+        while self.folder_body.count() > 1:
+            item = self.folder_body.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.folder_rows = {}
+        for index, folder in enumerate(self.settings.folders):
+            row = FolderRow(folder, zebra=bool(index % 2),
+                            missing=not self._folder_exists(folder.path))
+            row.type_toggled.connect(self._on_folder_type_toggled)
+            row.writable_toggled.connect(self._on_folder_writable_toggled)
+            row.remove_requested.connect(self._on_folder_remove_requested)
+            self.folder_body.insertWidget(self.folder_body.count() - 1, row)
+            self.folder_rows[channels.normalize_path(folder.path)] = row
+        self._refresh_folder_warning()
+        self._refresh_dest_summary()
+
+    @staticmethod
+    def _folder_exists(path: str) -> bool:
+        """``is_dir`` tolerante: una unidad desconectada no es un error."""
+        try:
+            return Path(path).expanduser().is_dir()
+        except OSError:
+            return False
+
+    def _refresh_folder_warning(self) -> None:
+        orphans = channels.orphan_types(self.settings.folders)
+        if not orphans:
+            self.folders_warning.setText("")
+            self.folders_warning.setVisible(False)
+            return
+        names = ", ".join(tr(TYPE_LABELS[key]) for key in orphans)
+        self.folders_warning.setText(
+            tr("No folder for: {types}. Those builds cannot be downloaded "
+               "until you tick one.", types=names))
+        self.folders_warning.setVisible(True)
+
+    def _refresh_dest_summary(self) -> None:
+        if not hasattr(self, "dest_summary"):
+            return
+        folder = channels.owner_of(self.settings.folders, channels.TYPE_STABLE)
+        folder = folder or next((f for f in self.settings.folders if f.types), None)
+        self.dest_summary.setText(
+            tr("New downloads go to: {folder}", folder=folder.path) if folder
+            else tr("No folder is set to receive downloads."))
+
+    def _show_folders_hint(self) -> None:
+        """Presenta la biblioteca de carpetas a quien actualiza la app.
+
+        Lo primero que dice es lo que más tranquiliza: que no hay que tocar
+        nada y que no se ha movido ningún archivo. Lo segundo, para qué sirve.
+        """
+        self.settings.folders_hint_shown = True
+        self.settings.save()
+        folder = self.settings.folders[0].path if self.settings.folders else ""
+        dialog = AppDialog(
+            self, tr("Your Blender folders"),
+            tr("Nothing has changed on disk and you do not have to set up "
+               "anything: your versions are still in {folder} and keep working "
+               "exactly as before.", folder=folder)
+            + "\n\n"
+            + tr("What is new is that you can now add more folders and choose "
+                 "what goes in each one: for example the LTS versions on a "
+                 "fast SSD and the daily builds on a big drive. You can also "
+                 "point the app at folders where you already had Blender, and "
+                 "lock them so nothing is ever written there."))
+        choice = {"open": False}
+        dialog.add_button(tr("Not now"), on_click=dialog.reject)
+        dialog.add_button(
+            tr("Show me"), variant="accent",
+            on_click=lambda: (choice.update(open=True), dialog.accept()),
+            tooltip=tr("Opens Settings > Folders, where you add folders and\n"
+                       "tick what each one receives."))
+        dialog.exec()
+        if choice["open"]:
+            self.set_view("settings")
+            self.settings_tabs.setCurrentIndex(self.FOLDERS_TAB)
+
+    # ------------------------------------------------------- reorganizar
+    def _offer_reorg(self, root: str) -> None:
+        """Si algo dejó de encajar en esa carpeta, ofrece moverlo.
+
+        Se llama **después** de guardar el cambio: lo que se decide aquí es
+        solo qué hacer con lo que ya estaba dentro, no si el cambio se aplica.
+        Quedarse quieto es una respuesta válida y es la que se ofrece primero.
+        """
+        moves = organizer.misplaced(self.installed, self.settings.folders, root)
+        if not moves:
+            return
+        counts = {}
+        for move in moves:
+            counts[move.build_type] = counts.get(move.build_type, 0) + 1
+        detail = "\n".join(
+            f"    · {tr(TYPE_LABELS[key])}: {value}"
+            for key, value in counts.items())
+        message = (root + "\n\n"
+                   + tr("There are {count} versions here that this folder no "
+                        "longer takes:", count=len(moves))
+                   + "\n" + detail + "\n\n"
+                   + tr("You can move them to the folder that takes them, or "
+                        "leave them where they are."))
+        dialog = AppDialog(self, tr("Folder contents"), message)
+        choice = {"move": False}
+        dialog.add_button(tr("Leave them here"), on_click=dialog.reject,
+                          tooltip=tr(
+            "Nothing is moved.\n"
+            "Those versions stay in this folder and keep showing up in Local.\n"
+            "Only new downloads follow the boxes you just ticked."))
+        dialog.add_button(
+            tr("Move them"), variant="accent",
+            on_click=lambda: (choice.update(move=True), dialog.accept()),
+            tooltip=tr(
+                "Each version is moved to the folder that takes its kind of "
+                "build.\n"
+                "Nothing is deleted: a version is only removed from here once "
+                "the copy is complete.\n"
+                "With big folders on another drive this takes a while."))
+        dialog.exec()
+        if choice["move"]:
+            self._start_move(moves)
+
+    def _start_move(self, moves) -> None:
+        """Mueve las versiones en un hilo, con barra de progreso.
+
+        El diálogo es **modal** a propósito: mover carpetas por debajo de la
+        lista de instaladas mientras se usa es pedir que el usuario lance algo
+        que ya no está donde dice la tarjeta.
+        """
+        self._move_cancel = threading.Event()
+        self._move_dialog = ProgressDialog(
+            self, tr("Moving versions"), "",
+            primary_text="", secondary_text=tr("Cancel"))
+        self._move_dialog.set_text(
+            tr("Moving {name} ({done} of {total})",
+               name=moves[0].entry.name, done=1, total=len(moves)))
+
+        def worker():
+            moved = failed = 0
+            last = ""
+            for index, move in enumerate(moves):
+                if self._move_cancel.is_set():
+                    break
+                self.folder_move_progress.emit(index, len(moves),
+                                               move.entry.name)
+                try:
+                    organizer.move_build(
+                        move, should_cancel=self._move_cancel.is_set)
+                    moved += 1
+                except organizer.OrganizerError as error:
+                    if error.code == "cancelled":
+                        break
+                    # Que una build esté abierta no puede abortar las otras.
+                    download_log(f"move failed ({move.entry.name}): {error}")
+                    failed += 1
+                    last = str(error)
+            self.folder_move_done.emit(moved, failed, last)
+
+        threading.Thread(target=worker, daemon=True).start()
+        self._move_dialog.exec()
+
+    def _on_folder_move_progress(self, done: int, total: int, name: str) -> None:
+        if self._move_dialog is None:
+            return
+        self._move_dialog.set_progress(int(done * 100 / total) if total else 0)
+        self._move_dialog.set_text(tr("Moving {name} ({done} of {total})",
+                                      name=name, done=done + 1, total=total))
+
+    def _on_folder_move_done(self, moved: int, failed: int, error: str) -> None:
+        if self._move_dialog is not None:
+            self._move_dialog.accept()
+            self._move_dialog = None
+        self.refresh_installed()
+        if failed:
+            show_error(self, tr("Moving versions"),
+                       tr("{failed} versions could not be moved.", failed=failed)
+                       + ("\n\n" + error if error else ""))
+        elif moved:
+            self._show_message(tr("{moved} versions moved", moved=moved), 6)
+
+    def _save_folders(self) -> None:
+        """Guarda y refresca todo lo que depende de las carpetas."""
+        self.settings.save()
+        self.refresh_installed()
+        self._rebuild_store()
+        self._refresh_folder_warning()
+        self._refresh_dest_summary()
 
     def _settings_interface_card(self) -> QFrame:
         card, lay = self._settings_card(tr("Interface"))
@@ -1645,7 +1902,8 @@ class MainWindow(QWidget):
                 card = GridInstalledCard(entry, zebra, self.zoom, marked,
                                          update=update)
             else:
-                card = InstalledCard(entry, zebra, marked, update=update)
+                card = InstalledCard(entry, zebra, marked, update=update,
+                                     read_only=self._is_read_only(entry))
             card.launch_clicked.connect(self.launch_installed)
             card.delete_clicked.connect(self.delete_installed)
             card.notes_clicked.connect(self.open_release_notes)
@@ -1727,74 +1985,175 @@ class MainWindow(QWidget):
                                                 current or str(Path.home()))
 
     def browse_dest(self) -> None:
-        """Pide la carpeta de descargas con el diálogo del sistema."""
-        folder = self._choose_folder(self.dest_folder, tr("Choose destination folder"))
+        """Pide la carpeta de descargas con el diálogo del sistema (modo simple)."""
+        current = self.settings.folders[0].path if self.settings.folders else ""
+        folder = self._choose_folder(current, tr("Choose destination folder"))
         if folder:
             self.dest_input.setText(folder)
+            self._on_simple_folder_changed()
 
-    def browse_lts(self) -> None:
-        """Pide la carpeta opcional de las versiones LTS."""
-        folder = self._choose_folder(self.lts_folder,
-                                     tr("Choose the folder for LTS builds"))
-        if folder:
-            self.lts_input.setText(folder)
+    def _on_simple_folder_changed(self) -> None:
+        """Cambia la ruta de la única carpeta (modo simple)."""
+        text = self.dest_input.text().strip()
+        if not text or not self.settings.folders:
+            return
+        if channels.normalize_path(text) == channels.normalize_path(
+                self.settings.folders[0].path):
+            return
+        self.settings.folders[0].path = text
+        self._save_folders()
 
-    # ------------------------------------------------ carpeta extra
-    def browse_extra_folder(self) -> None:
-        """Pide la carpeta opcional con los Blender del propio usuario."""
-        folder = self._choose_folder(
-            self.extra_folder, tr("Choose a folder with Blender versions"))
-        if folder:
-            self.extra_input.setText(folder)
+    # -------------------------------------------- biblioteca de carpetas
+    def add_folder(self) -> None:
+        """Da de alta una carpeta nueva en la biblioteca.
+
+        Propone marcarle los tipos que **nadie** recibe todavía: es lo que hace
+        que el primer clic en "Separar por canales" deje algo útil sin tener
+        que explicar nada. Si ya están todos repartidos entra sin tipos (solo
+        se escanea), que es lo menos invasivo.
+        """
+        folder = self._choose_folder("", tr("Choose a folder with Blender versions"))
+        if not folder:
+            return
+        problem = self._folder_problem(folder)
+        if problem == "duplicate":
+            show_info(self, tr("Folders"),
+                      tr("That folder is already in the list."))
+            return
+        if problem == "inside":
+            show_error(self, tr("Folders"), tr(
+                "This folder is inside another one in the list, so its "
+                "versions are already being found."))
+            return
+        if problem == "contains":
+            show_error(self, tr("Folders"), tr(
+                "A folder already in the list is inside this one. Remove it "
+                "first, or pick another folder."))
+            return
+
+        writable = not _write_problem(folder)
+        types = channels.orphan_types(self.settings.folders) if writable else []
+        self.settings.folders.append(
+            settings_service.Folder(path=folder, types=types, writable=writable))
+        self._save_folders()
+        self._rebuild_folder_rows()
+        if not writable:
+            self._show_message(tr(
+                "Added as read-only: that folder does not allow writing."), 6)
+
+    def _folder_problem(self, candidate: str) -> str:
+        """Por qué no se puede añadir esa carpeta, o "" si sí se puede.
+
+        Se compara con ``resolve()`` y no por texto: si no, en Windows
+        ``C:\\Blender`` y ``c:\\blender`` entrarían como dos carpetas
+        distintas y todas sus versiones saldrían duplicadas en Local.
+        """
+        def resolved(path):
+            try:
+                return Path(path).expanduser().resolve()
+            except OSError:
+                return Path(path).expanduser()
+
+        target = resolved(candidate)
+        for folder in self.settings.folders:
+            existing = resolved(folder.path)
+            if existing == target:
+                return "duplicate"
+            if existing in target.parents:
+                return "inside"
+            if target in existing.parents:
+                return "contains"
+        return ""
+
+    def _on_folder_type_toggled(self, path: str, build_type: str,
+                                marked: bool) -> None:
+        """Marca o desmarca un tipo, respetando que solo tenga un dueño."""
+        folder = self.settings.folder_for(path)
+        if folder is None:
+            return
+        previous = (channels.owner_of(self.settings.folders, build_type)
+                    if marked else None)
+        if marked:
+            for other in self.settings.folders:
+                if build_type in other.types and other is not folder:
+                    other.types = [item for item in other.types
+                                   if item != build_type]
+            if build_type not in folder.types:
+                folder.types = [item for item in channels.BUILD_TYPES
+                                if item in folder.types or item == build_type]
+        else:
+            folder.types = [item for item in folder.types if item != build_type]
+        self._save_folders()
+        # Solo se repintan las filas afectadas: reconstruir la lista entera
+        # desde la señal de una de sus casillas destruiría el widget que la
+        # acaba de emitir.
+        for target in {path, previous.path if previous else None}:
+            row = self.folder_rows.get(channels.normalize_path(target or ""))
+            entry = self.settings.folder_for(target or "")
+            if row is not None and entry is not None:
+                row.set_folder(entry)
+        if previous is not None:
+            self._show_message(tr(
+                "{type} builds now go to {folder}",
+                type=tr(TYPE_LABELS[build_type]), folder=folder.path), 6)
+        # Al desmarcar, lo que ya estaba dentro puede dejar de encajar; al
+        # marcar, es la carpeta que pierde el tipo la que se queda con builds
+        # que ya no recibe.
+        self._offer_reorg(previous.path if previous is not None else path)
+
+    def _on_folder_writable_toggled(self, path: str, writable: bool) -> None:
+        """Abre o cierra el candado de una carpeta.
+
+        Cerrarlo apaga sus casillas: no se puede recibir una descarga donde la
+        aplicación no escribe (es la invariante de ``settings.Folder``).
+        """
+        folder = self.settings.folder_for(path)
+        if folder is None:
+            return
+        folder.writable = writable
+        if not writable:
+            folder.types = []
+        self._save_folders()
+        row = self.folder_rows.get(channels.normalize_path(path))
+        if row is not None:
+            row.set_folder(folder)
+        if not writable:
+            # Cerrar el candado deja la carpeta sin recibir nada: lo de dentro
+            # puede tener ahora otra casa. Pero de aquí no se saca nada (lo
+            # impide ``organizer.plan_reorg``), así que no saldrá diálogo.
+            self._offer_reorg(path)
+
+    def _on_folder_remove_requested(self, path: str) -> None:
+        """Quita una carpeta de la lista (sin tocar el disco)."""
+        folder = self.settings.folder_for(path)
+        if folder is None:
+            return
+        if len(self.settings.folders) == 1:
+            show_error(self, tr("Folders"), tr(
+                "This is the only folder left. Add another one before "
+                "removing it."))
+            return
+        if not confirm(self, tr("Remove folder"),
+                       tr("Remove {folder} from the list?", folder=path)
+                       + "\n\n"
+                       + tr("Nothing is deleted from disk: the versions there "
+                            "just stop being shown."),
+                       accept_text=tr("Remove")):
+            return
+        self.settings.folders = [item for item in self.settings.folders
+                                 if item is not folder]
+        self._save_folders()
+        self._rebuild_folder_rows()
 
     def _destination_for(self, build) -> str:
-        """Carpeta donde va esta compilación: las LTS pueden ir aparte.
+        """Carpeta donde va esta compilación, o "" si nadie recibe su tipo.
 
         Se delega en ``Settings.destination_for`` para que la regla viva con
         los ajustes (y se pueda probar sin montar la ventana).
         """
-        return self.settings.destination_for(getattr(build, "is_lts", False))
+        return self.settings.destination_for(build)
 
     # ------------------------------------------------------- auto-guardado
-    def _on_dest_changed(self, text: str) -> None:
-        self.dest_folder = text
-        self.settings.dest_folder = text
-        self.settings.save()
-        self.refresh_installed()
-        self._rebuild_store()
-
-    def _on_lts_folder_changed(self, text: str) -> None:
-        self.lts_folder = text
-        self.settings.lts_folder = text
-        self.settings.save()
-        self.refresh_installed()
-        self._rebuild_store()
-
-    def _on_separate_lts_toggled(self, value: bool) -> None:
-        """Separa (o vuelve a juntar) las LTS en su carpeta."""
-        self.separate_lts = value
-        self.settings.separate_lts = value
-        self.settings.save()
-        # Solo se enseña la carpeta cuando está activado; la ruta se guarda.
-        self.lts_row.setVisible(value)
-        self.refresh_installed()
-        self._rebuild_store()
-
-    def _on_extra_folder_changed(self, text: str) -> None:
-        self.extra_folder = text
-        self.settings.extra_folder = text
-        self.settings.save()
-        self.refresh_installed()
-
-    def _on_extra_folder_toggled(self, value: bool) -> None:
-        """Enciende (o apaga) la búsqueda en la carpeta extra."""
-        self.use_extra_folder = value
-        self.settings.use_extra_folder = value
-        self.settings.save()
-        # Solo se enseña la carpeta cuando está activado; la ruta se guarda.
-        self.extra_row.setVisible(value)
-        self.refresh_installed()
-
     def _on_archive_toggled(self, value: bool) -> None:
         self.delete_archive = value
         self.settings.delete_archive = value
@@ -1952,7 +2311,15 @@ class MainWindow(QWidget):
 
     def _start_download(self, build, source) -> None:
         """Arranca la descarga desde la fuente ya elegida."""
-        destination = str(Path(self._destination_for(build)).expanduser())
+        target = self._destination_for(build)
+        if not target:
+            # Nadie ha marcado ese tipo en ninguna carpeta. Es el precio de no
+            # tener cadena de reservas, y es el precio bueno: mejor decirlo que
+            # dejarle la build en una carpeta que no eligió.
+            self._set_downloading(False)
+            self._no_folder_for(channels.type_of_build(build))
+            return
+        destination = str(Path(target).expanduser())
         # La carpeta puede no dejar escribir (la de las LTS suele estar en otro
         # disco y a veces es una de sistema). Comprobarlo ahora evita bajar
         # cientos de MB para nada y, sobre todo, explica el motivo.
@@ -1981,13 +2348,36 @@ class MainWindow(QWidget):
             on_error=lambda msg: self._bridge.error.emit(msg),
         )
 
+    def _no_folder_for(self, build_type: str) -> None:
+        """Avisa de que nadie recibe ese tipo y lleva a arreglarlo."""
+        dialog = AppDialog(
+            self, tr("Download"),
+            tr("No folder is set to receive {type} builds.",
+               type=tr(TYPE_LABELS[build_type]))
+            + "\n\n"
+            + tr("Open Settings and tick {type} on the folder where you want "
+                 "them.", type=tr(TYPE_LABELS[build_type])))
+        choice = {"open": False}
+        dialog.add_button(tr("Close"), on_click=dialog.reject)
+        dialog.add_button(
+            tr("Open folder settings"), variant="accent",
+            on_click=lambda: (choice.update(open=True), dialog.accept()),
+            tooltip=tr("Takes you to Settings > Folders, where you choose "
+                       "which folder\nreceives each kind of build."))
+        dialog.exec()
+        if choice["open"]:
+            self.set_view("settings")
+            self.settings_tabs.setCurrentIndex(self.FOLDERS_TAB)
+
     def _ask_other_folder(self, build, destination: str, problem: str) -> bool:
         """Ofrece arreglar la carpeta cuando no se puede escribir en ella.
 
         Devuelve True si al final se puede escribir ahí (porque el usuario ha
         elegido otra carpeta o ha dado permiso de administrador), para que la
-        descarga se reintente sola. Edita la carpeta de las LTS o la de destino
-        según cuál fuera la que iba a usarse.
+        descarga se reintente sola. La carpeta nueva se da de alta con **el
+        tipo de esta compilación**, así que el arreglo dura: antes se adivinaba
+        cuál era la carpeta afectada comparando cadenas de rutas y, de paso, se
+        cambiaba la carpeta global por defecto por un fallo puntual.
         """
         message = (tr("Could not write to the destination folder:")
                    + "\n\n" + destination + "\n\n" + problem
@@ -2016,20 +2406,25 @@ class MainWindow(QWidget):
             return False
         if not choice["other"]:
             return False
-        using_lts = (self.separate_lts
-                     and str(Path(self.lts_folder).expanduser()) == destination)
-        if using_lts:
-            folder = self._choose_folder(self.lts_folder,
-                                         tr("Choose the folder for LTS builds"))
-            if folder:
-                self.lts_input.setText(folder)
-                return True
+        build_type = channels.type_of_build(build)
+        folder = self._choose_folder(destination, tr("Choose destination folder"))
+        if not folder:
             return False
-        folder = self._choose_folder(self.dest_folder, tr("Choose destination folder"))
-        if folder:
-            self.dest_input.setText(folder)
-            return True
-        return False
+        existing = self.settings.folder_for(folder)
+        if existing is None:
+            existing = settings_service.Folder(path=folder, types=[],
+                                               writable=True)
+            self.settings.folders.append(existing)
+        existing.writable = True
+        # El tipo cambia de dueño: solo puede estar en una carpeta.
+        for other in self.settings.folders:
+            if other is not existing:
+                other.types = [item for item in other.types if item != build_type]
+        existing.types = [item for item in channels.BUILD_TYPES
+                          if item in existing.types or item == build_type]
+        self._save_folders()
+        self._rebuild_folder_rows()
+        return True
 
     def _grant_permission(self, destination: str) -> bool:
         """Pide el UAC y espera a poder escribir en ``destination``.
@@ -2086,7 +2481,11 @@ class MainWindow(QWidget):
         self._set_status(tr("Extracting..."))
         self._set_downloading(True)
 
-        destination = Path(self._destination_for(build)).expanduser()
+        # El archivo ya está bajado, así que se extrae **junto a él**: es la
+        # carpeta que recibió la descarga. Preguntar otra vez por el destino
+        # daría "" si el usuario acaba de quitar esa carpeta de la lista, y
+        # ``Path("")`` es el directorio actual: extraeríamos dentro de la app.
+        destination = archive.parent
 
         def worker():
             try:
@@ -2122,7 +2521,8 @@ class MainWindow(QWidget):
         """
         self._set_status(tr("Installing..."))
         self._set_downloading(True)
-        destination = Path(self._destination_for(build)).expanduser()
+        # Igual que al extraer: el .dmg ya está en la carpeta que lo recibió.
+        destination = archive.parent
 
         def worker():
             try:
@@ -2307,6 +2707,18 @@ class MainWindow(QWidget):
         except Exception as error:
             download_log(f"launch failed: {error}")
 
+    def _is_read_only(self, entry) -> bool:
+        """True si esa instalación vive en una carpeta con el candado cerrado."""
+        folder = self.settings.folder_for(getattr(entry, "root", None))
+        return folder is not None and not folder.writable
+
+    @staticmethod
+    def _read_only_message() -> str:
+        return (tr("This version is in a read-only folder.")
+                + "\n\n"
+                + tr("Open the lock in Settings > Folders, or use your file "
+                     "manager."))
+
     def rename_installed(self, entry, new_name: str) -> None:
         """Renombra la carpeta de una instalación (doble clic en el nombre).
 
@@ -2314,6 +2726,9 @@ class MainWindow(QWidget):
         vale o el disco no deja (en Windows, Blender abierto desde esa carpeta la
         bloquea), se avisa con el motivo y se deja el nombre viejo.
         """
+        if self._is_read_only(entry):
+            show_error(self, tr("Rename folder"), self._read_only_message())
+            return
         reason = installed_service.rename_failure(entry.path, new_name)
         if reason:
             show_error(self, tr("Rename folder"), self._rename_error(reason))
@@ -2348,6 +2763,11 @@ class MainWindow(QWidget):
         diálogo no se veía nada) y **nada de ``ignore_errors``**: si el borrado
         falla hay que decir por qué, no callarse.
         """
+        if self._is_read_only(entry):
+            # "Solo lectura" no admite excepciones: si se pudiera borrar pero
+            # no instalar, el candado no significaría nada.
+            show_error(self, tr("Uninstall"), self._read_only_message())
+            return
         if not confirm(self, tr("Uninstall"),
                        tr("Delete {name}?", name=entry.name)
                        + "\n\n" + tr("This will remove the folder permanently.")
