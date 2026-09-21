@@ -420,7 +420,8 @@ class InstalledCard(_HoverCard, QFrame):
     console_toggled = Signal(bool)    # lanzar con consola
 
     def __init__(self, entry, zebra: bool, marked: bool = False, parent=None,
-                 update=None, read_only: bool = False, console: bool = False):
+                 update=None, read_only: bool = False,
+                 console: bool | None = None):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -477,7 +478,8 @@ class InstalledCard(_HoverCard, QFrame):
                 lambda: self.update_clicked.emit(entry, update))
             lay.addWidget(update_btn)
 
-        lay.addWidget(_console_button(console, self.console_toggled))
+        if console is not None:
+            lay.addWidget(_console_button(console, self.console_toggled))
 
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
@@ -507,7 +509,7 @@ class GridInstalledCard(_HoverCard, QFrame):
 
     def __init__(self, entry, zebra: bool, zoom: float = 1.0,
                  marked: bool = False, parent=None, update=None,
-                 console: bool = False):
+                 console: bool | None = None):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -575,9 +577,11 @@ class GridInstalledCard(_HoverCard, QFrame):
             update_btn.clicked.connect(
                 lambda: self.update_clicked.emit(entry, update))
             row.addWidget(update_btn)
-        console_btn = _console_button(console, self.console_toggled)
-        console_btn.setFixedWidth(max(int(42 * zoom), MIN_ICON_BUTTON_WIDTH))
-        row.addWidget(console_btn)
+        if console is not None:
+            console_btn = _console_button(console, self.console_toggled)
+            console_btn.setFixedWidth(max(int(42 * zoom),
+                                          MIN_ICON_BUTTON_WIDTH))
+            row.addWidget(console_btn)
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())

@@ -608,6 +608,10 @@ class MainWindow(QWidget):
             btn.setFont(icon_font(20))
             self.side_group.addButton(btn)
             btn.clicked.connect(lambda _=False, k=key: self.set_view(k))
+            # Recientes y Add-ons son nuevas: ocultas hasta activar las
+            # opciones experimentales (Ajustes > Avanzado), como Migración.
+            if key in ("recent", "addons"):
+                btn.setVisible(self.settings.experimental_features)
             lay.addWidget(btn)
             self.side_buttons[key] = btn
         lay.addStretch()
@@ -1213,17 +1217,21 @@ class MainWindow(QWidget):
         card, lay = self._settings_card(tr("Launch options"))
 
         # Lanzar con consola: se puede alternar también desde cada tarjeta
-        # instalada; aquí queda el ajuste (el mismo) para dejarlo fijo.
-        row = QHBoxLayout()
-        row.addWidget(QLabel(tr("Launch with console")))
-        row.addStretch()
+        # instalada; aquí queda el ajuste (el mismo) para dejarlo fijo. Es una
+        # opción nueva, así que va tras las experimentales.
+        self.console_row = QWidget()
+        console_lay = QHBoxLayout(self.console_row)
+        console_lay.setContentsMargins(0, 0, 0, 0)
+        console_lay.addWidget(QLabel(tr("Launch with console")))
+        console_lay.addStretch()
         self.console_switch = SwitchPill(
             self.settings.launch_console,
             tooltip=tr("Launch with the console visible: Python output and "
                        "script errors."))
         self.console_switch.toggled.connect(self.set_launch_console)
-        row.addWidget(self.console_switch)
-        lay.addLayout(row)
+        console_lay.addWidget(self.console_switch)
+        self.console_row.setVisible(self.settings.experimental_features)
+        lay.addWidget(self.console_row)
 
         lay.addWidget(QLabel(tr("Launch arguments")))
         self.args_input = QLineEdit(self.launch_args)
@@ -1328,9 +1336,10 @@ class MainWindow(QWidget):
         row.addStretch()
         self.experimental_switch = SwitchPill(
             self.settings.experimental_features,
-            tooltip=tr("Show the Migration tab: copy add-ons, extensions and "
-                       "preferences between Blender versions. It is still in "
-                       "development and may change."))
+            tooltip=tr("Show the experimental features: the Migration, Recent "
+                       "files and Add-ons views, and launching Blender with "
+                       "its console. They are still in development and may "
+                       "change."))
         self.experimental_switch.toggled.connect(self._on_experimental_toggled)
         row.addWidget(self.experimental_switch)
         lay.addLayout(row)
@@ -1338,20 +1347,25 @@ class MainWindow(QWidget):
         # El aviso va debajo, en apagado: el interruptor por sí solo no dice
         # que lo que se activa está a medias.
         hint = QLabel(tr(
-            "Show the Migration tab: copy add-ons, extensions and preferences "
-            "between Blender versions. It is still in development and may "
-            "change."))
+            "Show the experimental features: the Migration, Recent files and "
+            "Add-ons views, and launching Blender with its console. They are "
+            "still in development and may change."))
         hint.setObjectName("Muted")
         hint.setWordWrap(True)
         lay.addWidget(hint)
         return card
 
     def _on_experimental_toggled(self, value: bool) -> None:
-        """Enseña u oculta Migración, y sale de ella si se apaga estando dentro."""
+        """Enseña u oculta las vistas nuevas, y sale de ellas si se apaga."""
         self.settings.experimental_features = value
         self.settings.save()
-        self.side_buttons["migrate"].setVisible(value)
-        if not value and self.view == "migrate":
+        for key in ("migrate", "recent", "addons"):
+            self.side_buttons[key].setVisible(value)
+        if hasattr(self, "console_row"):
+            self.console_row.setVisible(value)
+        # El botón de consola de las tarjetas depende de lo mismo.
+        self._rebuild_installed()
+        if not value and self.view in ("migrate", "recent", "addons"):
             self.set_view("installed" if self.installed else "store")
 
     def _build_footer(self) -> QFrame:
@@ -1499,8 +1513,9 @@ class MainWindow(QWidget):
         que estabas. Entre tienda e instaladas no hay interruptor, el clic
         cambia de pestaña y ya.
         """
-        if view == "migrate" and not self.settings.experimental_features:
-            # Migración está oculta (opciones experimentales apagadas): su
+        if (view in ("migrate", "recent", "addons")
+                and not self.settings.experimental_features):
+            # Esas vistas están ocultas (opciones experimentales apagadas): su
             # botón no se ve, pero cualquier llamada debe quedar sin efecto.
             view = "installed" if self.installed else "store"
         if view == "settings" and self.view == "settings":
@@ -2017,7 +2032,9 @@ class MainWindow(QWidget):
             zebra = (not grid) and bool(index % 2)
             marked = entry.favorite_key in self.settings.favorites
             update = self.updates_by_path.get(str(entry.path))
-            console = self.settings.launch_console
+            # El botón de consola solo se enseña con las opciones experimentales.
+            console = (self.settings.launch_console
+                       if self.settings.experimental_features else None)
             if grid:
                 card = GridInstalledCard(entry, zebra, self.zoom, marked,
                                          update=update, console=console)

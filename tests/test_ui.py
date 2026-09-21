@@ -689,24 +689,30 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.set_view("settings")
         self.assertEqual(window.view, "store")
 
-    def test_migracion_oculta_hasta_activar_experimental(self):
-        """Migración es experimental: su botón no aparece hasta activarlo."""
+    def test_las_vistas_nuevas_estan_tras_experimental(self):
+        """Migración, Recientes y Add-ons no aparecen hasta activar Avanzado."""
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        # Apagado (por defecto): el botón no se ve y no se puede entrar.
-        self.assertTrue(window.side_buttons["migrate"].isHidden())
-        window.set_view("migrate")
-        self.assertNotEqual(window.view, "migrate")
-        # Al activarlo aparece y se entra.
+        hidden = ("migrate", "recent", "addons")
+        # Apagado (por defecto): los botones no se ven y no se puede entrar.
+        for key in hidden:
+            self.assertTrue(window.side_buttons[key].isHidden(), key)
+            window.set_view(key)
+            self.assertNotEqual(window.view, key, key)
+        self.assertTrue(window.console_row.isHidden())
+        # Al activarlo aparecen y se entra.
         window.experimental_switch.setChecked(True)
-        self.assertFalse(window.side_buttons["migrate"].isHidden())
-        window.set_view("migrate")
-        self.assertEqual(window.view, "migrate")
-        # Al apagarlo estando dentro, sale.
+        for key in hidden:
+            self.assertFalse(window.side_buttons[key].isHidden(), key)
+        window.set_view("recent")
+        self.assertEqual(window.view, "recent")
+        self.assertFalse(window.console_row.isHidden())
+        # Al apagarlo estando dentro de una de ellas, sale.
         window.experimental_switch.setChecked(False)
-        self.assertNotEqual(window.view, "migrate")
-        self.assertTrue(window.side_buttons["migrate"].isHidden())
+        self.assertNotEqual(window.view, "recent")
+        for key in hidden:
+            self.assertTrue(window.side_buttons[key].isHidden(), key)
 
     def test_reescanea_al_recuperar_el_foco(self):
         from PySide6.QtCore import QEvent
