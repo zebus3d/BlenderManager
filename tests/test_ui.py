@@ -3079,18 +3079,18 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(view.detail_scroll.isHidden())
 
     def test_los_paneles_con_scroll_se_pueden_estirar(self):
-        """Las dos listas con scroll tienen asa para subirlas de alto."""
+        """Las dos listas se estiran desde su esquina inferior derecha."""
         from services import blender_prefs as bprefs
         from ui.widgets.migrate import (DETAIL_MIN_HEIGHT,
                                         SNAPSHOT_MIN_HEIGHT)
 
         view = self._view()
         view.resize(900, 700)
-        # Lista de claves: con filas, el asa se ve y se puede estirar.
+        # Lista de claves: la esquinita existe y estira el panel.
         view.detail_prefs = [
             bprefs.Preference(f"view.clave_{i}", i) for i in range(20)]
         view._fill_detail_rows()
-        self.assertFalse(view.detail_handle.isHidden())
+        self.assertIsNotNone(view.detail_scroll._grip)
         before = view.detail_scroll.height()
         view._resize_detail(120)
         self.assertGreater(view.detail_scroll.height(), before)

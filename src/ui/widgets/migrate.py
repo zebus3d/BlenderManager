@@ -25,6 +25,7 @@ se ocultan (lo decide ``MainWindow._set_view``).
 import threading
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -66,9 +67,10 @@ DETAIL_SCROLL_HEIGHT = 260
 # partir de ahí se baja con la barra).
 SNAPSHOT_SCROLL_HEIGHT = 280
 
-# Estos paneles llevan una barra para estirarlos hacia abajo (``_ResizeHandle``):
-# el alto inicial es el de su contenido, y el usuario lo sube si quiere ver más
-# filas sin tocar la ventana. Por debajo de estos mínimos no se puede encoger.
+# Estos paneles se estiran desde su esquina inferior derecha
+# (``_ResizableScroll``): el alto inicial es el de su contenido, y el usuario lo
+# sube si quiere ver más filas sin tocar la ventana. Por debajo de estos mínimos
+# no se puede encoger.
 DETAIL_MIN_HEIGHT = 60
 SNAPSHOT_MIN_HEIGHT = 60
 
@@ -464,26 +466,36 @@ def _show_snapshot_details(parent, snapshot, preferences) -> None:
     dialog.exec()
 
 
-class _ResizeHandle(QFrame):
-    """Asa para estirar hacia abajo el panel que tiene encima.
+class _CornerGrip(QWidget):
+    """Esquinita para estirar el panel, abajo a la derecha.
 
-    Qt no deja redimensionar un ``QScrollArea`` arrastrando su borde, y con el
-    alto fijo el usuario se queda con las filas que quepan. Esta barra toma el
-    relevo: se arrastra y el panel crece o mengua (ver ``_resize_scroll``). Va
-    pegada **debajo** del scroll, así que separa el panel de los botones.
+    Sustituye a la barra horizontal que había antes: se agarra desde la esquina
+    (donde todo el mundo busca el redimensionado) y no ocupa ninguna fila. Solo
+    manda el desplazamiento vertical; el ancho lo fija el layout.
     """
+
+    SIZE = 14
 
     def __init__(self, on_resize, tooltip: str = "", parent=None):
         super().__init__(parent)
         self._on_resize = on_resize
         self._last = None
-        self.setObjectName("ResizeHandle")
-        # Píldora estrecha y centrada (se centra desde el layout): ancha no se
-        # distinguiría de un separador y no se vería que se puede arrastrar.
-        self.setFixedSize(120, 8)
-        self.setCursor(Qt.SizeVerCursor)
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setCursor(Qt.SizeFDiagCursor)
         if tooltip:
             self.setToolTip(tooltip)
+
+    def paintEvent(self, event) -> None:
+        # Tres rayitas diagonales, como el grip clásico; se encienden al pasar
+        # el ratón para que se vea que se puede arrastrar.
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        color = QColor(t.ACCENT if self.underMouse() else t.MUTED)
+        painter.setPen(QPen(color, 1.4, Qt.SolidLine, Qt.RoundCap))
+        edge = self.SIZE - 1
+        for offset in (4, 7, 10):
+            painter.drawLine(edge - offset, edge, edge, edge - offset)
+        painter.end()
 
     def mousePressEvent(self, event) -> None:
         self._last = event.globalPosition().y()
@@ -491,14 +503,35 @@ class _ResizeHandle(QFrame):
     def mouseMoveEvent(self, event) -> None:
         if self._last is None:
             return
-        # Posición **global**: el asa se mueve con el panel, así que la local
-        # daría un salto en cada fotograma.
+        # Posición **global**: la esquinita se mueve con el panel al crecer, así
+        # que la local daría un salto en cada fotograma.
         current = event.globalPosition().y()
         self._on_resize(int(current - self._last))
         self._last = current
 
     def mouseReleaseEvent(self, event) -> None:
         self._last = None
+
+
+class _ResizableScroll(QScrollArea):
+    """``QScrollArea`` con una esquinita para estirarlo desde abajo a la derecha.
+
+    Qt no deja redimensionar un scroll arrastrando su borde y con el alto fijo
+    el usuario se queda con las filas que quepan. La esquinita va **dentro** del
+    scroll, pegada a su esquina inferior derecha, y avisa del desplazamiento;
+    quien la usa decide el alto (``setFixedHeight``).
+    """
+
+    def __init__(self, on_resize, tooltip: str = "", parent=None):
+        super().__init__(parent)
+        self._grip = _CornerGrip(on_resize, tooltip, self)
+        self._grip.raise_()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._grip.move(self.width() - self._grip.width(),
+                        self.height() - self._grip.height())
+        self._grip.raise_()
 
 
 class _BoardRow(QFrame):
@@ -1109,7 +1142,10 @@ class MigrateView(QWidget):
         # ``DETAIL_SCROLL_HEIGHT``). Los botones quedan **fuera**, como en la
         # biblioteca de carpetas: así no hay que bajar hasta el final de una
         # lista larguísima para pulsarlos.
-        self.detail_scroll = QScrollArea()
+        self.detail_scroll = _ResizableScroll(
+            self._resize_detail,
+            tooltip=tr("Drag the bottom-right corner to make the settings list "
+                       "taller or shorter."))
         self.detail_scroll.setObjectName("DetailPrefs")
         self.detail_scroll.setWidgetResizable(True)
         self.detail_scroll.setFrameShape(QFrame.NoFrame)
@@ -1125,18 +1161,6 @@ class MigrateView(QWidget):
         self.detail_scroll.setWidget(body)
         self.detail_scroll.setVisible(False)
         lay.addWidget(self.detail_scroll)
-
-        # Asa para estirar la lista hacia abajo (los botones quedan debajo,
-        # siempre a la vista).
-        self.detail_handle = _ResizeHandle(
-            self._resize_detail,
-            tooltip=tr("Drag to make the settings list taller or shorter."))
-        self.detail_handle.setVisible(False)
-        handle_row = QHBoxLayout()
-        handle_row.addStretch()
-        handle_row.addWidget(self.detail_handle)
-        handle_row.addStretch()
-        lay.addLayout(handle_row)
 
         row = QHBoxLayout()
         self.detail_load_btn = CardButton(
@@ -1175,11 +1199,10 @@ class MigrateView(QWidget):
     def _clear_detail_rows(self) -> None:
         self.detail_checks = []
         _clear_layout(self.detail_rows)
-        # Sin filas no se enseña el área (ni su asa): un hueco vacío con su
-        # barra quedaría raro cuando aún no se ha leído nada.
+        # Sin filas no se enseña el área: un hueco vacío con su barra (y su
+        # esquinita) quedaría raro cuando aún no se ha leído nada.
         if hasattr(self, "detail_scroll"):
             self.detail_scroll.setVisible(False)
-            self.detail_handle.setVisible(False)
 
     def _clamp_height(self, height: int, minimum: int) -> int:
         """Alto de un panel: ni por debajo del mínimo ni más alto que la ventana."""
@@ -1335,7 +1358,6 @@ class MigrateView(QWidget):
         self._clear_detail_rows()
         self.detail_checks = []
         self.detail_scroll.setVisible(True)
-        self.detail_handle.setVisible(True)
         for section, items in bprefs.group_by_section(self.detail_prefs):
             label = tr(dict(bprefs.SECTIONS).get(section, section))
             header = QLabel(label)
@@ -1465,7 +1487,10 @@ class MigrateView(QWidget):
         lay.addWidget(self.factory_status)
 
         # La lista, en scroll: puede haber muchos guardados.
-        self.snapshot_scroll = QScrollArea()
+        self.snapshot_scroll = _ResizableScroll(
+            self._resize_snapshots,
+            tooltip=tr("Drag the bottom-right corner to make the saved copies "
+                       "list taller or shorter."))
         self.snapshot_scroll.setObjectName("SnapshotList")
         self.snapshot_scroll.setWidgetResizable(True)
         self.snapshot_scroll.setFrameShape(QFrame.NoFrame)
@@ -1480,16 +1505,6 @@ class MigrateView(QWidget):
         self.snapshot_scroll.setWidget(body)
         self.snapshot_scroll.setVisible(False)
         lay.addWidget(self.snapshot_scroll)
-
-        self.snapshot_handle = _ResizeHandle(
-            self._resize_snapshots,
-            tooltip=tr("Drag to make the saved copies list taller or shorter."))
-        self.snapshot_handle.setVisible(False)
-        handle_row = QHBoxLayout()
-        handle_row.addStretch()
-        handle_row.addWidget(self.snapshot_handle)
-        handle_row.addStretch()
-        lay.addLayout(handle_row)
 
         self.factory_empty = QLabel(tr(
             "No saved settings. Resetting will keep nothing to go back to."))
@@ -1592,7 +1607,6 @@ class MigrateView(QWidget):
             self.factory_path_label.setText("")
             self.factory_empty.setVisible(False)
             self.snapshot_scroll.setVisible(False)
-            self.snapshot_handle.setVisible(False)
             self.delete_all_btn.setEnabled(False)
             return
         _, version = _entry_info(self._factory_entry())
@@ -1607,7 +1621,6 @@ class MigrateView(QWidget):
             self.factory_status.setText("")
             self.factory_empty.setVisible(True)
             self.snapshot_scroll.setVisible(False)
-            self.snapshot_handle.setVisible(False)
             self._analysis = {}
             self._analyzed_for = ""
             self._factory_live_count = None
@@ -1615,7 +1628,6 @@ class MigrateView(QWidget):
         self.factory_empty.setVisible(False)
         self._build_snapshot_rows(snapshots)
         self.snapshot_scroll.setVisible(True)
-        self.snapshot_handle.setVisible(True)
         self._fit_snapshot_scroll()
         self.factory_status.setText(self._factory_status_text(len(snapshots)))
         self._maybe_analyze_snapshots()

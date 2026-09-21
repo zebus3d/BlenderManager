@@ -292,13 +292,6 @@ def build_qss() -> str:
     QScrollArea#SnapshotList > QWidget > QWidget {{ background: transparent; }}
     QWidget#SnapshotListBody {{ background: transparent; }}
     QWidget#SnapshotDetailsBody {{ background: transparent; }}
-    /* Asa para estirar los paneles con scroll. Se ve como una barra fina (así
-       se descubre que se puede arrastrar) y se enciende al pasar el ratón. */
-    QFrame#ResizeHandle {{
-        background: {t.SURFACE_ALT};
-        border-radius: 3px;
-    }}
-    QFrame#ResizeHandle:hover {{ background: {t.ACCENT}; }}
     /* El candado cerrado, en ámbar: que "aquí no se escribe" se vea de un
        vistazo y no haya que pasar el ratón por encima para enterarse. */
     QPushButton#CardButton[writable="false"] {{

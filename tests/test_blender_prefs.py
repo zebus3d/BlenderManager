@@ -17,6 +17,16 @@ class FilterTest(unittest.TestCase):
         self.assertTrue(bp.is_environment("filepaths.temp_directory"))
         self.assertFalse(bp.is_environment("view.ui_scale"))
         self.assertFalse(bp.is_environment("inputs.use_zoom_to_mouse"))
+        # El dispositivo de Cycles (OPTIX/CUDA/HIP) es una preferencia del
+        # usuario: se migra lo que él tenga configurado, no se descarta.
+        self.assertFalse(
+            bp.is_environment("addons.cycles.compute_device_type"))
+
+    def test_seccion_de_una_clave_de_addon(self):
+        pref = bp.Preference("addons.cycles.compute_device_type", "OPTIX")
+        self.assertEqual(pref.section, "addons")
+        self.assertEqual(pref.label, "compute_device_type")
+        self.assertIn(("addons", "Add-ons"), bp.SECTIONS)
 
     def test_sets_conocidos_no_son_escribibles(self):
         self.assertFalse(bp.is_settable("edit.key_insert_channels"))

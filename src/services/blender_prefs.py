@@ -82,6 +82,8 @@ SECTIONS = (
     ("filepaths", "File Paths"),
     ("keymap", "Keymap"),
     ("system", "System"),
+    # Preferencias de los addons activos (p. ej. el dispositivo de Cycles).
+    ("addons", "Add-ons"),
 )
 
 # --- Guion que corre dentro de Blender ------------------------------------
@@ -103,7 +105,7 @@ def walk(obj, prefix, depth=0):
     if depth > 5:
         return
     for prop in obj.bl_rna.properties:
-        if prop.identifier == "rna_type" or prop.type == "COLLECTION":
+        if prop.identifier in ("rna_type", "bl_idname") or prop.type == "COLLECTION":
             continue
         try:
             value = getattr(obj, prop.identifier)
@@ -128,6 +130,22 @@ def walk(obj, prefix, depth=0):
 
 
 walk(bpy.context.preferences, "")
+
+# Preferencias de los addons ACTIVOS. No son atributos de ``preferences`` (viven
+# en la coleccion ``addons``), asi que el recorrido de arriba no las ve: de ahi
+# salian sin detectar el dispositivo de Cycles (OPTIX/CUDA/HIP) o las opciones
+# de glTF. Los modulos de extension llevan puntos en el nombre
+# (``bl_ext.<repo>.<id>``); quien las aplica resuelve el modulo por el prefijo
+# mas largo de ``addons``.
+for addon in bpy.context.preferences.addons:
+    try:
+        addon_prefs = addon.preferences
+    except Exception:
+        continue
+    if addon_prefs is None:
+        continue
+    walk(addon_prefs, "addons." + addon.module + ".", 0)
+
 print("BLENDERMANAGER_DUMP=" + json.dumps(OUT))
 '''
 
@@ -157,12 +175,39 @@ try:
 except Exception:
     pass
 
+def resolve(path):
+    """Objeto RNA al que apunta la ruta, o None si no existe.
+
+    ``addons.<modulo>.<clave>`` no es una cadena de atributos (``addons`` es una
+    coleccion), asi que se entra por ella. El modulo puede llevar puntos
+    (extensiones), y se elige el que sea prefijo mas largo de la ruta.
+    """
+    if path.startswith("addons."):
+        rest = path[len("addons."):]
+        modules = [m for m in prefs.addons.keys() if rest.startswith(m + ".")]
+        if not modules:
+            return None
+        module = max(modules, key=len)
+        addon = prefs.addons.get(module)
+        obj = addon.preferences if addon is not None else None
+        if obj is None:
+            return None
+        head = rest[len(module) + 1:].rpartition(".")[0]
+    else:
+        obj = prefs
+        head = path.rpartition(".")[0]
+    for part in head.split(".") if head else []:
+        obj = getattr(obj, part)
+    return obj
+
+
 for path, value in pairs:
     try:
-        obj = prefs
-        head, _, leaf = path.rpartition(".")
-        for part in head.split(".") if head else []:
-            obj = getattr(obj, part)
+        leaf = path.rpartition(".")[2]
+        obj = resolve(path)
+        if obj is None:
+            errors.append({"path": path, "error": "unknown add-on or property"})
+            continue
         prop = obj.bl_rna.properties.get(leaf)
         if prop is None:
             errors.append({"path": path, "error": "unknown property"})

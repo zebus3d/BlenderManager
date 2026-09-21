@@ -218,6 +218,19 @@ class DumpScriptTest(unittest.TestCase):
 
         self.assertIn("sorted(value)", bp._DUMP_SCRIPT)
 
+    def test_el_volcado_incluye_las_preferencias_de_addons(self):
+        """El dispositivo de Cycles y compañía viven en la colección ``addons``.
+
+        Recorrer solo ``bpy.context.preferences`` los dejaba fuera, así que no
+        se detectaba, por ejemplo, que el usuario tiene OPTIX puesto.
+        """
+        from services import blender_prefs as bp
+
+        self.assertIn("preferences.addons", bp._DUMP_SCRIPT)
+        self.assertIn('"addons."', bp._DUMP_SCRIPT)
+        # Y el guion que las aplica sabe entrar por la colección.
+        self.assertIn("prefs.addons", bp._APPLY_SCRIPT)
+
     def test_el_orden_de_un_set_no_es_estable(self):
         """Por qué hace falta lo de arriba, con la prueba delante."""
         valores = {"CUSTOM_PROPS", "LOCATION", "ROTATION", "SCALE"}

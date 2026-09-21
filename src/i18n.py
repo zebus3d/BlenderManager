@@ -216,10 +216,14 @@ _TRANSLATIONS = {
             "ajustes actuales se guardan aparte y se pueden recuperar.",
         "Version": "Versión",
         "User prefs": "Prefs de usuario",
-        "Drag to make the settings list taller or shorter.":
-            "Arrastra para alargar o acortar la lista de ajustes.",
-        "Drag to make the saved copies list taller or shorter.":
-            "Arrastra para alargar o acortar la lista de copias guardadas.",
+        "Drag the bottom-right corner to make the settings list taller or "
+        "shorter.":
+            "Arrastra la esquina inferior derecha para alargar o acortar la "
+            "lista de ajustes.",
+        "Drag the bottom-right corner to make the saved copies list taller or "
+        "shorter.":
+            "Arrastra la esquina inferior derecha para alargar o acortar la "
+            "lista de copias guardadas.",
         "Pick the version whose settings you want to reset or put back.":
             "Elige la versión cuyos ajustes quieres restablecer o recuperar.",
         "The version whose settings are reset or restored.":
