@@ -23,6 +23,7 @@ TYPE_LABELS = {
     channels.TYPE_LTS: "LTS",
     channels.TYPE_STABLE: "Stable",
     channels.TYPE_DAILY: "Daily",
+    channels.TYPE_PATCH: "Patches",
     channels.TYPE_EXPERIMENTAL: "Experimental",
 }
 
@@ -43,6 +44,11 @@ TYPE_TOOLTIPS = {
         "Daily: builds made every day from the branch in development.\n"
         "They bring the newest features and they can break; they also pile up\n"
         "fast, so many people keep them on a big drive.\n"
+        "Only one folder can take them."),
+    channels.TYPE_PATCH: (
+        "Patches: builds of open pull requests, to test a fix or feature\n"
+        "before it is merged. They are not official versions.\n"
+        "Tick this and every patch you download lands in this folder.\n"
         "Only one folder can take them."),
     channels.TYPE_EXPERIMENTAL: (
         "Experimental: branches with features that are not in any release yet.\n"

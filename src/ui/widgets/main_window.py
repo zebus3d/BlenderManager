@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -128,6 +129,7 @@ CHANNELS = (
     ("lts", "LTS"),
     ("stable", "Stable"),
     ("daily", "Daily"),
+    ("patch", "Patches"),
     ("experimental", "Experimental"),
     ("favorites", "Favorites"),
 )
@@ -140,6 +142,8 @@ CHANNEL_TOOLTIPS = {
               "releases, supported until the next one.",
     "daily": "Daily and alpha builds with the newest changes.\nThey can fail: "
              "for testing, not for work.",
+    "patch": "Builds of open pull requests: an unreleased fix or feature to "
+             "test.\nThey are not official versions; the list changes often.",
     "experimental": "Branches with new features still in development.\nThey are "
                     "not ready for production and the list is usually empty.",
     "favorites": "Only the builds you marked with the star.",
@@ -1953,6 +1957,8 @@ class MainWindow(QWidget):
             # Cada canal vacío tiene su explicación, en vez del genérico.
             if self.channel == "experimental":
                 text, hint = tr("No experimental builds right now"), ""
+            elif self.channel == "patch":
+                text, hint = tr("No patch builds right now"), ""
             elif self.channel == "favorites":
                 text = tr("No favorites yet")
                 hint = tr("Tap the star on a card to keep it here.")
@@ -1978,8 +1984,70 @@ class MainWindow(QWidget):
             card.action_clicked.connect(self.install_build)
             card.notes_clicked.connect(self.open_release_notes)
             card.favorite_toggled.connect(self.set_favorite)
+            card.setContextMenuPolicy(Qt.CustomContextMenu)
+            card.customContextMenuRequested.connect(
+                lambda pos, b=build, c=card: self._show_store_menu(b, c, pos))
             cards.append(card)
         self._fill_grid(self.store_grid, cards, columns)
+
+    def _card_menu(self) -> QMenu:
+        """Menú contextual de una tarjeta (mismo aspecto que el de la bandeja)."""
+        menu = QMenu(self)
+        menu.setObjectName("CardMenu")
+        return menu
+
+    def _installed_menu(self, entry) -> QMenu:
+        """Menú contextual de una tarjeta instalada (sin mostrarlo).
+
+        Se separa de ``_show_installed_menu`` para poder comprobarlo sin abrir
+        un menú modal (que en un test se queda esperando).
+        """
+        menu = self._card_menu()
+        launch = menu.addAction(tr("Launch"))
+        launch.triggered.connect(lambda: self.launch_installed(entry))
+        if self.settings.experimental_features:
+            console = menu.addAction(tr("Launch with console"))
+            console.triggered.connect(lambda: self._launch_with_console(entry))
+        menu.addSeparator()
+        open_folder = menu.addAction(tr("Open folder"))
+        open_folder.triggered.connect(lambda: opener.open_path(entry.path))
+        copy = menu.addAction(tr("Copy path"))
+        copy.triggered.connect(
+            lambda: QApplication.clipboard().setText(str(entry.path)))
+        menu.addSeparator()
+        remove = menu.addAction(tr("Uninstall"))
+        remove.triggered.connect(lambda: self.delete_installed(entry))
+        return menu
+
+    def _show_installed_menu(self, entry, card, pos) -> None:
+        self._installed_menu(entry).exec(card.mapToGlobal(pos))
+
+    def _launch_with_console(self, entry) -> None:
+        """Lanza esa versión con consola sin cambiar el ajuste guardado."""
+        executable = getattr(entry, "executable", None)
+        if not executable:
+            return
+        try:
+            args = shlex.split(self.launch_args or "")
+            self.launcher.launch(executable, args=args, console=True)
+        except Exception as error:
+            download_log(f"launch failed: {error}")
+
+    def _store_menu(self, build) -> QMenu:
+        """Menú contextual de una tarjeta de la tienda (sin mostrarlo)."""
+        menu = self._card_menu()
+        install = menu.addAction(tr("Download and install"))
+        install.triggered.connect(lambda: self.install_build(build))
+        notes = menu.addAction(tr("Release notes"))
+        notes.triggered.connect(lambda: self.open_release_notes(build.version))
+        menu.addSeparator()
+        copy = menu.addAction(tr("Copy download link"))
+        copy.triggered.connect(
+            lambda: QApplication.clipboard().setText(build.url))
+        return menu
+
+    def _show_store_menu(self, build, card, pos) -> None:
+        self._store_menu(build).exec(card.mapToGlobal(pos))
 
     def refresh_installed(self) -> None:
         """Vuelve a escanear las carpetas y repinta las instaladas."""
@@ -2049,6 +2117,9 @@ class MainWindow(QWidget):
             card.update_clicked.connect(self.offer_blender_update)
             card.rename_requested.connect(self.rename_installed)
             card.console_toggled.connect(self.set_launch_console)
+            card.setContextMenuPolicy(Qt.CustomContextMenu)
+            card.customContextMenuRequested.connect(
+                lambda pos, e=entry, c=card: self._show_installed_menu(e, c, pos))
             cards.append(card)
         self._fill_grid(self.installed_grid, cards, columns)
 

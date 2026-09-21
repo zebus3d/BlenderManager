@@ -15,9 +15,9 @@ from services.extractor import extract, is_archive
 
 
 def make_build(version, risk, branch, filename, platform="linux", arch="x86_64", mtime=0,
-               build_hash="", experimental=False):
+               build_hash="", experimental=False, patch=""):
     return Build(version, branch, risk, platform, arch, "https://example/" + filename, filename,
-                 mtime=mtime, build_hash=build_hash, experimental=experimental)
+                 mtime=mtime, build_hash=build_hash, experimental=experimental, patch=patch)
 
 
 class ApiTests(unittest.TestCase):
@@ -76,6 +76,17 @@ class ApiTests(unittest.TestCase):
         }
         self.assertTrue(api._to_build(entry, experimental=True).experimental)
         self.assertFalse(api._to_build(entry).experimental)
+
+    def test_to_build_lee_el_patch(self):
+        entry = {
+            "version": "5.2.0", "branch": "main-PR161547", "risk_id": "stable",
+            "platform": "linux", "architecture": "x86_64", "url": "u",
+            "file_name": "f.tar.xz", "patch": "PR161547",
+        }
+        build = api._to_build(entry)
+        self.assertEqual(build.patch, "PR161547")
+        self.assertFalse(build.experimental)
+        self.assertEqual(api._to_build({}).patch, "")
 
     def test_windows_amd64_se_normaliza_y_coincide_con_el_filtro(self):
         # La API llama "amd64" a la arquitectura de Windows; la barra de filtros
@@ -173,6 +184,8 @@ class ChannelFilterTests(unittest.TestCase):
             make_build("4.5.13", "stable", "v45", "b.tar.xz", mtime=3),
             make_build("4.5.0", "alpha", "geometry-nodes", "b.tar.xz", mtime=4,
                        experimental=True),
+            make_build("5.2.0", "stable", "main-PR161547", "b.tar.xz", mtime=5,
+                       patch="PR161547"),
         ]
 
     def test_experimental_only_in_its_own_channel(self):
@@ -182,6 +195,17 @@ class ChannelFilterTests(unittest.TestCase):
         for channel in ("all", "lts", "stable", "lts_stable", "daily"):
             selected = api.filter_builds(builds, channel)
             self.assertNotIn("geometry-nodes", [build.branch for build in selected])
+
+    def test_patches_only_in_their_own_channel(self):
+        """Las de pull requests no se cuelan en las diarias ni en las estables."""
+        builds = self._builds()
+        patches = api.filter_builds(builds, "patch")
+        self.assertEqual([build.patch for build in patches], ["PR161547"])
+        for channel in ("all", "lts", "stable", "lts_stable", "daily",
+                        "experimental"):
+            selected = api.filter_builds(builds, channel)
+            self.assertEqual([build.patch for build in selected
+                              if build.patch], [], channel)
 
     def test_channels_keep_their_meaning(self):
         builds = self._builds()
@@ -535,7 +559,7 @@ class SettingsMigrationTests(unittest.TestCase):
         # que hacía destination_for(is_lts).
         self.assertEqual(loaded.folders[0].types,
                          [channels.TYPE_STABLE, channels.TYPE_DAILY,
-                          channels.TYPE_EXPERIMENTAL])
+                          channels.TYPE_PATCH, channels.TYPE_EXPERIMENTAL])
         self.assertEqual(loaded.folders[1].types, [channels.TYPE_LTS])
         self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
                          "/tmp/ssd")

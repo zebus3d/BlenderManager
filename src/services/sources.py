@@ -66,10 +66,10 @@ class Source(NamedTuple):
 def release_url(build) -> Optional[str]:
     """URL del release oficial de esa versión, o ``None`` si no hay.
 
-    Solo las estables: las diarias y las alfas se compilan al vuelo y nunca se
-    publican como release.
+    Solo las estables: las diarias, las alfas y las de pull requests se
+    compilan al vuelo y nunca se publican como release.
     """
-    if build.risk != "stable":
+    if build.risk != "stable" or getattr(build, "patch", ""):
         return None
     combinacion = RELEASE_NAMES.get((build.platform, build.arch))
     if not combinacion:

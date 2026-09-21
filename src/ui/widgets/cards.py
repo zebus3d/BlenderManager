@@ -252,6 +252,11 @@ class BaseBuildCard(_HoverCard, QFrame):
         if build.experimental:
             self.channel_text = build.branch
             self.is_lts = False
+        elif build.patch:
+            # La insignia enseña el pull request (PR161547): es lo que
+            # distingue una compilación de parche de una versión normal.
+            self.channel_text = build.patch
+            self.is_lts = False
         else:
             if build.is_lts:
                 channel = "LTS"
@@ -263,7 +268,7 @@ class BaseBuildCard(_HoverCard, QFrame):
             self.is_lts = build.is_lts
 
         details = [build.human_size]
-        if not build.experimental:
+        if not build.experimental and not build.patch:
             details.append(build.branch)
         details.append(build.arch)
         self.meta_text = "  ·  ".join(details)

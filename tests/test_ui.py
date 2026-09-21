@@ -714,6 +714,32 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         for key in hidden:
             self.assertTrue(window.side_buttons[key].isHidden(), key)
 
+    def test_menu_contextual_de_las_tarjetas(self):
+        """Clic derecho en una tarjeta: acciones de lanzar/abrir/borrar."""
+        import i18n
+
+        from ui.widgets.main_window import MainWindow
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+
+        window = MainWindow()
+        # MainWindow fija el idioma de los ajustes al construirse, así que se
+        # cambia después.
+        i18n.set_language("en")
+        window.refresh_installed = lambda: None
+
+        entry = _fake_installed("5.2.2")
+        labels = [action.text() for action
+                  in window._installed_menu(entry).actions() if action.text()]
+        for expected in ("Launch", "Open folder", "Copy path", "Uninstall"):
+            self.assertIn(expected, labels)
+
+        build = _build("5.2.1", "v52", "stable")
+        labels = [action.text() for action
+                  in window._store_menu(build).actions() if action.text()]
+        self.assertIn("Download and install", labels)
+        self.assertIn("Release notes", labels)
+
     def test_reescanea_al_recuperar_el_foco(self):
         from PySide6.QtCore import QEvent
 

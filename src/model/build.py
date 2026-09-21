@@ -74,6 +74,10 @@ class Build:
     # "Branch" del builder, ramas con funciones nuevas que aún no están en una
     # versión oficial). Se muestra con su propio filtro "Experimental".
     experimental: bool = False
+    # Id del pull request del que sale la compilación (``PR161547``), vacío en
+    # las demás. Las publica el builder en la sección "Patch"; se muestran con
+    # su propio filtro "Patches".
+    patch: str = ""
 
     @property
     def is_lts(self) -> bool:

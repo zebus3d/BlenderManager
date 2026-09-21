@@ -37,6 +37,11 @@ _TRANSLATIONS = {
         "Launching": "Lanzando",
         "Delete": "Borrar",
         "Uninstall": "Desinstalar",
+        "Open folder": "Abrir carpeta",
+        "Copy path": "Copiar ruta",
+        "Copy download link": "Copiar enlace de descarga",
+        "Download and install": "Descargar e instalar",
+        "Release notes": "Notas de la versión",
         "Unexpected error": "Error inesperado",
         "Cancel": "Cancelar",
         "Close": "Cerrar",
@@ -166,6 +171,14 @@ _TRANSLATIONS = {
             "desarrollo.\nTraen lo más nuevo y pueden fallar; además se "
             "acumulan rápido, así que\nmucha gente las guarda en un disco "
             "grande.\nSolo una carpeta puede quedárselas.",
+        "Patches: builds of open pull requests, to test a fix or feature\n"
+        "before it is merged. They are not official versions.\n"
+        "Tick this and every patch you download lands in this folder.\n"
+        "Only one folder can take them.":
+            "Parches: compilaciones de pull requests abiertos, para probar un "
+            "arreglo o una\nfunción antes de que se fusione. No son versiones "
+            "oficiales.\nMarca esto y cada parche que descargues irá a esta "
+            "carpeta.\nSolo una carpeta puede quedárselos.",
         "Experimental: branches with features that are not in any release yet.\n"
         "Blender rarely publishes them, so this is usually empty.\n"
         "Only one folder can take them.":
@@ -506,6 +519,14 @@ _TRANSLATIONS = {
         "Experimental": "Experimentales",
         "Filter: experimental branches": "Filtro: solo ramas experimentales (funciones en desarrollo)",
         "No experimental builds right now": "Ahora mismo no hay ramas experimentales disponibles",
+        "Patches": "Parches",
+        "Builds of open pull requests: an unreleased fix or feature to test.\n"
+        "They are not official versions; the list changes often.":
+            "Compilaciones de pull requests abiertos: un arreglo o una función "
+            "sin publicar, para probar. No son versiones oficiales y la lista "
+            "cambia a menudo.",
+        "No patch builds right now":
+            "Ahora mismo no hay compilaciones de parches disponibles",
         "Favorites": "Favoritos",
         "Filter: favorites": "Filtro: solo las versiones marcadas como favoritas",
         "Mark as favorite": "Marcar como favorita",
