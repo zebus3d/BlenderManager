@@ -689,6 +689,25 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.set_view("settings")
         self.assertEqual(window.view, "store")
 
+    def test_migracion_oculta_hasta_activar_experimental(self):
+        """Migración es experimental: su botón no aparece hasta activarlo."""
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        # Apagado (por defecto): el botón no se ve y no se puede entrar.
+        self.assertTrue(window.side_buttons["migrate"].isHidden())
+        window.set_view("migrate")
+        self.assertNotEqual(window.view, "migrate")
+        # Al activarlo aparece y se entra.
+        window.experimental_switch.setChecked(True)
+        self.assertFalse(window.side_buttons["migrate"].isHidden())
+        window.set_view("migrate")
+        self.assertEqual(window.view, "migrate")
+        # Al apagarlo estando dentro, sale.
+        window.experimental_switch.setChecked(False)
+        self.assertNotEqual(window.view, "migrate")
+        self.assertTrue(window.side_buttons["migrate"].isHidden())
+
     def test_ajustes_en_pestanas(self):
         from PySide6.QtWidgets import QTabWidget
 
@@ -699,13 +718,14 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertIsNotNone(tabs)
         # Un tema por pestaña, y todos los controles siguen existiendo aunque
         # su pestaña no sea la activa.
-        self.assertEqual(tabs.count(), 6)
+        self.assertEqual(tabs.count(), 7)
         for control in (window.dest_input, window.folder_list,
                         window.add_folder_btn,
                         window.archive_switch, window.language_combo,
                         window.reset_zoom_slider, window.args_input,
                         window.close_tray_switch, window.autostart_switch,
-                        window.update_switch, window.periodic_switch):
+                        window.update_switch, window.periodic_switch,
+                        window.experimental_switch):
             self.assertIsNotNone(control)
 
     def test_el_buscador_va_pegado_al_boton_de_refrescar(self):
@@ -3340,6 +3360,8 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
+        # Migración es experimental: hay que activarla para poder entrar.
+        window.experimental_switch.setChecked(True)
         window.migrate_view.set_installed([])
         window.set_view("store")
         self.assertTrue(window.filters.isVisibleTo(window))

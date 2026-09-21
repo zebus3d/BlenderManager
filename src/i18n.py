@@ -361,6 +361,13 @@ _TRANSLATIONS = {
         "Launch": "Lanzamiento",
         "System": "Sistema",
         "Updates": "Actualizaciones",
+        "Advanced": "Avanzado",
+        "Experimental options": "Opciones experimentales",
+        "Show the Migration tab: copy add-ons, extensions and preferences "
+        "between Blender versions. It is still in development and may change.":
+            "Muestra la pestaña de Migración: copia addons, extensiones y "
+            "preferencias entre versiones de Blender. Sigue en desarrollo y "
+            "puede cambiar.",
         "Language": "Idioma",
         "Automatic": "Automático",
         "English": "Inglés",

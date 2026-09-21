@@ -351,6 +351,10 @@ class Settings:
     # ven quienes vienen del esquema viejo: en una instalación nueva no hay
     # nada que explicar, porque la pantalla se ve igual que siempre.
     folders_hint_shown: bool = True
+    # Opciones experimentales (Ajustes > Avanzado). De momento esconde la vista
+    # de Migración, que sigue en desarrollo: así se puede publicar como release
+    # estable y quien la quiera la activa a mano.
+    experimental_features: bool = False
 
     @classmethod
     def load(cls) -> "Settings":
@@ -397,6 +401,8 @@ class Settings:
             channel=str(data.get("channel") or "all"),
             favorites=_clean_string_list(data.get("favorites")),
             folders_hint_shown=bool(data.get("folders_hint_shown", True)),
+            experimental_features=bool(data.get("experimental_features",
+                                                False)),
         )
         # La biblioteca de carpetas: o se lee, o se convierte la del esquema
         # viejo. El número de versión es lo que distingue "vengo de una app

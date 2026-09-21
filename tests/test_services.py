@@ -635,6 +635,7 @@ class SettingsTests(unittest.TestCase):
             window_height=700,
             platform="Windows",
             arch="arm64",
+            experimental_features=True,
         )
         settings.save()
         loaded = settings_module.Settings.load()
@@ -655,6 +656,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(loaded.window_height, 700)
         self.assertEqual(loaded.platform, "Windows")
         self.assertEqual(loaded.arch, "arm64")
+        self.assertTrue(loaded.experimental_features)
 
     def test_save_is_atomic(self):
         # Tras guardar no debe quedar ningún .tmp suelto y el JSON debe ser
@@ -679,6 +681,9 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(loaded.layout_mode, "grid")
         self.assertTrue(loaded.auto_update)
         self.assertEqual(loaded.favorites, [])
+        # Las opciones experimentales (Migración) vienen apagadas: así la
+        # release es estable sin que nadie tenga que tocar nada.
+        self.assertFalse(loaded.experimental_features)
 
     def test_las_lts_pueden_ir_a_otra_carpeta(self):
         """El caso que motivó todo: las LTS al SSD, el resto al disco lento."""

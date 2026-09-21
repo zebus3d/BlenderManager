@@ -592,6 +592,9 @@ class MainWindow(QWidget):
         migrate_btn.setFont(icon_font(20))
         self.side_group.addButton(migrate_btn)
         migrate_btn.clicked.connect(lambda: self.set_view("migrate"))
+        # Oculta hasta activar las opciones experimentales: Migración sigue en
+        # desarrollo y así la release es estable (Ajustes > Avanzado).
+        migrate_btn.setVisible(self.settings.experimental_features)
         lay.addWidget(migrate_btn)
         self.side_buttons["migrate"] = migrate_btn
         settings_btn = SideButton(icons.SETTINGS, tr("Settings."))
@@ -674,6 +677,9 @@ class MainWindow(QWidget):
                     tr("System"))
         tabs.addTab(self._settings_tab(self._settings_updates_card()),
                     tr("Updates"))
+        # Avanzado va al final: son opciones que la mayoría no toca.
+        tabs.addTab(self._settings_tab(self._settings_advanced_card()),
+                    tr("Advanced"))
         # ``ensurePolished`` hace que el alto salga con el QSS ya aplicado; sin
         # él la medida es de antes de vestir y la fila queda 2 px alta.
         tabs.tabBar().ensurePolished()
@@ -1272,6 +1278,41 @@ class MainWindow(QWidget):
             self.muted_series_label.setText(
                 tr("Silenced: {series}", series=", ".join(series)))
 
+    def _settings_advanced_card(self) -> QFrame:
+        """Opciones avanzadas/experimentales (hoy solo la vista de Migración)."""
+        card, lay = self._settings_card(tr("Advanced"))
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel(tr("Experimental options")))
+        row.addStretch()
+        self.experimental_switch = SwitchPill(
+            self.settings.experimental_features,
+            tooltip=tr("Show the Migration tab: copy add-ons, extensions and "
+                       "preferences between Blender versions. It is still in "
+                       "development and may change."))
+        self.experimental_switch.toggled.connect(self._on_experimental_toggled)
+        row.addWidget(self.experimental_switch)
+        lay.addLayout(row)
+
+        # El aviso va debajo, en apagado: el interruptor por sí solo no dice
+        # que lo que se activa está a medias.
+        hint = QLabel(tr(
+            "Show the Migration tab: copy add-ons, extensions and preferences "
+            "between Blender versions. It is still in development and may "
+            "change."))
+        hint.setObjectName("Muted")
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
+        return card
+
+    def _on_experimental_toggled(self, value: bool) -> None:
+        """Enseña u oculta Migración, y sale de ella si se apaga estando dentro."""
+        self.settings.experimental_features = value
+        self.settings.save()
+        self.side_buttons["migrate"].setVisible(value)
+        if not value and self.view == "migrate":
+            self.set_view("installed" if self.installed else "store")
+
     def _build_footer(self) -> QFrame:
         footer = QFrame()
         footer.setObjectName("Chrome")
@@ -1417,6 +1458,10 @@ class MainWindow(QWidget):
         que estabas. Entre tienda e instaladas no hay interruptor, el clic
         cambia de pestaña y ya.
         """
+        if view == "migrate" and not self.settings.experimental_features:
+            # Migración está oculta (opciones experimentales apagadas): su
+            # botón no se ve, pero cualquier llamada debe quedar sin efecto.
+            view = "installed" if self.installed else "store"
         if view == "settings" and self.view == "settings":
             # Segundo clic en ajustes: volvemos a donde estábamos.
             view = self._previous_view
