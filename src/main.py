@@ -36,7 +36,9 @@ def smoke() -> int:
     """
     info = detector.detect()
     try:
-        builds = api.fetch_builds()
+        # ``fetch_builds`` devuelve ``(builds, etags)``; aquí solo importan las
+        # builds.
+        builds, _ = api.fetch_builds()
     except Exception as error:
         print(f"ERROR: no se pudo descargar el listado: {error}", file=sys.stderr)
         return 1

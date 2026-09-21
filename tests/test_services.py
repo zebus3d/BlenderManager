@@ -907,7 +907,9 @@ class SmokeTests(unittest.TestCase):
 
     def test_con_red_devuelve_cero(self):
         builds = [make_build("5.2.1", "stable", "v52", "b.tar.xz")]
-        self.assertEqual(self._smoke({"return_value": builds}), 0)
+        # ``fetch_builds`` devuelve ``(builds, etags)``: si ``smoke`` no lo
+        # desempaqueta, revienta (pasó en el CI con el binario empaquetado).
+        self.assertEqual(self._smoke({"return_value": (builds, {})}), 0)
 
     def test_sin_red_falla(self):
         # Antes caia al cache de disco y salia con 0: un binario sin HTTPS
@@ -916,7 +918,7 @@ class SmokeTests(unittest.TestCase):
             self._smoke({"side_effect": OSError("sin red")}), 1)
 
     def test_listado_vacio_falla(self):
-        self.assertEqual(self._smoke({"return_value": []}), 1)
+        self.assertEqual(self._smoke({"return_value": ([], {})}), 1)
 
 
 class TlsTests(unittest.TestCase):
