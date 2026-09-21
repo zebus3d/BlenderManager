@@ -275,6 +275,30 @@ def build_qss() -> str:
     QScrollArea#FolderList {{ background: transparent; border: none; }}
     QScrollArea#FolderList > QWidget > QWidget {{ background: transparent; }}
     QWidget#FolderListBody {{ background: transparent; }}
+    /* Lo mismo para la lista de claves cambiadas de Migración > Preferencias:
+       vive dentro de una tarjeta SURFACE y el scroll no puede cortarla. */
+    QScrollArea#DetailPrefs {{ background: transparent; border: none; }}
+    QScrollArea#DetailPrefs > QWidget > QWidget {{ background: transparent; }}
+    QWidget#DetailPrefsBody {{ background: transparent; }}
+    /* Gestor de guardados (Migración > Valores de fábrica): cada guardado es
+       una fila, como las de add-ons, y el scroll va transparente para no cortar
+       la tarjeta. */
+    QFrame#SnapshotRow {{
+        background-color: {t.CARD_DIM};
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.35);
+    }}
+    QScrollArea#SnapshotList {{ background: transparent; border: none; }}
+    QScrollArea#SnapshotList > QWidget > QWidget {{ background: transparent; }}
+    QWidget#SnapshotListBody {{ background: transparent; }}
+    QWidget#SnapshotDetailsBody {{ background: transparent; }}
+    /* Asa para estirar los paneles con scroll. Se ve como una barra fina (así
+       se descubre que se puede arrastrar) y se enciende al pasar el ratón. */
+    QFrame#ResizeHandle {{
+        background: {t.SURFACE_ALT};
+        border-radius: 3px;
+    }}
+    QFrame#ResizeHandle:hover {{ background: {t.ACCENT}; }}
     /* El candado cerrado, en ámbar: que "aquí no se escribe" se vea de un
        vistazo y no haya que pasar el ratón por encima para enterarse. */
     QPushButton#CardButton[writable="false"] {{

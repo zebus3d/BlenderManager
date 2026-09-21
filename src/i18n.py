@@ -214,6 +214,82 @@ _TRANSLATIONS = {
         "settings are saved aside and can be put back.":
             "Arranca Blender {version} como si acabaras de instalarlo. Tus "
             "ajustes actuales se guardan aparte y se pueden recuperar.",
+        "Version": "Versión",
+        "User prefs": "Prefs de usuario",
+        "Drag to make the settings list taller or shorter.":
+            "Arrastra para alargar o acortar la lista de ajustes.",
+        "Drag to make the saved copies list taller or shorter.":
+            "Arrastra para alargar o acortar la lista de copias guardadas.",
+        "Pick the version whose settings you want to reset or put back.":
+            "Elige la versión cuyos ajustes quieres restablecer o recuperar.",
+        "The version whose settings are reset or restored.":
+            "La versión cuyos ajustes se restablecen o se recuperan.",
+        "Folder with the settings of this version. This is the one that gets "
+        "reset or put back.":
+            "Carpeta con los ajustes de esta versión. Es la que se restablece "
+            "o se recupera.",
+        "Saved settings": "Ajustes guardados",
+        "Saved on {date}. {origin}": "Guardado el {date}. {origin}",
+        "Clean settings replaced by a restore":
+            "Ajustes limpios que se reemplazaron al restaurar",
+        "Your settings saved when resetting Blender {version}":
+            "Tus ajustes, guardados al restablecer Blender {version}",
+        "Empty": "Vacío",
+        "preferences": "preferencias",
+        "startup": "escena inicial",
+        "bookmarks ({count})": "marcadores ({count})",
+        "recent files ({count})": "recientes ({count})",
+        "Most recent": "Más reciente",
+        "Most complete": "Más completo",
+        "View settings": "Ver ajustes",
+        "See the settings this saved copy changes from Blender's defaults.":
+            "Mira los ajustes que esta copia guardada cambia respecto a los de "
+            "fábrica de Blender.",
+        "Restore": "Restaurar",
+        "Put these settings back in Blender.":
+            "Devuelve estos ajustes a Blender.",
+        "Delete": "Borrar",
+        "Delete this saved copy for good.":
+            "Borra esta copia guardada para siempre.",
+        "Analyzing its settings...": "Analizando sus ajustes...",
+        "Could not read this copy's settings.":
+            "No se pudieron leer los ajustes de esta copia.",
+        "No settings changed from Blender's defaults":
+            "Sin ajustes cambiados respecto a los de fábrica de Blender",
+        "{count} settings changed from Blender's defaults":
+            "{count} ajustes cambiados respecto a los de fábrica de Blender",
+        "Saved copies: {count}.": "Copias guardadas: {count}.",
+        "Right now this Blender has {count} settings changed from its "
+        "defaults.":
+            "Ahora mismo este Blender tiene {count} ajustes cambiados respecto "
+            "a los de fábrica.",
+        "Right now this Blender is at its defaults; restoring a copy brings "
+        "your settings back.":
+            "Ahora mismo este Blender está de fábrica; al restaurar una copia "
+            "vuelven tus ajustes.",
+        "Saved settings of {date}": "Ajustes guardados del {date}",
+        "These are the settings this copy changes from Blender's defaults.":
+            "Estos son los ajustes que esta copia cambia respecto a los de "
+            "fábrica de Blender.",
+        "Still reading this copy. Try again in a moment.":
+            "Todavía se está leyendo esta copia. Inténtalo en un momento.",
+        "Restore settings": "Restaurar ajustes",
+        "Put back in Blender {version} the settings saved on {date}?\n\nWhat "
+        "it has now is saved aside, so this can be undone.":
+            "¿Devolver a Blender {version} los ajustes guardados el {date}?\n\n"
+            "Lo que tiene ahora se guarda aparte, así que esto se puede "
+            "deshacer.",
+        "Delete all saved settings": "Borrar todos los ajustes guardados",
+        "Delete every saved copy of this version for good.":
+            "Borra para siempre todas las copias guardadas de esta versión.",
+        "Delete the settings saved on {date} for good? You will not be able to "
+        "restore them.":
+            "¿Borrar para siempre los ajustes guardados el {date}? No podrás "
+            "recuperarlos.",
+        "Delete all saved settings of this version for good? You will not be "
+        "able to restore them.":
+            "¿Borrar para siempre todos los ajustes guardados de esta versión? "
+            "No podrás recuperarlos.",
         "Useful when something misbehaves and you want to find out why: if the "
         "problem disappears on a clean Blender, it comes from your settings or "
         "add-ons, not from Blender itself. From there you put your settings "
@@ -228,13 +304,13 @@ _TRANSLATIONS = {
             "forma honesta de reportar un error, y la manera de grabar un "
             "tutorial con la interfaz que ve todo el mundo. No pierdes nada: "
             "tus ajustes quedan guardados aparte y vuelven con un clic.",
-        "This version was reset to factory settings from this app on {date}, "
-        "so these are the factory ones. Your previous settings are saved "
-        "aside: you can put them back in the \"Factory settings\" tab.":
-            "Esta versión se restableció a valores de fábrica desde esta "
-            "aplicación el {date}, así que estos son los de fábrica. Tus "
-            "ajustes anteriores están guardados aparte: puedes recuperarlos "
-            "en la pestaña «Valores de fábrica».",
+        "This app has the settings of Blender {version} saved aside from a "
+        "previous reset. To put them back, open the \"Factory settings\" tab "
+        "and pick Blender {version} there.":
+            "Esta aplicación tiene los ajustes de Blender {version} guardados "
+            "aparte de un restablecimiento anterior. Para recuperarlos, abre "
+            "la pestaña «Valores de fábrica» y elige allí Blender "
+            "{version}.",
         "Your Blender folders": "Tus carpetas de Blender",
         "Nothing has changed on disk and you do not have to set up anything: "
         "your versions are still in {folder} and keep working exactly as "

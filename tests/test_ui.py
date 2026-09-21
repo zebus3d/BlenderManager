@@ -3010,6 +3010,80 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                      "version": "5.3.0"})
             self.assertTrue(apply.called)
 
+    def test_leer_de_nuevo_sin_cambios_limpia_la_lista(self):
+        """Si la lectura nueva dice "de fábrica", no pueden quedar casillas.
+
+        Tras restablecer y pulsar "Leer de nuevo", el texto cambiaba a "no hay
+        cambios" pero las casillas de la lectura anterior seguían ahí (parecía
+        que aún detectaba aquellos ajustes).
+        """
+        from services import blender_prefs as bprefs
+
+        view = self._view()
+        view.detail_prefs = [bprefs.Preference("view.ui_scale", 1.25)]
+        view._fill_detail_rows()
+        self.assertFalse(view.detail_scroll.isHidden())
+        view._prefs_waiting = True
+        view._on_prefs_loaded({"user": {"view.ui_scale": 1.0},
+                               "factory": {"view.ui_scale": 1.0}})
+        self.assertEqual(view.detail_prefs, [])
+        self.assertEqual(view.detail_checks, [])
+        self.assertTrue(view.detail_scroll.isHidden())
+
+    def test_las_claves_cambiadas_van_en_un_scroll_con_tope(self):
+        """Con cientos de ajustes la tarjeta no puede crecer sin límite.
+
+        Sin un tope, la lista empuja los botones fuera de la pantalla y no se
+        llega a leer: las claves van en un scroll de alto máximo y los botones,
+        fuera de él.
+        """
+        from services import blender_prefs as bprefs
+        from ui.widgets.migrate import DETAIL_SCROLL_HEIGHT
+
+        view = self._view()
+        # Sin filas no se enseña el área de scroll.
+        self.assertTrue(view.detail_scroll.isHidden())
+        view.detail_prefs = [
+            bprefs.Preference(path=f"view.clave_{i}", value=i)
+            for i in range(40)]
+        view._fill_detail_rows()
+        self.assertFalse(view.detail_scroll.isHidden())
+        self.assertEqual(view.detail_scroll.maximumHeight(),
+                         DETAIL_SCROLL_HEIGHT)
+        # Las filas están dentro del scroll, no sueltas en la tarjeta.
+        body = view.detail_scroll.widget()
+        self.assertIs(body.layout(), view.detail_rows)
+        self.assertGreater(view.detail_rows.count(), 40)
+        # Al vaciarlas, el área se esconde otra vez.
+        view._clear_detail_rows()
+        self.assertTrue(view.detail_scroll.isHidden())
+
+    def test_los_paneles_con_scroll_se_pueden_estirar(self):
+        """Las dos listas con scroll tienen asa para subirlas de alto."""
+        from services import blender_prefs as bprefs
+        from ui.widgets.migrate import (DETAIL_MIN_HEIGHT,
+                                        SNAPSHOT_MIN_HEIGHT)
+
+        view = self._view()
+        view.resize(900, 700)
+        # Lista de claves: con filas, el asa se ve y se puede estirar.
+        view.detail_prefs = [
+            bprefs.Preference(f"view.clave_{i}", i) for i in range(20)]
+        view._fill_detail_rows()
+        self.assertFalse(view.detail_handle.isHidden())
+        before = view.detail_scroll.height()
+        view._resize_detail(120)
+        self.assertGreater(view.detail_scroll.height(), before)
+        view._resize_detail(-10000)          # no baja del mínimo
+        self.assertEqual(view.detail_scroll.height(), DETAIL_MIN_HEIGHT)
+
+        # Lista de guardados: lo mismo.
+        view.snapshot_scroll.setFixedHeight(200)
+        view._resize_snapshots(80)
+        self.assertEqual(view.snapshot_scroll.height(), 280)
+        view._resize_snapshots(-10000)
+        self.assertEqual(view.snapshot_scroll.height(), SNAPSHOT_MIN_HEIGHT)
+
     def test_reset_fabrica_aparta_la_config_y_permite_recuperar(self):
         from unittest import mock as _mock
 
@@ -3023,12 +3097,13 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                     _mock.patch("ui.widgets.migrate.show_info"), \
                     _mock.patch("ui.widgets.migrate.confirm",
                                 return_value=True):
-                view.target_entry = _fake_installed("5.3.0")
+                # La pestaña de fábrica usa su propio selector de una versión.
+                entry = _fake_installed("5.3.0")
                 view.platform = "linux"
-                # Solo hace falta el destino para el reset.
-                view.source_entry = _fake_installed("4.5.0")
-                view.target_cfg = target
-                with _mock.patch.object(view, "_target_config",
+                view._choices = [entry]
+                view.factory_combo.addItem("5.3.0")
+                view.factory_combo.setCurrentIndex(0)
+                with _mock.patch.object(view, "_factory_config",
                                         return_value=target):
                     view.reset_to_factory()
                     snapshots = __import__(
@@ -3039,6 +3114,175 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                     view.restore_factory_snapshot()
             self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
                              b"MIO")
+
+    def test_el_aviso_de_sin_cambios_nombra_la_version_y_el_destino(self):
+        """Sin cambios + instantáneas: decir de qué versión y dónde se recuperan.
+
+        La pestaña "Valores de fábrica" tiene su propio selector de versión, así
+        que el aviso tiene que decir que se elija esa versión **allí**; antes
+        decía «recupéralos en la pestaña Valores de fábrica» a secas y el
+        usuario la abría con otra versión y no encontraba nada.
+        """
+        from services import blender_config as bc
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(tmp, "5.2.2")
+            source.config_dir.mkdir(parents=True)
+            (source.config_dir / "userpref.blend").write_bytes(b"MIO")
+            bc.snapshot_config(source, label="v5.2.2")
+            view = self._view()
+            view.source_cfg = source
+            view.source_entry = _fake_installed("5.2.2")
+            message = view._no_changes_message()
+        self.assertIn("5.2.2", message)
+        self.assertIn("Factory settings", message)
+        # Ni el nombre crudo de la carpeta ni una fecha inventada.
+        self.assertNotIn("config-", message)
+
+    def test_fabrica_tiene_su_propio_selector_de_una_version(self):
+        """La pestaña de fábrica no usa la barra origen → destino.
+
+        Solo hay que elegir una versión: si allí aparecen "Desde" y "Hacia" se
+        cree que la operación usa los dos y no se sabe cuál manda.
+        """
+        from unittest import mock as _mock
+
+        from services import blender_config as bc
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp, "5.2.2")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"MIO")
+            bc.snapshot_config(config, label="v5.2.2")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch.object(
+                        view, "_factory_config", return_value=config):
+                view._choices = [_fake_installed("5.2.2")]
+                view.factory_combo.addItem("5.2.2")
+                view.factory_combo.setCurrentIndex(0)
+                view.tabs.setCurrentIndex(2)
+                # La cabecera que se ve es la de una sola versión…
+                self.assertIs(view.factory_header.parentWidget(),
+                              view.factory_page)
+                self.assertIsNot(view.header.parentWidget(),
+                                 view.factory_page)
+                # …y las pestañas de migración sí llevan la de dos.
+                view.tabs.setCurrentIndex(0)
+                self.assertIs(view.header.parentWidget(),
+                              view.tabs.widget(0))
+                # Funciona con una sola versión instalada (no exige dos): hay
+                # una fila de guardado y su botón de restaurar está activo.
+                row = next(iter(view._snapshot_widgets.values()))
+                self.assertTrue(row.restore_btn.isEnabled())
+
+    def test_el_selector_de_fabrica_ensena_solo_la_version(self):
+        """En fábrica el nombre de la carpeta repetía el número.
+
+        «Blender 5.3.0-alpha · blender-5.3.0-alpha» con una etiqueta que ya dice
+        "Versión" sobra; la ruta de la config está justo debajo.
+        """
+        from unittest import mock as _mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            configs = {"4.5.0": self._config(tmp, "4.5.0"),
+                       "5.3.0": self._config(tmp, "5.3.0")}
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False):
+                self._with_configs(view, configs, source="4.5.0",
+                                   target="5.3.0")
+            self.assertEqual(view.factory_combo.itemText(0), "5.3.0")
+            # Las de migración sí llevan la build, para distinguirla.
+            self.assertIn("blender-5.3.0", view.target_combo.itemText(0))
+
+    def test_gestor_de_guardados_lista_analiza_y_borra(self):
+        """El gestor: una fila por guardado, con análisis y borrado individual."""
+        from unittest import mock as _mock
+        from services import blender_config as bc
+        from services import blender_prefs as bprefs
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp, "5.2.2")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"MIO")
+            first = bc.snapshot_config(config, label="v5.2.2")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"OTRA")
+            second = bc.snapshot_config(config, label="v5.2.2")
+            newest = bc.snapshots_for(config)[0]
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch.object(
+                        view, "_factory_config", return_value=config):
+                view._choices = [_fake_installed("5.2.2")]
+                view.factory_combo.addItem("5.2.2")
+                view.factory_combo.setCurrentIndex(0)
+                view.tabs.setCurrentIndex(2)
+                self.assertEqual(len(view._snapshot_widgets), 2)
+                # La más nueva se marca como reciente.
+                self.assertIn("recent",
+                              view._snapshot_widgets[newest].badge.text().lower())
+                # Llega el análisis: se cuentan y se marca el más completo.
+                view._snapshots_waiting = True
+                view._on_snapshots_analyzed({
+                    "version": "5.2.2",
+                    "results": {
+                        str(first): [bprefs.Preference("view.ui_scale", 1.1)],
+                        str(second): [
+                            bprefs.Preference("view.ui_scale", 1.2),
+                            bprefs.Preference("view.show_developer_ui", True)],
+                    },
+                    "live": 0,
+                })
+                most = max(view._snapshot_widgets,
+                           key=lambda path: len(
+                               view._snapshot_widgets[path].analysis or []))
+                self.assertIn("complete",
+                              view._snapshot_widgets[most].badge.text().lower())
+                self.assertTrue(
+                    view._snapshot_widgets[most].details_btn.isEnabled())
+                # Borrar uno (con confirmación) deja el otro.
+                with _mock.patch("ui.widgets.migrate.confirm",
+                                 return_value=True):
+                    view.delete_snapshot(first)
+                self.assertEqual(len(view._snapshot_widgets), 1)
+                self.assertNotIn(first, view._snapshot_widgets)
+
+    def test_el_detalle_de_un_guardado_lista_sus_ajustes(self):
+        """"Ver ajustes" abre un diálogo con las claves de ese guardado."""
+        from unittest import mock as _mock
+        from services import blender_config as bc
+        from services import blender_prefs as bprefs
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp, "5.2.2")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"MIO")
+            snap = bc.snapshot_config(config, label="v5.2.2")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch.object(
+                        view, "_factory_config", return_value=config):
+                view._choices = [_fake_installed("5.2.2")]
+                view.factory_combo.addItem("5.2.2")
+                view.factory_combo.setCurrentIndex(0)
+                view.tabs.setCurrentIndex(2)
+                view._snapshots_waiting = True
+                view._on_snapshots_analyzed({
+                    "version": "5.2.2",
+                    "results": {
+                        str(snap): [
+                            bprefs.Preference("view.ui_scale", 1.25)]},
+                    "live": 0,
+                })
+                with _mock.patch("ui.widgets.migrate.AppDialog.exec",
+                                 return_value=0) as run:
+                    view.show_snapshot_details(snap)
+            self.assertTrue(run.called)
 
     def test_review_explica_como_revisar(self):
         """El amarillo "Review" tiene que decir qué hacer, no solo el motivo."""

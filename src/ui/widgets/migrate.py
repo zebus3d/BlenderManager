@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QScrollArea,
     QSizePolicy,
     QTabWidget,
     QVBoxLayout,
@@ -48,11 +49,28 @@ from ui import theme as t
 from ui.fonts import glyph_icon, icon_font
 from ui.widgets.buttons import CardButton, CheckPill
 from ui.widgets.cards import card_shadow
-from ui.widgets.dialogs import confirm, show_info
+from ui.widgets.dialogs import AppDialog, confirm, show_info
 from ui.widgets.labels import ElidedLabel
 
 # Alto fijo de una fila: las dos columnas tienen que cuadrar una con otra.
 ROW_HEIGHT = 48
+
+# Alto máximo del área con las claves cambiadas. Un Blender puede tener cientos
+# de ajustes distintos de fábrica: sin tope, la tarjeta crece sin fin, empuja
+# los botones fuera de la pantalla y no se puede leer nada. Con esto caben unas
+# ocho filas y el resto se ve con la barra de scroll, con los botones siempre a
+# la vista.
+DETAIL_SCROLL_HEIGHT = 260
+
+# Alto máximo de la lista de guardados (mismo motivo: caben unos cuatro y a
+# partir de ahí se baja con la barra).
+SNAPSHOT_SCROLL_HEIGHT = 280
+
+# Estos paneles llevan una barra para estirarlos hacia abajo (``_ResizeHandle``):
+# el alto inicial es el de su contenido, y el usuario lo sube si quiere ver más
+# filas sin tocar la ventana. Por debajo de estos mínimos no se puede encoger.
+DETAIL_MIN_HEIGHT = 60
+SNAPSHOT_MIN_HEIGHT = 60
 
 # Color del glifo dentro de un botón (sobre el relleno de acento).
 _ICON_ON_ACCENT = "#FFFFFF"
@@ -219,6 +237,15 @@ def _entry_info(entry) -> tuple:
     return getattr(entry, "executable", None), getattr(entry, "version", "")
 
 
+def _version_label(entry) -> str:
+    """Texto de una opción del selector de fábrica: solo la versión.
+
+    Allí el nombre de la carpeta no aporta nada y repetía el número
+    («Blender 5.2.2 · blender-5.2.2-linux-x64»); la ruta ya está debajo.
+    """
+    return getattr(entry, "version", "") or getattr(entry, "name", "")
+
+
 def _report_lines(summary: str, backed_up: bool, failed, failure_title: str,
                   failure_label) -> list:
     """Monta las líneas del diálogo de resultado de una copia.
@@ -238,6 +265,240 @@ def _report_lines(summary: str, backed_up: bool, failed, failure_title: str,
         for item, message in failed[:10]:
             lines.append(f"· {failure_label(item)}: {message}")
     return lines
+
+
+def _size_text(size: int) -> str:
+    """Tamaño legible (``180 KB``, ``1.2 MB``). Unidades, no palabras.
+
+    No pasa por ``tr``: un número con su unidad (KB/MB) se lee igual en los dos
+    idiomas y así no hay una clave de traducción por cada medida.
+    """
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.0f} KB"
+    return f"{size / (1024 * 1024):.1f} MB"
+
+
+def _section_names(paths) -> list:
+    """Nombres legibles de las secciones a las que pertenecen esas rutas RNA."""
+    labels = dict(bprefs.SECTIONS)
+    order = {key: index for index, (key, _) in enumerate(bprefs.SECTIONS)}
+    positions = {}
+    for path in paths:
+        key = (path or "").split(".", 1)[0]
+        positions.setdefault(key, order.get(key, 99))
+    ordered = sorted(positions, key=lambda key: (positions[key], key))
+    return [tr(labels.get(key, key)) for key in ordered]
+
+
+def _snapshot_origin(snapshot) -> str:
+    """Qué es ese guardado, en una frase (según la etiqueta del nombre).
+
+    ``factory`` es la config limpia que se aparcó al restaurar; ``vX.Y.Z`` son
+    los ajustes del usuario que se apartaron al restablecer esa versión. Sin la
+    frase, dos carpetas con fechas distintas no dicen cuál es cuál.
+    """
+    label = bc.snapshot_label(snapshot)
+    if label == "factory":
+        return tr("Clean settings replaced by a restore")
+    if label.startswith("v"):
+        return tr("Your settings saved when resetting Blender {version}",
+                  version=label[1:])
+    return tr("Saved settings")
+
+
+def _snapshot_files_text(details) -> str:
+    """Qué trae el guardado, además de su userpref (barato, sin arrancar nada)."""
+    parts = []
+    if details.get("has_userpref"):
+        parts.append(tr("preferences"))
+    if details.get("has_startup"):
+        parts.append(tr("startup"))
+    if details.get("bookmarks"):
+        parts.append(tr("bookmarks ({count})", count=details["bookmarks"]))
+    if details.get("recent"):
+        parts.append(tr("recent files ({count})", count=details["recent"]))
+    if details.get("total"):
+        parts.append(_size_text(int(details["total"])))
+    return "  ·  ".join(parts) or tr("Empty")
+
+
+class _SnapshotRow(QFrame):
+    """Fila del gestor de guardados: qué es, qué trae y qué hacer con él.
+
+    Cada acción va en su botón (ver, restaurar, borrar), así que no hay que
+    seleccionar una y luego buscar el botón: es un gestor, no una lista de
+    opciones.
+    """
+
+    def __init__(self, snapshot, details, on_restore, on_delete, on_details,
+                 parent=None):
+        super().__init__(parent)
+        self.snapshot = Path(snapshot)
+        # Preferencias leídas de este guardado (o None mientras se analiza).
+        self.analysis = None
+        self.setObjectName("SnapshotRow")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(12)
+
+        info = QVBoxLayout()
+        info.setSpacing(2)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(8)
+        date = bc.snapshot_date(self.snapshot) or self.snapshot.name
+        origin = _snapshot_origin(self.snapshot)
+        title = QLabel(f"{date}  ·  {origin}")
+        title.setToolTip(tr("Saved on {date}. {origin}", date=date,
+                            origin=origin))
+        title_row.addWidget(title)
+        self.badge = QLabel("")
+        self.badge.setObjectName("Info")
+        title_row.addWidget(self.badge)
+        title_row.addStretch()
+        info.addLayout(title_row)
+
+        files = QLabel(_snapshot_files_text(details))
+        files.setObjectName("Muted")
+        files.setWordWrap(True)
+        info.addWidget(files)
+
+        self.analysis_label = QLabel("")
+        self.analysis_label.setObjectName("Muted")
+        self.analysis_label.setWordWrap(True)
+        info.addWidget(self.analysis_label)
+        lay.addLayout(info, 1)
+
+        self.details_btn = CardButton(
+            tr("View settings"),
+            tooltip=tr("See the settings this saved copy changes from "
+                       "Blender's defaults."))
+        self.details_btn.clicked.connect(lambda: on_details(self.snapshot))
+        self.details_btn.setEnabled(False)
+        lay.addWidget(self.details_btn)
+
+        self.restore_btn = CardButton(
+            tr("Restore"), variant="accent",
+            tooltip=tr("Put these settings back in Blender."))
+        self.restore_btn.clicked.connect(lambda: on_restore(self.snapshot))
+        self.restore_btn.setEnabled(bool(details.get("has_userpref")))
+        lay.addWidget(self.restore_btn)
+
+        delete = CardButton(tr("Delete"), variant="danger",
+                            tooltip=tr("Delete this saved copy for good."))
+        delete.clicked.connect(lambda: on_delete(self.snapshot))
+        lay.addWidget(delete)
+
+    def add_badge(self, text: str) -> None:
+        """Añade una insignia ("más reciente", "más completo") a la fila."""
+        current = self.badge.text()
+        self.badge.setText(f"{current} · {text}" if current else text)
+
+    def set_unreadable(self) -> None:
+        """No se pudo leer ese guardado (Blender falló o no está)."""
+        self.analysis = None
+        self.analysis_label.setText(
+            tr("Could not read this copy's settings."))
+
+    def set_analysis(self, preferences) -> None:
+        """Pinta el resumen del análisis (o "Analizando…" si es ``None``)."""
+        self.analysis = preferences
+        if preferences is None:
+            self.analysis_label.setText(tr("Analyzing its settings..."))
+            return
+        self.details_btn.setEnabled(True)
+        if not preferences:
+            self.analysis_label.setText(
+                tr("No settings changed from Blender's defaults"))
+            return
+        text = tr("{count} settings changed from Blender's defaults",
+                  count=len(preferences))
+        sections = _section_names([pref.path for pref in preferences])
+        if sections:
+            text += "  ·  " + " · ".join(sections)
+        self.analysis_label.setText(text)
+
+
+def _show_snapshot_details(parent, snapshot, preferences) -> None:
+    """Diálogo con los ajustes que cambia ese guardado, uno por línea.
+
+    En un scroll: un guardado puede traer decenas de claves y el diálogo no
+    puede crecer hasta salirse de la pantalla.
+    """
+    date = bc.snapshot_date(snapshot) or Path(snapshot).name
+    dialog = AppDialog(parent, tr("Saved settings of {date}", date=date),
+                       tr("These are the settings this copy changes from "
+                          "Blender's defaults."))
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.NoFrame)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll.setMaximumHeight(360)
+    body = QWidget()
+    body.setObjectName("SnapshotDetailsBody")
+    body_lay = QVBoxLayout(body)
+    body_lay.setContentsMargins(0, 0, 0, 0)
+    body_lay.setSpacing(4)
+    if not preferences:
+        empty = QLabel(tr("No settings changed from Blender's defaults"))
+        empty.setObjectName("Muted")
+        body_lay.addWidget(empty)
+    else:
+        for section, items in bprefs.group_by_section(preferences):
+            head = QLabel(tr(dict(bprefs.SECTIONS).get(section, section)))
+            head.setObjectName("Muted")
+            body_lay.addWidget(head)
+            for pref in items:
+                # La ruta RNA completa con su valor: es lo que permite
+                # comprobarlo en Blender sin adivinar.
+                line = QLabel(f"{pref.path}  =  {pref.value}")
+                line.setWordWrap(True)
+                body_lay.addWidget(line)
+    body_lay.addStretch()
+    scroll.setWidget(body)
+    layout = dialog.layout()
+    layout.insertWidget(layout.count() - 1, scroll)
+    dialog.add_button(tr("Close"), variant="accent", on_click=dialog.accept,
+                      tooltip=tr("Close this message."))
+    dialog.exec()
+
+
+class _ResizeHandle(QFrame):
+    """Asa para estirar hacia abajo el panel que tiene encima.
+
+    Qt no deja redimensionar un ``QScrollArea`` arrastrando su borde, y con el
+    alto fijo el usuario se queda con las filas que quepan. Esta barra toma el
+    relevo: se arrastra y el panel crece o mengua (ver ``_resize_scroll``). Va
+    pegada **debajo** del scroll, así que separa el panel de los botones.
+    """
+
+    def __init__(self, on_resize, tooltip: str = "", parent=None):
+        super().__init__(parent)
+        self._on_resize = on_resize
+        self._last = None
+        self.setObjectName("ResizeHandle")
+        # Píldora estrecha y centrada (se centra desde el layout): ancha no se
+        # distinguiría de un separador y no se vería que se puede arrastrar.
+        self.setFixedSize(120, 8)
+        self.setCursor(Qt.SizeVerCursor)
+        if tooltip:
+            self.setToolTip(tooltip)
+
+    def mousePressEvent(self, event) -> None:
+        self._last = event.globalPosition().y()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._last is None:
+            return
+        # Posición **global**: el asa se mueve con el panel, así que la local
+        # daría un salto en cada fotograma.
+        current = event.globalPosition().y()
+        self._on_resize(int(current - self._last))
+        self._last = current
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._last = None
 
 
 class _BoardRow(QFrame):
@@ -335,6 +596,7 @@ class MigrateView(QWidget):
     prefs_loaded = Signal(object)      # {"user", "factory", "error"}
     prefs_applied = Signal(object)     # {"result", "version"}
     source_read = Signal(object)       # {"version", "enabled", "error"}
+    snapshots_analyzed = Signal(object)  # {"version", "results", "live"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -375,11 +637,22 @@ class MigrateView(QWidget):
         self.source_enabled = set()
         self.detail_prefs = []
         self.detail_checks = []
+        # Alto elegido a mano con el asa (None = el del contenido, con tope).
+        self._detail_height = None
+        self._snapshot_height = None
+        # Gestor de guardados: filas por instantánea, análisis cacheado y
+        # bandera de "ya se está analizando" (un arranque de Blender por fila).
+        self._snapshot_widgets = {}
+        self._analysis = {}
+        self._analyzed_for = ""
+        self._snapshots_waiting = False
+        self._factory_live_count = None
         self._build_ui()
         self.activation_done.connect(self._on_activation_done)
         self.prefs_loaded.connect(self._on_prefs_loaded)
         self.prefs_applied.connect(self._on_prefs_applied)
         self.source_read.connect(self._on_source_read)
+        self.snapshots_analyzed.connect(self._on_snapshots_analyzed)
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -391,13 +664,16 @@ class MigrateView(QWidget):
         había una cabecera propia y toda la vista iba del gris de panel: era la
         única pantalla con el fondo claro.
 
-        La tarjeta **origen → destino** es común a las tres pestañas, así que
-        hay una sola y se mueve a la pestaña visible (``_show_header``).
+        La tarjeta **origen → destino** es común a Add-ons y Preferences, así que
+        hay una sola y se mueve a la pestaña visible (``_show_header``). La
+        pestaña de fábrica **no migra nada**, así que lleva su propia tarjeta
+        con un solo desplegable: allí un "Desde" y un "Hacia" hacían creer que
+        la operación usaba los dos, cuando solo actúa sobre uno.
 
         * **Add-ons**: el tablero y el botón de copiar lo seleccionado.
         * **Preferences**: primero lo fino (ajustes uno a uno) y luego los
           ficheros completos.
-        * **Factory settings**: dejar la versión destino como recién instalada.
+        * **Factory settings**: una versión, que se restablece o se recupera.
         """
         root = QVBoxLayout(self)
         # Sin margen: las pestañas van **a sangre** (el canvas llega hasta la
@@ -407,12 +683,14 @@ class MigrateView(QWidget):
         root.setSpacing(0)
 
         self.header = self._build_header()
+        self.factory_header = self._build_factory_header()
 
         self.tabs = QTabWidget()
         self.tabs.setObjectName("MigrateTabs")
         self.tabs.addTab(self._build_addons_tab(), tr("Add-ons"))
-        self.tabs.addTab(self._build_preferences_tab(), tr("Preferences"))
-        self.tabs.addTab(self._build_factory_tab(), tr("Factory settings"))
+        self.tabs.addTab(self._build_preferences_tab(), tr("User prefs"))
+        self.factory_page = self._build_factory_tab()
+        self.tabs.addTab(self.factory_page, tr("Factory settings"))
         # Misma alineación que Ajustes: el QTabWidget dibuja su barra arriba del
         # todo, así que la vista baja lo que la fila mida de menos que la de
         # filtros y las dos terminan a la misma altura al cambiar de pantalla.
@@ -449,18 +727,92 @@ class MigrateView(QWidget):
         lay.addWidget(self.warning)
         return header
 
+    def _build_factory_header(self) -> QWidget:
+        """Cabecera de la pestaña de fábrica: una sola versión.
+
+        No es la barra origen → destino: en fábrica no hay copia, solo una
+        versión que se restablece (o cuyos ajustes guardados se recuperan). Con
+        dos desplegables parecía que la operación usaba el "Hacia" y el "Desde"
+        a la vez, y el usuario no sabía cuál mandaba.
+        """
+        header = QWidget()
+        header.setObjectName("MigrateHeader")
+        lay = QVBoxLayout(header)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(12)
+
+        card, card_lay = _settings_card()
+        card.setToolTip(tr(
+            "Pick the version whose settings you want to reset or put back."))
+        column = QVBoxLayout()
+        column.setSpacing(4)
+        label = QLabel(tr("Version"))
+        label.setToolTip(tr("The version whose settings are reset or restored."))
+        column.addWidget(label)
+        self.factory_combo = QComboBox()
+        self.factory_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.factory_combo.setMinimumWidth(150)
+        self.factory_combo.setToolTip(tr(
+            "The version whose settings are reset or restored."))
+        self.factory_combo.currentIndexChanged.connect(
+            lambda _: self._on_factory_version())
+        column.addWidget(self.factory_combo)
+        self.factory_path_label = QLabel("")
+        self.factory_path_label.setWordWrap(True)
+        self.factory_path_label.setToolTip(tr(
+            "Folder with the settings of this version. This is the one that "
+            "gets reset or put back."))
+        column.addWidget(self.factory_path_label)
+        card_lay.addLayout(column)
+        lay.addWidget(card)
+
+        self.factory_warning = QLabel("")
+        self.factory_warning.setObjectName("Danger")
+        self.factory_warning.setWordWrap(True)
+        self.factory_warning.setVisible(False)
+        lay.addWidget(self.factory_warning)
+        return header
+
+    def _on_factory_version(self) -> None:
+        """Cambió la versión de la pestaña de fábrica: refresca su estado.
+
+        Se tira el análisis y el resumen porque son de otra versión: los
+        guardados que se enseñan ahora son otros.
+        """
+        self._analysis = {}
+        self._analyzed_for = ""
+        self._factory_live_count = None
+        self._refresh_factory()
+        self._check_running(self._factory_entry(), self.factory_warning)
+
     def _show_header(self, index: int) -> None:
-        """Mueve la tarjeta de versiones a la pestaña que se acaba de abrir."""
+        """Mueve a la pestaña visible la tarjeta de versiones que le toca.
+
+        Add-ons y Preferences comparten la barra origen → destino; fábrica usa su
+        propio selector de una versión (``_build_factory_header``). La que no se
+        usa se desparenta y se oculta, para que no quede por debajo.
+        """
         page = self.tabs.widget(index)
-        if page is None or page is self.header.parentWidget():
-            return
-        old = self.header.parentWidget()
-        if old is not None and old.layout() is not None:
-            old.layout().removeWidget(self.header)
-        # ``insertWidget`` reparenta: la tarjeta pasa a ser hija de la página
-        # nueva y se dibuja arriba del todo, encima del contenido del tema.
-        page.layout().insertWidget(0, self.header)
-        self.header.show()
+        is_factory = page is self.factory_page
+        header = self.factory_header if is_factory else self.header
+        other = self.header if is_factory else self.factory_header
+        # Sacar la que no toca (``removeWidget`` no la desparenta, así que hay
+        # que insertarla de nuevo al volver: no basta con mirar el padre).
+        old_other = other.parentWidget()
+        if old_other is not None and old_other.layout() is not None:
+            old_other.layout().removeWidget(other)
+        other.hide()
+        if page is not None:
+            old = header.parentWidget()
+            if old is not None and old.layout() is not None:
+                old.layout().removeWidget(header)
+            # ``insertWidget`` reparenta: la tarjeta pasa a ser hija de la
+            # página nueva y se dibuja arriba del todo, encima del contenido.
+            page.layout().insertWidget(0, header)
+        header.show()
+        if is_factory:
+            self._refresh_factory()
+            self._check_running(self._factory_entry(), self.factory_warning)
 
     def _new_page(self) -> tuple:
         """Página de una pestaña con los márgenes de Ajustes (``(page, lay)``).
@@ -753,9 +1105,38 @@ class MigrateView(QWidget):
         self.detail_status.setWordWrap(True)
         lay.addWidget(self.detail_status)
 
-        self.detail_rows = QVBoxLayout()
+        # Las claves van en su propia área de scroll con alto tope (ver
+        # ``DETAIL_SCROLL_HEIGHT``). Los botones quedan **fuera**, como en la
+        # biblioteca de carpetas: así no hay que bajar hasta el final de una
+        # lista larguísima para pulsarlos.
+        self.detail_scroll = QScrollArea()
+        self.detail_scroll.setObjectName("DetailPrefs")
+        self.detail_scroll.setWidgetResizable(True)
+        self.detail_scroll.setFrameShape(QFrame.NoFrame)
+        self.detail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.detail_scroll.setMaximumHeight(DETAIL_SCROLL_HEIGHT)
+        # El scroll y su contenido transparentes: el fondo lo pone la tarjeta,
+        # y un QScrollArea pinta el suyo por defecto (se vería un rectángulo).
+        body = QWidget()
+        body.setObjectName("DetailPrefsBody")
+        self.detail_rows = QVBoxLayout(body)
+        self.detail_rows.setContentsMargins(0, 0, 0, 0)
         self.detail_rows.setSpacing(4)
-        lay.addLayout(self.detail_rows)
+        self.detail_scroll.setWidget(body)
+        self.detail_scroll.setVisible(False)
+        lay.addWidget(self.detail_scroll)
+
+        # Asa para estirar la lista hacia abajo (los botones quedan debajo,
+        # siempre a la vista).
+        self.detail_handle = _ResizeHandle(
+            self._resize_detail,
+            tooltip=tr("Drag to make the settings list taller or shorter."))
+        self.detail_handle.setVisible(False)
+        handle_row = QHBoxLayout()
+        handle_row.addStretch()
+        handle_row.addWidget(self.detail_handle)
+        handle_row.addStretch()
+        lay.addLayout(handle_row)
 
         row = QHBoxLayout()
         self.detail_load_btn = CardButton(
@@ -794,6 +1175,28 @@ class MigrateView(QWidget):
     def _clear_detail_rows(self) -> None:
         self.detail_checks = []
         _clear_layout(self.detail_rows)
+        # Sin filas no se enseña el área (ni su asa): un hueco vacío con su
+        # barra quedaría raro cuando aún no se ha leído nada.
+        if hasattr(self, "detail_scroll"):
+            self.detail_scroll.setVisible(False)
+            self.detail_handle.setVisible(False)
+
+    def _clamp_height(self, height: int, minimum: int) -> int:
+        """Alto de un panel: ni por debajo del mínimo ni más alto que la ventana."""
+        maximum = max(minimum, self.height() - 220)
+        return max(minimum, min(int(height), maximum))
+
+    def _resize_detail(self, delta: int) -> None:
+        """Arrastró el asa de la lista de claves: fija el alto elegido."""
+        self._detail_height = self._clamp_height(
+            self.detail_scroll.height() + delta, DETAIL_MIN_HEIGHT)
+        self.detail_scroll.setFixedHeight(self._detail_height)
+
+    def _resize_snapshots(self, delta: int) -> None:
+        """Arrastró el asa de la lista de guardados: fija el alto elegido."""
+        self._snapshot_height = self._clamp_height(
+            self.snapshot_scroll.height() + delta, SNAPSHOT_MIN_HEIGHT)
+        self.snapshot_scroll.setFixedHeight(self._snapshot_height)
 
     def _source_usable(self) -> bool:
         """True si el origen tiene un ejecutable real con el que preguntarle."""
@@ -819,12 +1222,17 @@ class MigrateView(QWidget):
             self.detail_status.setText(
                 tr("The source version has no executable to read."))
             self._show_detail_buttons(False)
+            self._clear_detail_rows()
             return
         executable, _ = _entry_info(self.source_entry)
         self._source_reading = True
         self._prefs_loading = True
         self._prefs_waiting = True
         self.detail_load_btn.setEnabled(False)
+        # Se vacía lo que hubiera: mientras se lee, una lista de la lectura
+        # anterior haría creer que esos siguen siendo los ajustes de ahora.
+        self.detail_prefs = []
+        self._clear_detail_rows()
         self.detail_status.setText(tr("Reading settings..."))
 
         def worker():
@@ -879,6 +1287,8 @@ class MigrateView(QWidget):
         self._prefs_loading = False
         self.detail_load_btn.setEnabled(True)
         if payload.get("error") or not payload.get("user"):
+            self.detail_prefs = []
+            self._clear_detail_rows()
             self.detail_status.setText(tr("Could not read the settings."))
             self._show_detail_buttons(False)
             return
@@ -889,7 +1299,10 @@ class MigrateView(QWidget):
             # Decir solo "no has cambiado nada" despista cuando el motivo es
             # que la propia aplicación restableció esa versión: el usuario sabe
             # que SÍ tenía ajustes y cree que el detector falla. Si hay una
-            # instantánea, se dice de dónde viene y cómo recuperarlos.
+            # instantánea, se dice de dónde viene y cómo recuperarlos. Y la
+            # lista se **vacía**: sin esto quedaban las casillas de la lectura
+            # anterior y parecía que aún detectaba aquellos ajustes.
+            self._clear_detail_rows()
             self.detail_status.setText(self._no_changes_message())
             self._show_detail_buttons(False)
             return
@@ -898,21 +1311,31 @@ class MigrateView(QWidget):
         self._refresh_plan_status()
 
     def _no_changes_message(self) -> str:
-        """Por qué no hay nada que copiar, con la causa cuando la sabemos."""
+        """Por qué no hay nada que copiar, con la causa cuando la sabemos.
+
+        Si hay instantáneas con ajustes es que la app restableció esa versión
+        (o el usuario lo hizo desde aquí) y sus ajustes están aparte. Se dice
+        **de qué versión** son y dónde se recuperan: la pestaña "Valores de
+        fábrica" tiene su propio selector, así que hay que decir que se elija
+        esa versión allí, o el usuario la abre con otra y no encuentra nada
+        (fue su confusión).
+        """
         base = tr("You have no settings changed from Blender's defaults.")
         config = self.source_cfg
         snapshots = bc.snapshots_for(config) if config is not None else []
         if not snapshots:
             return base
+        _, version = _entry_info(self.source_entry)
         return base + " " + tr(
-            "This version was reset to factory settings from this app on "
-            "{date}, so these are the factory ones. Your previous settings "
-            "are saved aside: you can put them back in the \"Factory "
-            "settings\" tab.", date=snapshots[0].name)
+            "This app has the settings of Blender {version} saved aside from a "
+            "previous reset. To put them back, open the \"Factory settings\" "
+            "tab and pick Blender {version} there.", version=version)
 
     def _fill_detail_rows(self) -> None:
         self._clear_detail_rows()
         self.detail_checks = []
+        self.detail_scroll.setVisible(True)
+        self.detail_handle.setVisible(True)
         for section, items in bprefs.group_by_section(self.detail_prefs):
             label = tr(dict(bprefs.SECTIONS).get(section, section))
             header = QLabel(label)
@@ -933,6 +1356,25 @@ class MigrateView(QWidget):
                     lambda checked, p=pref: setattr(p, "selected", checked))
                 self.detail_rows.addWidget(check)
                 self.detail_checks.append(check)
+        # Alto al contenido, con tope: pocas claves no dejan un hueco vacío y
+        # muchas no empujan los botones fuera. Se suma el ``sizeHint`` de cada
+        # fila a mano porque el del layout (``sizeHint`` con activación) da 0
+        # mientras el scroll aún mide 0: la restricción de alto se contagia.
+        content = 0
+        for index in range(self.detail_rows.count()):
+            widget = self.detail_rows.itemAt(index).widget()
+            if widget is not None:
+                content += widget.sizeHint().height()
+        content += self.detail_rows.spacing() * max(
+            0, self.detail_rows.count() - 1)
+        # Alto: el que el usuario haya elegido con el asa o, si no, el del
+        # contenido con tope. ``setFixedHeight`` porque el layout de la página
+        # tiene un ``addStretch`` que, si no, se queda el hueco y deja el scroll
+        # en su mínimo.
+        height = self._detail_height or min(content, DETAIL_SCROLL_HEIGHT)
+        self.detail_scroll.setFixedHeight(max(DETAIL_MIN_HEIGHT, height))
+        # Con una lista nueva, al principio (si no, hereda la posición anterior).
+        self.detail_scroll.verticalScrollBar().setValue(0)
 
     def _select_detail(self, checked: bool) -> None:
         for pref in self.detail_prefs:
@@ -987,11 +1429,11 @@ class MigrateView(QWidget):
                                       version=version))
 
     def _build_factory(self) -> QFrame:
-        """Tarjeta para resetear la versión DESTINO a valores de fábrica.
+        """Tarjeta-gestor de los ajustes guardados de esa versión.
 
-        Se apoya en ``snapshot_config``: aparta la carpeta ``config`` a una
-        instantánea y deja que Blender recree todo de fábrica. Se puede volver
-        a poner la instantánea, o borrarla para dejarlo limpio para siempre.
+        Cada guardado es una fila con su fecha, de qué es, qué trae y qué
+        ajustes cambia (eso último se lee en segundo plano), con botones para
+        verlos, restaurarlo o borrarlo. El reset sigue siendo una acción aparte.
         """
         # Sin título dentro: la pestaña ya se llama "Factory settings". El
         # texto se rellena en ``_refresh_factory`` porque nombra la versión
@@ -1017,11 +1459,43 @@ class MigrateView(QWidget):
         why.setObjectName("Muted")
         lay.addWidget(why)
 
+        # Resumen: cuántos guardados hay y en qué estado está la config viva.
         self.factory_status = QLabel("")
         self.factory_status.setWordWrap(True)
-        self.factory_status.setToolTip(tr(
-            "Settings saved aside by a previous reset, ready to be put back."))
         lay.addWidget(self.factory_status)
+
+        # La lista, en scroll: puede haber muchos guardados.
+        self.snapshot_scroll = QScrollArea()
+        self.snapshot_scroll.setObjectName("SnapshotList")
+        self.snapshot_scroll.setWidgetResizable(True)
+        self.snapshot_scroll.setFrameShape(QFrame.NoFrame)
+        self.snapshot_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.snapshot_scroll.setMaximumHeight(SNAPSHOT_SCROLL_HEIGHT)
+        body = QWidget()
+        body.setObjectName("SnapshotListBody")
+        self.snapshot_rows = QVBoxLayout(body)
+        self.snapshot_rows.setContentsMargins(0, 0, 0, 0)
+        self.snapshot_rows.setSpacing(6)
+        self.snapshot_rows.addStretch()
+        self.snapshot_scroll.setWidget(body)
+        self.snapshot_scroll.setVisible(False)
+        lay.addWidget(self.snapshot_scroll)
+
+        self.snapshot_handle = _ResizeHandle(
+            self._resize_snapshots,
+            tooltip=tr("Drag to make the saved copies list taller or shorter."))
+        self.snapshot_handle.setVisible(False)
+        handle_row = QHBoxLayout()
+        handle_row.addStretch()
+        handle_row.addWidget(self.snapshot_handle)
+        handle_row.addStretch()
+        lay.addLayout(handle_row)
+
+        self.factory_empty = QLabel(tr(
+            "No saved settings. Resetting will keep nothing to go back to."))
+        self.factory_empty.setObjectName("Muted")
+        self.factory_empty.setWordWrap(True)
+        lay.addWidget(self.factory_empty)
 
         row = QHBoxLayout()
         reset = CardButton(tr("Reset to factory settings"),
@@ -1030,61 +1504,249 @@ class MigrateView(QWidget):
         reset.clicked.connect(self.reset_to_factory)
         row.addWidget(reset)
         row.addStretch()
-        self.restore_btn = CardButton(
-            tr("Restore last settings"),
-            tooltip=tr("Put the saved settings back."))
-        self.restore_btn.clicked.connect(self.restore_factory_snapshot)
-        row.addWidget(self.restore_btn)
-        self.delete_snapshot_btn = CardButton(
-            tr("Delete saved settings"), variant="danger",
-            tooltip=tr("Delete the saved settings for good."))
-        self.delete_snapshot_btn.clicked.connect(self.delete_factory_snapshot)
-        row.addWidget(self.delete_snapshot_btn)
+        self.delete_all_btn = CardButton(
+            tr("Delete all saved settings"), variant="danger",
+            tooltip=tr("Delete every saved copy of this version for good."))
+        self.delete_all_btn.clicked.connect(self.delete_all_snapshots)
+        row.addWidget(self.delete_all_btn)
         lay.addLayout(row)
         self._refresh_factory()
         return card
 
-    def _target_config(self):
-        """Config de la versión destino (la que se resetea/restaura)."""
-        if self.target_entry is None:
+    def _factory_entry(self):
+        """Instalada elegida en la pestaña de fábrica (su propio selector)."""
+        return self._selected(self.factory_combo)
+
+    def _factory_config(self):
+        """Config de la versión que se restablece/recupera en esa pestaña."""
+        entry = self._factory_entry()
+        if entry is None:
             return None
-        return bc.config_for(self.target_entry.version, self.platform)
+        return bc.config_for(entry.version, self.platform)
+
+    def _clear_snapshot_rows(self) -> None:
+        """Vacía la lista de guardados (deja el hueco del final)."""
+        self._snapshot_widgets = {}
+        for index in range(self.snapshot_rows.count() - 1, -1, -1):
+            widget = self.snapshot_rows.itemAt(index).widget()
+            if widget is None:
+                continue
+            self.snapshot_rows.takeAt(index)
+            widget.setParent(None)
+            widget.hide()
+            widget.deleteLater()
+
+    def _build_snapshot_rows(self, snapshots) -> None:
+        """Crea una fila por guardado y le vuelca el análisis ya cacheado."""
+        self._snapshot_widgets = {}
+        for snapshot in snapshots:
+            row = _SnapshotRow(
+                snapshot, bc.snapshot_details(snapshot),
+                on_restore=self.restore_factory_snapshot,
+                on_delete=self.delete_snapshot,
+                on_details=self.show_snapshot_details)
+            cached = self._analysis.get(str(snapshot))
+            if cached is not None:
+                row.set_analysis(cached)
+            # Antes del hueco final (el ``addStretch`` del layout).
+            self.snapshot_rows.insertWidget(self.snapshot_rows.count() - 1,
+                                            row)
+            self._snapshot_widgets[snapshot] = row
+        if snapshots:
+            self._snapshot_widgets[snapshots[0]].add_badge(tr("Most recent"))
+
+    def _factory_status_text(self, count: int) -> str:
+        """Resumen: cuántos guardados hay y en qué estado está la config viva."""
+        text = tr("Saved copies: {count}.", count=count)
+        if self._factory_live_count is None:
+            return text
+        if self._factory_live_count:
+            return text + " " + tr(
+                "Right now this Blender has {count} settings changed from its "
+                "defaults.", count=self._factory_live_count)
+        return text + " " + tr(
+            "Right now this Blender is at its defaults; restoring a copy "
+            "brings your settings back.")
+
+    def _fit_snapshot_scroll(self) -> None:
+        """Alto de la lista de guardados: el elegido con el asa o el del contenido."""
+        content = 0
+        for index in range(self.snapshot_rows.count()):
+            widget = self.snapshot_rows.itemAt(index).widget()
+            if widget is not None:
+                content += widget.sizeHint().height()
+        content += self.snapshot_rows.spacing() * max(
+            0, self.snapshot_rows.count() - 1)
+        height = self._snapshot_height or min(content, SNAPSHOT_SCROLL_HEIGHT)
+        self.snapshot_scroll.setFixedHeight(max(SNAPSHOT_MIN_HEIGHT, height))
 
     def _refresh_factory(self) -> None:
-        """Actualiza el estado de la tarjeta de fábrica."""
+        """Repinta la tarjeta de fábrica: estado, lista de guardados y análisis."""
         if not hasattr(self, "factory_status"):
             return
-        config = self._target_config()
+        config = self._factory_config()
+        self._clear_snapshot_rows()
         if config is None:
             self.factory_hint.setText("")
             self.factory_status.setText("")
-            self.restore_btn.setEnabled(False)
-            self.delete_snapshot_btn.setEnabled(False)
+            self.factory_path_label.setText("")
+            self.factory_empty.setVisible(False)
+            self.snapshot_scroll.setVisible(False)
+            self.snapshot_handle.setVisible(False)
+            self.delete_all_btn.setEnabled(False)
             return
-        _, version = _entry_info(self.target_entry)
+        _, version = _entry_info(self._factory_entry())
+        self.factory_path_label.setText(str(config.root))
         self.factory_hint.setText(tr(
             "Start Blender {version} as if it were freshly installed. Its "
             "current settings are saved aside and can be put back.",
             version=version))
         snapshots = bc.snapshots_for(config)
-        if snapshots:
-            self.factory_status.setText(tr(
-                "Saved settings: {count}. The newest is from {date}.",
-                count=len(snapshots), date=snapshots[0].name))
-        else:
-            self.factory_status.setText(tr(
-                "No saved settings. Resetting will keep nothing to go back to."))
-        self.restore_btn.setEnabled(bool(snapshots))
-        self.delete_snapshot_btn.setEnabled(bool(snapshots))
+        self.delete_all_btn.setEnabled(bool(bc.snapshot_dirs(config)))
+        if not snapshots:
+            self.factory_status.setText("")
+            self.factory_empty.setVisible(True)
+            self.snapshot_scroll.setVisible(False)
+            self.snapshot_handle.setVisible(False)
+            self._analysis = {}
+            self._analyzed_for = ""
+            self._factory_live_count = None
+            return
+        self.factory_empty.setVisible(False)
+        self._build_snapshot_rows(snapshots)
+        self.snapshot_scroll.setVisible(True)
+        self.snapshot_handle.setVisible(True)
+        self._fit_snapshot_scroll()
+        self.factory_status.setText(self._factory_status_text(len(snapshots)))
+        self._maybe_analyze_snapshots()
 
-    def reset_to_factory(self) -> None:
-        """Aparta la config del destino (instantánea) para dejarlo limpio."""
-        config = self._target_config()
+    def _maybe_analyze_snapshots(self) -> None:
+        """Lee en segundo plano qué ajustes cambia cada guardado.
+
+        Solo cuando la pestaña está abierta (no en cada ``_reload``) y una vez
+        por versión: cada guardado cuesta un arranque de Blender, así que no se
+        repite mientras no cambie la versión ni los guardados.
+        """
+        if not hasattr(self, "_snapshot_widgets"):
+            return
+        if self.tabs.currentWidget() is not self.factory_page:
+            return
+        if self._snapshots_waiting or self._analyzed_for:
+            return
+        entry = self._factory_entry()
+        executable, version = _entry_info(entry)
+        config = self._factory_config()
+        if config is None or not executable or not Path(executable).is_file():
+            return
+        snapshots = list(bc.snapshots_for(config))
+        if not snapshots:
+            return
+        self._analyzed_for = version
+        self._snapshots_waiting = True
+
+        def worker():
+            payload = {"version": version, "results": {}, "live": None}
+            try:
+                factory = bprefs.read_preferences(executable, factory=True,
+                                                  timeout=120)
+                live = bprefs.read_preferences(executable, timeout=120)
+                payload["live"] = len(bprefs.changed(live, factory))
+                for snapshot in snapshots:
+                    user = bprefs.snapshot_preferences(executable, snapshot,
+                                                       timeout=120)
+                    payload["results"][str(snapshot)] = bprefs.changed(
+                        user, factory)
+            except Exception:  # noqa: BLE001 - un fallo no puede tumbar la vista
+                payload["failed"] = True
+            self.snapshots_analyzed.emit(payload)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_snapshots_analyzed(self, payload) -> None:
+        self._snapshots_waiting = False
+        if payload.get("version") != getattr(self._factory_entry(),
+                                             "version", ""):
+            return
+        results = payload.get("results") or {}
+        best = None
+        best_count = 0
+        for snapshot, row in self._snapshot_widgets.items():
+            preferences = results.get(str(snapshot))
+            if preferences is None:
+                if payload.get("failed"):
+                    row.set_unreadable()
+                else:
+                    row.set_analysis(None)
+                continue
+            self._analysis[str(snapshot)] = preferences
+            row.set_analysis(preferences)
+            if len(preferences) > best_count:
+                best, best_count = snapshot, len(preferences)
+        if best is not None:
+            self._snapshot_widgets[best].add_badge(tr("Most complete"))
+        live = payload.get("live")
+        if live is not None:
+            self._factory_live_count = live
+            self.factory_status.setText(
+                self._factory_status_text(len(self._snapshot_widgets)))
+
+    def show_snapshot_details(self, snapshot) -> None:
+        """Abre el diálogo con los ajustes que cambia ese guardado."""
+        row = self._snapshot_widgets.get(Path(snapshot))
+        preferences = row.analysis if row is not None else None
+        if preferences is None:
+            show_info(self, tr("Saved settings"),
+                      tr("Still reading this copy. Try again in a moment."))
+            return
+        _show_snapshot_details(self, snapshot, preferences)
+
+    def delete_snapshot(self, snapshot) -> None:
+        """Borra un guardado concreto (irreversible)."""
+        snapshot = Path(snapshot)
+        date = bc.snapshot_date(snapshot) or snapshot.name
+        if not confirm(
+                self, tr("Delete saved settings"),
+                tr("Delete the settings saved on {date} for good? You will not "
+                   "be able to restore them.", date=date),
+                accept_text=tr("Delete"), danger=True):
+            return
+        bc.delete_snapshot(snapshot)
+        self._analysis.pop(str(snapshot), None)
+        self.status_message.emit(tr("Saved settings deleted."))
+        self._refresh_factory()
+
+    def delete_all_snapshots(self) -> None:
+        """Borra todos los guardados de esa versión (irreversible)."""
+        config = self._factory_config()
         if config is None:
             return
-        if self._blocked_by_running():
+        # ``snapshot_dirs`` (no ``snapshots_for``): se borra también lo vacío,
+        # que si no quedaría ahí sin forma de limpiarlo desde la interfaz.
+        snapshots = bc.snapshot_dirs(config)
+        if not snapshots:
             return
-        _, version = _entry_info(self.target_entry)
+        if not confirm(
+                self, tr("Delete saved settings"),
+                tr("Delete all saved settings of this version for good? You "
+                   "will not be able to restore them."),
+                accept_text=tr("Delete"), danger=True):
+            return
+        for snapshot in snapshots:
+            bc.delete_snapshot(snapshot)
+        self._analysis = {}
+        self._analyzed_for = ""
+        self.status_message.emit(tr("Saved settings deleted."))
+        self._refresh_factory()
+
+    def reset_to_factory(self) -> None:
+        """Aparta la config de esa versión (instantánea) para dejarla limpia."""
+        entry = self._factory_entry()
+        config = self._factory_config()
+        if config is None:
+            return
+        if self._blocked_by_running(entry):
+            return
+        _, version = _entry_info(entry)
         if not confirm(
                 self, tr("Reset to factory settings"),
                 tr("Blender {version} will start clean on next launch.\n\nYour "
@@ -1097,49 +1759,41 @@ class MigrateView(QWidget):
             self.factory_status.setText(tr(
                 "This version has no settings yet."))
             return
+        self._analysis = {}
+        self._analyzed_for = ""
         self.status_message.emit(tr("Settings saved aside and reset."))
         show_info(self, tr("Reset to factory settings"),
                   tr("Your settings were saved. Blender {version} will start "
                      "clean the next time you open it.", version=version))
         self._refresh_factory()
 
-    def restore_factory_snapshot(self) -> None:
-        """Devuelve la instantánea más reciente a su sitio."""
-        config = self._target_config()
+    def restore_factory_snapshot(self, snapshot=None) -> None:
+        """Copia un guardado a su sitio (el más reciente si no se dice cuál)."""
+        entry = self._factory_entry()
+        config = self._factory_config()
         if config is None:
             return
         snapshots = bc.snapshots_for(config)
         if not snapshots:
             return
-        _, version = _entry_info(self.target_entry)
+        target = Path(snapshot) if snapshot is not None else snapshots[0]
+        if target not in snapshots:
+            return
+        if self._blocked_by_running(entry):
+            return
+        _, version = _entry_info(entry)
+        date = bc.snapshot_date(target) or target.name
         if not confirm(
-                self, tr("Restore last settings"),
-                tr("Put back the saved settings of Blender {version}?\n\nThe "
-                   "clean settings you have now are saved aside, so this can "
-                   "be undone too.", version=version),
+                self, tr("Restore settings"),
+                tr("Put back in Blender {version} the settings saved on "
+                   "{date}?\n\nWhat it has now is saved aside, so this can be "
+                   "undone.", version=version, date=date),
                 accept_text=tr("Restore")):
             return
-        bc.restore_snapshot(config, snapshots[0])
+        bc.restore_snapshot(config, target)
+        self._analysis = {}
+        self._analyzed_for = ""
         self.status_message.emit(tr("Settings restored."))
-        self._refresh_factory()
-
-    def delete_factory_snapshot(self) -> None:
-        """Borra la instantánea más reciente (irreversible)."""
-        config = self._target_config()
-        if config is None:
-            return
-        snapshots = bc.snapshots_for(config)
-        if not snapshots:
-            return
-        if not confirm(
-                self, tr("Delete saved settings"),
-                tr("Delete the saved settings for good? You will not be able to "
-                   "restore them."),
-                accept_text=tr("Delete"), danger=True):
-            return
-        for snapshot in snapshots:
-            bc.delete_snapshot(snapshot)
-        self.status_message.emit(tr("Saved settings deleted."))
         self._refresh_factory()
 
     def _undo_button(self) -> CardButton:
@@ -1227,6 +1881,14 @@ class MigrateView(QWidget):
                          self._current_version(self.source_combo))
         self._fill_combo(self.target_combo, choices,
                          self._current_version(self.target_combo))
+        # La pestaña de fábrica tiene su propio selector de una versión: se
+        # mantiene lo elegido y, la primera vez, arranca en la más nueva (igual
+        # que el destino de la migración).
+        self._fill_combo(self.factory_combo, choices,
+                         self._current_version(self.factory_combo),
+                         label=_version_label)
+        if choices and self.factory_combo.currentIndex() < 0:
+            self.factory_combo.setCurrentIndex(0)
         # Por defecto (solo la primera vez): de la **penúltima** a la **última**,
         # que es el caso normal de "acabo de instalarme la nueva y quiero
         # traerme lo de la anterior".
@@ -1243,11 +1905,19 @@ class MigrateView(QWidget):
             return self._choices[index].version
         return ""
 
-    def _fill_combo(self, combo, choices, keep_version: str) -> None:
+    def _fill_combo(self, combo, choices, keep_version: str,
+                    label=None) -> None:
+        """Rellena un desplegable de versiones.
+
+        ``label`` decide el texto de cada opción (por defecto, versión y carpeta;
+        el selector de fábrica usa solo la versión, que allí el nombre de la
+        carpeta no aporta nada y repetía el número).
+        """
+        label = label or (lambda entry: f"Blender {entry.version}  ·  {entry.name}")
         combo.blockSignals(True)
         combo.clear()
         for entry in choices:
-            combo.addItem(f"Blender {entry.version}  ·  {entry.name}")
+            combo.addItem(label(entry))
         index = next((i for i, entry in enumerate(choices)
                       if entry.version == keep_version), -1)
         combo.setCurrentIndex(index)
@@ -1322,34 +1992,39 @@ class MigrateView(QWidget):
         self._set_controls_enabled(True)
         self._update_summary()
 
-    def _check_running(self, target) -> None:
-        """Avisa (en la tarjeta) si el Blender destino está abierto.
+    def _check_running(self, entry, warning=None) -> None:
+        """Avisa (en la tarjeta) si ese Blender está abierto.
 
         Escribir sus preferencias con Blender abierto es perder el cambio al
         salir. Es un aviso suave en la propia vista; para las acciones que van a
         escribir de verdad se llama a ``_blocked_by_running``, que impide
-        continuar.
+        continuar. ``warning`` elige la etiqueta (la de migración o la de
+        fábrica), porque cada pestaña tiene la suya.
         """
-        executable, version = _entry_info(target)
+        warning = warning if warning is not None else self.warning
+        executable, version = _entry_info(entry)
         try:
-            if blender_runner.is_running(executable):
-                self._set_warning(self._running_message(version))
+            running = blender_runner.is_running(executable)
         except Exception:  # noqa: BLE001 - el aviso no puede tumbar la vista
-            pass
+            running = False
+        self._put_warning(warning,
+                          self._running_message(version) if running else "")
 
     @staticmethod
     def _running_message(version: str) -> str:
         return tr("Close Blender {version} before migrating: it would "
                   "overwrite the changes when it quits.", version=version)
 
-    def _blocked_by_running(self) -> bool:
-        """True si el Blender destino está abierto (y avisa); bloquea la acción.
+    def _blocked_by_running(self, entry=None) -> bool:
+        """True si ese Blender está abierto (y avisa); bloquea la acción.
 
         El chequeo no depende de que encontremos el ejecutable: pisar las
         preferencias con Blender abierto es malo aunque la build esté en una
         ruta rara, y ``running_blenders`` se apaña con la ruta que le den.
+        Sin ``entry`` se refiere al destino de la migración.
         """
-        executable, version = _entry_info(self.target_entry)
+        executable, version = _entry_info(
+            entry if entry is not None else self.target_entry)
         try:
             running = blender_runner.is_running(executable)
         except Exception:  # noqa: BLE001 - el chequeo no puede tumbar la acción
@@ -1392,8 +2067,13 @@ class MigrateView(QWidget):
             widget.setEnabled(enabled)
 
     def _set_warning(self, text: str) -> None:
-        self.warning.setText(text)
-        self.warning.setVisible(bool(text))
+        self._put_warning(self.warning, text)
+
+    @staticmethod
+    def _put_warning(label, text: str) -> None:
+        """Pinta el aviso en la etiqueta que le pasen (cada pestaña tiene una)."""
+        label.setText(text)
+        label.setVisible(bool(text))
 
     # --------------------------------------------------------------- copiar
     def apply(self) -> None:

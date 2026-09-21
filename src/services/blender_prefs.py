@@ -19,7 +19,10 @@ Es un módulo de ``services/``: no importa Qt. La parte que habla con Blender
 está en ``blender_runner``; aquí solo vive el guion, el filtrado y los tipos.
 """
 
+import shutil
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 
 from services import blender_runner
 
@@ -216,6 +219,16 @@ def is_scalar(value) -> bool:
     return isinstance(value, (bool, int, float, str))
 
 
+def changed(user: dict, factory: dict) -> list:
+    """Todas las claves que el usuario cambió respecto a fábrica.
+
+    ``diff`` aparta las que dependen del equipo; aquí se devuelven **todas**,
+    porque para resumir "cuánto tiene este guardado" cuenta todo lo que el
+    usuario tocó, esté donde esté. Es la misma base que usa ``diff``.
+    """
+    return _changed(user, factory)
+
+
 def _changed(user: dict, factory: dict) -> list:
     """Todas las claves que el usuario cambió respecto a fábrica.
 
@@ -270,11 +283,14 @@ def group_by_section(preferences) -> dict:
     return grouped
 
 
-def read_preferences(executable, factory: bool = False, timeout: int = 180) -> dict:
+def read_preferences(executable, factory: bool = False, timeout: int = 180,
+                     config_dir=None) -> dict:
     """Pide a Blender su volcado de preferencias (de fábrica o del usuario).
 
-    Devuelve ``{}`` si no se pudo (sin ejecutable, timeout, salida rara). El
-    fallo no es fatal: la interfaz lo enseña como "no se pudo leer".
+    ``config_dir`` apunta a una carpeta de configuración concreta
+    (``BLENDER_USER_CONFIG``): es lo que permite leer un guardado sin tocar la
+    config viva. Devuelve ``{}`` si no se pudo (sin ejecutable, timeout, salida
+    rara). El fallo no es fatal: la interfaz lo enseña como "no se pudo leer".
     """
     if not executable:
         return {}
@@ -282,11 +298,35 @@ def read_preferences(executable, factory: bool = False, timeout: int = 180) -> d
     if factory:
         args.append("--factory-startup")
     args += ["--python-expr", _DUMP_SCRIPT]
-    code, out, _ = blender_runner._run(executable, args, timeout=timeout)
+    extra_env = None
+    if config_dir:
+        extra_env = {"BLENDER_USER_CONFIG": str(config_dir)}
+    code, out, _ = blender_runner._run(executable, args, extra_env=extra_env,
+                                       timeout=timeout)
     if code is None:
         return {}
     payload = blender_runner._parse_marker(out, "BLENDERMANAGER_DUMP=")
     return payload if isinstance(payload, dict) else {}
+
+
+def snapshot_preferences(executable, snapshot, timeout: int = 180) -> dict:
+    """Preferencias guardadas en una instantánea, sin tocarla.
+
+    Se copia a un temporal y se arranca Blender con esa config: un guardado se
+    abre **en una copia**, nunca en su sitio (Blender escribe cosas suyas al
+    arrancar y no queremos que un guardado cambie por leerlo).
+    """
+    snapshot = Path(snapshot)
+    if not executable or not snapshot.is_dir():
+        return {}
+    with tempfile.TemporaryDirectory(
+            prefix="blendermanager-snapshot-") as tmp:
+        config = Path(tmp) / "config"
+        try:
+            shutil.copytree(snapshot, config)
+        except OSError:
+            return {}
+        return read_preferences(executable, config_dir=config, timeout=timeout)
 
 
 def apply_preferences(executable, preferences, timeout: int = 180) -> dict:

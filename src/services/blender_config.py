@@ -780,8 +780,12 @@ def snapshot_config(target: BlenderConfig, label: str = "") -> Path | None:
     return destination
 
 
-def snapshots_for(target: BlenderConfig) -> list:
-    """Instantáneas de ``config`` de esa versión, de la más nueva a la más vieja."""
+def snapshot_dirs(target: BlenderConfig) -> list:
+    """Todas las instantáneas de ``config`` de esa versión, vacías incluidas.
+
+    Es la lista cruda (para borrar o para saber si hay algo), de la más nueva a
+    la más vieja. Lo que se ofrece restaurar es ``snapshots_for``.
+    """
     folder = target.root / SNAPSHOT_DIR
     if not folder.is_dir():
         return []
@@ -790,17 +794,114 @@ def snapshots_for(target: BlenderConfig) -> list:
                   key=lambda item: item.name, reverse=True)
 
 
-def restore_snapshot(target: BlenderConfig, snapshot) -> Path | None:
-    """Devuelve una instantánea a su sitio (``config``), apartando la actual.
+def _has_settings(snapshot: Path) -> bool:
+    """True si guarda preferencias de verdad (``userpref`` o ``startup``).
 
-    Devuelve la instantánea que se acaba de apartar (la config de fábrica que
-    había en ese momento), para poder deshacer el propio "restaurar".
+    No basta con que la carpeta tenga algo: una instantánea con solo
+    ``platform_support.txt`` o los recientes no tiene ajustes que restaurar y no
+    debe contar como "lo más reciente" (el botón de restaurar no recuperaría
+    nada).
+    """
+    snapshot = Path(snapshot)
+    return any((snapshot / name).is_file()
+               for name in ("userpref.blend", "startup.blend"))
+
+
+def snapshots_for(target: BlenderConfig) -> list:
+    """Instantáneas con ajustes de verdad, de la más nueva a la más vieja.
+
+    Las vacías se descartan: al restaurar se aparta la config que hubiera, y si
+    no había nada queda una carpeta sin ficheros. Si esa contase como "lo más
+    reciente", el botón de restaurar no recuperaría los ajustes de verdad (le
+    pasó al usuario: su config real quedaba tapada por una vacía).
+    """
+    return [item for item in snapshot_dirs(target) if _has_settings(item)]
+
+
+def snapshot_date(snapshot) -> str:
+    """Fecha legible de una instantánea (``2026-09-18 14:21``), o ``""``.
+
+    El nombre es ``config-AAAAMMDD-HHMMSS[-etiqueta]``. La interfaz enseña la
+    fecha, no el nombre de la carpeta: «config-20260918-152704-factory» no dice
+    nada a quien lo lee.
+    """
+    match = re.match(r"config-(\d{8})-(\d{6})", Path(snapshot).name)
+    if not match:
+        return ""
+    try:
+        moment = datetime.strptime(match.group(1) + match.group(2),
+                                   "%Y%m%d%H%M%S")
+    except ValueError:
+        return ""
+    return moment.strftime("%Y-%m-%d %H:%M")
+
+
+def snapshot_label(snapshot) -> str:
+    """Etiqueta con la que se guardó (``v5.2.0``, ``factory`` o ``""``).
+
+    Es lo que distingue un guardado del usuario (los ajustes que se apartaron al
+    restablecer) de una config limpia que se aparcó al restaurar.
+    """
+    match = re.match(r"config-\d{8}-\d{6}(?:-(.*))?$", Path(snapshot).name)
+    return (match.group(1) or "") if match else ""
+
+
+def snapshot_details(snapshot) -> dict:
+    """Resumen barato de una instantánea (sin arrancar Blender).
+
+    Cuenta los ficheros y sus tamaños, y las líneas de los que son texto
+    (marcadores y recientes). ``has_userpref`` es lo que de verdad importa:
+    sin él no hay preferencias que restaurar.
+    """
+    snapshot = Path(snapshot)
+    files = {}
+    if snapshot.is_dir():
+        for child in snapshot.iterdir():
+            try:
+                if child.is_file():
+                    files[child.name] = child.stat().st_size
+            except OSError:
+                continue
+
+    def lines(name: str) -> int:
+        try:
+            text = (snapshot / name).read_text(encoding="utf-8",
+                                               errors="ignore")
+        except OSError:
+            return 0
+        return sum(1 for line in text.splitlines() if line.strip())
+
+    return {
+        "files": files,
+        "total": sum(files.values()),
+        "has_userpref": "userpref.blend" in files,
+        "has_startup": "startup.blend" in files,
+        "bookmarks": lines("bookmarks.txt"),
+        "recent": lines("recent-files.txt"),
+    }
+
+
+def restore_snapshot(target: BlenderConfig, snapshot) -> Path | None:
+    """Copia una instantánea a su sitio (``config``), sin consumirla.
+
+    Antes se **movía** (el guardado desaparecía). Eso dejaba al usuario sin
+    segunda oportunidad: si algo pisaba la config después (un Blender de la
+    misma serie abierto, por ejemplo), los ajustes se perdían para siempre. Se
+    copia y el guardado se queda hasta que el usuario lo borre a mano.
+
+    La config que había se aparta como ``factory`` para poder deshacer, pero
+    solo si tenía algo: aparcar una carpeta vacía solo añade ruido. Devuelve ese
+    aparte (o ``None``).
     """
     snapshot = Path(snapshot)
     if not snapshot.is_dir():
         return None
-    aside = snapshot_config(target, label="factory")
-    shutil.move(str(snapshot), str(target.config_dir))
+    aside = None
+    if _has_settings(target.config_dir):
+        aside = snapshot_config(target, label="factory")
+    target.config_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(snapshot, target.config_dir, dirs_exist_ok=True,
+                    symlinks=True)
     return aside
 
 

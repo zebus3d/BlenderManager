@@ -570,6 +570,46 @@ class FactoryResetTest(unittest.TestCase):
             # La limpia se aparta, no se pierde (se puede deshacer).
             self.assertIsNotNone(aside)
             self.assertEqual((aside / "userpref.blend").read_bytes(), b"FABRICA")
+            # Y el guardado NO se consume: se puede volver a restaurar o borrar
+            # a mano. Restaurar no puede ser la última oportunidad de recuperar
+            # unos ajustes (se perdieron unos así).
+            self.assertTrue(snapshot.is_dir())
+            self.assertEqual((snapshot / "userpref.blend").read_bytes(), b"MIO")
+            self.assertIn(snapshot, bc.snapshots_for(config))
+
+    def test_restaurar_sobre_config_vacia_no_aparca_nada(self):
+        """Sin ajustes que apartar, el ``aside`` es ``None`` (no añade ruido)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            snapshot = bc.snapshot_config(config, label="v5.3")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "platform_support.txt").write_bytes(b"x")
+            self.assertIsNone(bc.restore_snapshot(config, snapshot))
+            self.assertEqual((config.config_dir / "userpref.blend").read_bytes(),
+                             b"MIO")
+
+    def test_snapshot_label(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            reset = bc.snapshot_config(config, label="v5.3.0")
+            self.assertEqual(bc.snapshot_label(reset), "v5.3.0")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"x")
+            factory = bc.snapshot_config(config, label="factory")
+            self.assertEqual(bc.snapshot_label(factory), "factory")
+            self.assertEqual(bc.snapshot_label(Path(tmp) / "otra"), "")
+
+    def test_snapshot_details(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp, "5.3")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"x" * 100)
+            (config.config_dir / "bookmarks.txt").write_text("a\nb\n\n")
+            details = bc.snapshot_details(config.config_dir)
+            self.assertTrue(details["has_userpref"])
+            self.assertFalse(details["has_startup"])
+            self.assertEqual(details["bookmarks"], 2)
+            self.assertEqual(details["total"], 100 + 5)
 
     def test_varias_snapshots_y_orden(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -595,6 +635,34 @@ class FactoryResetTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp, "5.3")
             self.assertEqual(bc.snapshots_for(config), [])
+
+    def test_las_snapshots_vacias_no_cuentan_como_ajustes(self):
+        """Restaurar tiene que apuntar a la instantánea con ajustes, no a una vacía.
+
+        Al restaurar se aparta la config que hubiera; si estaba vacía queda una
+        carpeta sin ficheros que, siendo la más nueva, tapaba los ajustes de
+        verdad y el botón de restaurar no recuperaba nada.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            real = bc.snapshot_config(config, label="v5.3")
+            config.config_dir.mkdir(parents=True)
+            vacia = bc.snapshot_config(config, label="factory")
+            self.assertIsNotNone(vacia)
+            # La cruda las ve las dos; la que se ofrece restaurar, solo la real.
+            self.assertEqual(len(bc.snapshot_dirs(config)), 2)
+            self.assertEqual(bc.snapshots_for(config), [real])
+
+    def test_snapshot_date(self):
+        from datetime import datetime as _datetime
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            with mock.patch.object(bc, "datetime") as reloj:
+                reloj.now.return_value = _datetime(2026, 9, 18, 14, 21, 31)
+                snapshot = bc.snapshot_config(config, label="v5.3")
+            self.assertEqual(bc.snapshot_date(snapshot), "2026-09-18 14:21")
+            self.assertEqual(bc.snapshot_date(Path(tmp) / "otra"), "")
 
 
 class SummaryTest(unittest.TestCase):
