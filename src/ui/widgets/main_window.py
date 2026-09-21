@@ -64,6 +64,7 @@ from services import (
 )
 from services.downloader import Downloader, log as download_log
 from services.extractor import extract, is_archive
+from services import launcher
 from services.launcher import Launcher
 from ui import icons
 from ui import theme as t
@@ -88,6 +89,7 @@ from ui.widgets.dialogs import (
 from ui.widgets.folders import MAX_VISIBLE_ROWS, TYPE_LABELS, FolderRow
 from ui.widgets.labels import ElidedLabel
 from ui.widgets.migrate import MigrateView
+from ui.widgets.recent import RecentView
 from ui.widgets.tray import TrayIcon
 
 PLATFORMS = {"GNU/Linux": "linux", "Windows": "windows", "macOS": "darwin"}
@@ -374,6 +376,12 @@ class MainWindow(QWidget):
         self._update_timer.timeout.connect(self._periodic_update_check)
         self._apply_update_timer()
 
+        # Cooldown del reescaneo al recuperar el foco: cambiar de ventana no
+        # puede lanzar un escaneo de disco cada vez.
+        self._focus_refresh = QTimer(self)
+        self._focus_refresh.setSingleShot(True)
+        self._focus_refresh.setInterval(2000)
+
         # Conectamos las señales de los hilos ANTES de montar la UI.
         self.builds_loaded.connect(self._on_builds_loaded)
         self.download_done.connect(self._on_download_done)
@@ -415,7 +423,13 @@ class MainWindow(QWidget):
         self.migrate_view = MigrateView()
         self.migrate_view.set_system(self.system.os_name, self.system.arch)
         self.migrate_view.status_message.connect(self._show_message)
+        self.migrate_view.snapshot_keep_changed.connect(self.set_snapshot_keep)
+        self.migrate_view.set_snapshot_keep(self.settings.snapshot_keep)
         self.stack.addWidget(self.migrate_view)
+        self.recent_view = RecentView()
+        self.recent_view.set_system(self.system.os_name, self.system.arch)
+        self.recent_view.status_message.connect(self._show_message)
+        self.stack.addWidget(self.recent_view)
         self.stack.addWidget(self._build_settings_view())
         body.addWidget(self.stack, 1)
         root.addLayout(body, 1)
@@ -426,6 +440,7 @@ class MainWindow(QWidget):
         # (si no, al abrir en esa pestaña se vería vacía hasta el primer refresco).
         self._rebuild_installed()
         self.migrate_view.set_installed(self.installed)
+        self.recent_view.set_installed(self.installed)
         self._install_shortcuts()
 
     def _install_shortcuts(self) -> None:
@@ -576,6 +591,9 @@ class MainWindow(QWidget):
                 "Show the versions you already have on this computer.")),
             ("store", icons.STORE, tr(
                 "Show the builds you can download from the cloud.")),
+            ("recent", icons.CLOCK, tr(
+                "Show the .blend files you opened recently, by Blender "
+                "version.")),
         ):
             btn = SideButton(glyph, tip)
             btn.setFont(icon_font(20))
@@ -1184,6 +1202,20 @@ class MainWindow(QWidget):
 
     def _settings_launch_card(self) -> QFrame:
         card, lay = self._settings_card(tr("Launch options"))
+
+        # Lanzar con consola: se puede alternar también desde cada tarjeta
+        # instalada; aquí queda el ajuste (el mismo) para dejarlo fijo.
+        row = QHBoxLayout()
+        row.addWidget(QLabel(tr("Launch with console")))
+        row.addStretch()
+        self.console_switch = SwitchPill(
+            self.settings.launch_console,
+            tooltip=tr("Launch with the console visible: Python output and "
+                       "script errors."))
+        self.console_switch.toggled.connect(self.set_launch_console)
+        row.addWidget(self.console_switch)
+        lay.addLayout(row)
+
         lay.addWidget(QLabel(tr("Launch arguments")))
         self.args_input = QLineEdit(self.launch_args)
         self.args_input.setPlaceholderText("--background --python script.py")
@@ -1479,6 +1511,10 @@ class MainWindow(QWidget):
         elif view == "migrate":
             # Las instaladas pueden haber cambiado desde la última vez.
             self.migrate_view.set_installed(self.installed)
+        elif view == "recent":
+            # Los recientes se leen al entrar: Blender puede haber abierto
+            # ficheros desde la última vez.
+            self.recent_view.set_installed(self.installed)
 
     def _set_view(self, view: str, animate: bool = True) -> None:
         # Tienda e Instaladas comparten la zona de listas (con sus filtros); lo
@@ -1488,12 +1524,14 @@ class MainWindow(QWidget):
             self.list_stack.setCurrentIndex(0 if view == "store" else 1)
             show_tools = True
         else:
-            self.stack.setCurrentIndex({"migrate": 1, "settings": 2}.get(view, 0))
+            self.stack.setCurrentIndex(
+                {"migrate": 1, "recent": 2, "settings": 3}.get(view, 0))
             show_tools = False
         for key, btn in self.side_buttons.items():
             btn.setChecked(key == view)
-        # El buscador y el zoom del pie solo aplican a las listas; en Migración
-        # y Ajustes se ocultan (no arrastran salto: van en la cabecera y el pie).
+        # El buscador y el zoom del pie solo aplican a las listas; en Migración,
+        # Recientes y Ajustes se ocultan (no arrastran salto: van en la cabecera
+        # y el pie).
         self.header_tools.setVisible(show_tools)
         self.zoom_box.setVisible(show_tools and self.layout_mode == "grid")
 
@@ -1501,7 +1539,8 @@ class MainWindow(QWidget):
         """Cambia entre rejilla y lista y recuerda la elección."""
         self.layout_mode = mode
         self.zoom_box.setVisible(
-            self.view not in ("settings", "migrate") and mode == "grid")
+            self.view not in ("settings", "migrate", "recent")
+            and mode == "grid")
         (self.grid_btn if mode == "grid" else self.list_btn).setChecked(True)
         self.settings.layout_mode = mode
         self.settings.save()
@@ -1543,7 +1582,7 @@ class MainWindow(QWidget):
 
     def _zoom_enabled(self) -> bool:
         """El zoom solo pinta algo en rejilla y fuera de ajustes/migración."""
-        return (self.view not in ("settings", "migrate")
+        return (self.view not in ("settings", "migrate", "recent")
                 and self.layout_mode == "grid")
 
     def _set_zoom_value(self, value: float) -> None:
@@ -1654,6 +1693,23 @@ class MainWindow(QWidget):
                 and not getattr(self, "_force_quit", False)
                 and TrayIcon.available()):
             QTimer.singleShot(0, self._hide_to_tray)
+        if (event.type() == QEvent.ActivationChange
+                and getattr(self, "_focus_refresh", None) is not None
+                and self.isActiveWindow()):
+            self._refresh_on_focus()
+
+    def _refresh_on_focus(self) -> None:
+        """Reescanea las instaladas al recuperar el foco, con un cooldown.
+
+        Blender puede haber instalado o renombrado algo fuera de la app. No se
+        repite si se acaba de hacer (``_focus_refresh``) ni mientras hay una
+        descarga o una actualización en curso: sería pisarla.
+        """
+        if (self.downloader.running or self.update_downloader.running
+                or self._focus_refresh.isActive()):
+            return
+        self._focus_refresh.start()
+        self.refresh_installed()
 
     # ------------------------------------------------------------- bandeja
     def _ensure_tray(self) -> TrayIcon:
@@ -1902,6 +1958,7 @@ class MainWindow(QWidget):
         self._recompute_updates()
         self._rebuild_installed()
         self.migrate_view.set_installed(self.installed)
+        self.recent_view.set_installed(self.installed)
 
     def _recompute_updates(self) -> None:
         """Recalcula qué instaladas tienen parche o serie nueva disponible.
@@ -1944,18 +2001,21 @@ class MainWindow(QWidget):
             zebra = (not grid) and bool(index % 2)
             marked = entry.favorite_key in self.settings.favorites
             update = self.updates_by_path.get(str(entry.path))
+            console = self.settings.launch_console
             if grid:
                 card = GridInstalledCard(entry, zebra, self.zoom, marked,
-                                         update=update)
+                                         update=update, console=console)
             else:
                 card = InstalledCard(entry, zebra, marked, update=update,
-                                     read_only=self._is_read_only(entry))
+                                     read_only=self._is_read_only(entry),
+                                     console=console)
             card.launch_clicked.connect(self.launch_installed)
             card.delete_clicked.connect(self.delete_installed)
             card.notes_clicked.connect(self.open_release_notes)
             card.favorite_toggled.connect(self.set_favorite)
             card.update_clicked.connect(self.offer_blender_update)
             card.rename_requested.connect(self.rename_installed)
+            card.console_toggled.connect(self.set_launch_console)
             cards.append(card)
         self._fill_grid(self.installed_grid, cards, columns)
 
@@ -2744,9 +2804,30 @@ class MainWindow(QWidget):
             executable = getattr(entry, "executable", None)
             if executable is None:
                 return
-            self.launcher.launch(executable, args=args)
+            console = self.settings.launch_console
+            if console and not launcher.terminal_available():
+                self._set_status(tr("No terminal found; launching without "
+                                    "console."), 6)
+            self.launcher.launch(executable, args=args, console=console)
         except Exception as error:
             download_log(f"launch failed: {error}")
+
+    def set_snapshot_keep(self, value: int) -> None:
+        """Recuerda cuántas copias guardadas se conservan por versión."""
+        self.settings.snapshot_keep = int(value)
+        self.settings.save()
+
+    def set_launch_console(self, value: bool) -> None:
+        """Recuerda si se lanza con consola y repinta las tarjetas.
+
+        Es un ajuste global (el botón de una tarjeta vale para todas), así que
+        hay que reconstruir las instaladas para que todas lo reflejen.
+        """
+        self.settings.launch_console = value
+        self.settings.save()
+        if hasattr(self, "console_switch"):
+            self.console_switch.setChecked(value)
+        self._rebuild_installed()
 
     def _is_read_only(self, entry) -> bool:
         """True si esa instalación vive en una carpeta con el candado cerrado."""

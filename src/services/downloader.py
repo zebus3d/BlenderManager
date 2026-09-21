@@ -45,6 +45,25 @@ class DownloadError(Exception):
     pass
 
 
+def _retry_after(error) -> float:
+    """Segundos que pide esperar un 429 (``Retry-After``), con tope y respaldo.
+
+    ``Retry-After`` puede venir en segundos; si no está o no es un número, se
+    usa el retardo normal. El tope de 60 s evita que un servidor raro deje la
+    descarga colgada minutos.
+    """
+    value = None
+    headers = getattr(error, "headers", None)
+    if headers is not None:
+        value = headers.get("Retry-After")
+    if value:
+        try:
+            return min(float(value), 60.0)
+        except (TypeError, ValueError):
+            pass
+    return float(RETRY_DELAY)
+
+
 class Downloader:
     """Gestor de una única descarga simultánea, cancelable."""
 
@@ -88,8 +107,17 @@ class Downloader:
                 # no se puede descargar nada (ver services/tls.py).
                 return urllib.request.urlopen(request, timeout=CONNECT_TIMEOUT,
                                               context=tls.ssl_context())
-            except urllib.error.HTTPError:
-                raise
+            except urllib.error.HTTPError as error:
+                # 429 = "Too Many Requests": el servidor pide esperar, así que
+                # sí se reintenta (respetando ``Retry-After`` si lo manda). El
+                # resto de errores HTTP (404, 500...) no cambian al reintentar.
+                if (error.code != 429 or self._cancel.is_set()
+                        or intento == CONNECT_ATTEMPTS):
+                    raise
+                wait = _retry_after(error)
+                log(f"download got 429 ({url}), reintento "
+                    f"{intento}/{CONNECT_ATTEMPTS} en {wait}s")
+                time.sleep(wait)
             except Exception as error:
                 if self._cancel.is_set() or intento == CONNECT_ATTEMPTS:
                     raise

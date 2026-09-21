@@ -127,6 +127,41 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(len(builds), 1)
             self.assertEqual(builds[0].version, "5.2.1")
 
+    def test_304_reutiliza_la_cache(self):
+        """Si el listado no cambió, no se vuelve a bajar: se usa la caché."""
+        cached = [
+            make_build("5.2.1", "stable", "v52", "b.tar.xz"),
+            make_build("5.3.0", "alpha", "main", "b.tar.xz", experimental=True),
+        ]
+        with mock.patch.object(api, "_fetch_json",
+                               return_value=(None, "etag")):
+            builds, etags = api.fetch_builds(
+                etags={api.API_URL: "e1", api.EXPERIMENTAL_URL: "e2"},
+                cached=cached)
+        self.assertEqual(builds, cached)
+        # Sin respuesta nueva, se conserva el etag que ya teníamos.
+        self.assertEqual(etags[api.API_URL], "e1")
+
+    def test_guarda_y_lee_los_etags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "builds.json"
+            original = api.cache_path
+            api.cache_path = lambda: path
+            try:
+                api.save_cache([], {api.API_URL: "abc"})
+                self.assertEqual(api.load_etags(), {api.API_URL: "abc"})
+            finally:
+                api.cache_path = original
+
+    def test_fetch_json_304_devuelve_none(self):
+        import urllib.error
+
+        error = urllib.error.HTTPError("https://x", 304, "Not Modified", {},
+                                       None)
+        with mock.patch.object(api.urllib.request, "urlopen", side_effect=error):
+            self.assertEqual(api._fetch_json("https://x", etag="e"),
+                             (None, "e"))
+
 
 class ChannelFilterTests(unittest.TestCase):
     """Filtro de canal de la tienda (incluidas las ramas experimentales)."""
@@ -636,6 +671,7 @@ class SettingsTests(unittest.TestCase):
             platform="Windows",
             arch="arm64",
             experimental_features=True,
+            snapshot_keep=3,
         )
         settings.save()
         loaded = settings_module.Settings.load()
@@ -657,6 +693,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(loaded.platform, "Windows")
         self.assertEqual(loaded.arch, "arm64")
         self.assertTrue(loaded.experimental_features)
+        self.assertEqual(loaded.snapshot_keep, 3)
 
     def test_save_is_atomic(self):
         # Tras guardar no debe quedar ningún .tmp suelto y el JSON debe ser
@@ -684,6 +721,7 @@ class SettingsTests(unittest.TestCase):
         # Las opciones experimentales (Migración) vienen apagadas: así la
         # release es estable sin que nadie tenga que tocar nada.
         self.assertFalse(loaded.experimental_features)
+        self.assertEqual(loaded.snapshot_keep, 5)
 
     def test_las_lts_pueden_ir_a_otra_carpeta(self):
         """El caso que motivó todo: las LTS al SSD, el resto al disco lento."""
@@ -1450,3 +1488,24 @@ class DownloaderRetryTests(unittest.TestCase):
             with self.assertRaises(urllib.error.URLError):
                 d._connect("https://x")
         self.assertEqual(abrir.call_count, 1)
+
+    def test_reintenta_el_429(self):
+        """Un 429 ("Too Many Requests") sí se reintenta: el servidor pide espera."""
+        import urllib.error
+
+        d = self.downloader.Downloader()
+        error = urllib.error.HTTPError("https://x", 429, "Too Many Requests",
+                                       {"Retry-After": "0"}, None)
+        exito = object()
+        with mock.patch.object(self.downloader.urllib.request, "urlopen",
+                               side_effect=[error, exito]) as abrir:
+            self.assertIs(d._connect("https://x/asset.zip"), exito)
+        self.assertEqual(abrir.call_count, 2)
+
+    def test_retry_after_con_valor_raro_usa_el_respaldo(self):
+        import urllib.error
+
+        error = urllib.error.HTTPError("https://x", 429, "x",
+                                       {"Retry-After": "pronto"}, None)
+        self.assertEqual(self.downloader._retry_after(error),
+                         float(self.downloader.RETRY_DELAY))

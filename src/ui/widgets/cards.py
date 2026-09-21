@@ -158,6 +158,27 @@ def _favorite_star(marked: bool, on_toggle) -> StarButton:
     return star
 
 
+def _console_button(checked: bool, on_toggle) -> CardButton:
+    """Botón para lanzar con consola (se enciende y se recuerda).
+
+    El estado es un ajuste global —lo que se elija en una tarjeta vale para
+    todas—, así que se refleja tal cual en cada una. Encendido va en azul.
+    """
+    button = CardButton(
+        icons.TERMINAL, variant="accent" if checked else "neutral",
+        tooltip=tr("Launch with the console visible: Python output and script "
+                   "errors."))
+    button.setCheckable(True)
+    button.setChecked(checked)
+    _icon_only(button)
+    button.setFont(_icon_font())
+    button.setFixedWidth(46)
+    button.toggled.connect(on_toggle.emit)
+    button.toggled.connect(
+        lambda on: button.set_variant("accent" if on else "neutral"))
+    return button
+
+
 def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
     """Devuelve el pixmap con esa opacidad.
 
@@ -396,9 +417,10 @@ class InstalledCard(_HoverCard, QFrame):
     favorite_toggled = Signal(object, bool)   # entry, marcada
     update_clicked = Signal(object, object)   # entry, build nueva
     rename_requested = Signal(object, str)    # entry, nombre nuevo
+    console_toggled = Signal(bool)    # lanzar con consola
 
     def __init__(self, entry, zebra: bool, marked: bool = False, parent=None,
-                 update=None, read_only: bool = False):
+                 update=None, read_only: bool = False, console: bool = False):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -455,6 +477,8 @@ class InstalledCard(_HoverCard, QFrame):
                 lambda: self.update_clicked.emit(entry, update))
             lay.addWidget(update_btn)
 
+        lay.addWidget(_console_button(console, self.console_toggled))
+
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())
@@ -479,9 +503,11 @@ class GridInstalledCard(_HoverCard, QFrame):
     favorite_toggled = Signal(object, bool)   # entry, marcada
     update_clicked = Signal(object, object)   # entry, build nueva
     rename_requested = Signal(object, str)    # entry, nombre nuevo
+    console_toggled = Signal(bool)    # lanzar con consola
 
     def __init__(self, entry, zebra: bool, zoom: float = 1.0,
-                 marked: bool = False, parent=None, update=None):
+                 marked: bool = False, parent=None, update=None,
+                 console: bool = False):
         super().__init__(parent)
         self.entry = entry
         self.setObjectName("Card")
@@ -549,6 +575,9 @@ class GridInstalledCard(_HoverCard, QFrame):
             update_btn.clicked.connect(
                 lambda: self.update_clicked.emit(entry, update))
             row.addWidget(update_btn)
+        console_btn = _console_button(console, self.console_toggled)
+        console_btn.setFixedWidth(max(int(42 * zoom), MIN_ICON_BUTTON_WIDTH))
+        row.addWidget(console_btn)
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())

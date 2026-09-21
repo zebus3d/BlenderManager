@@ -292,6 +292,18 @@ def build_qss() -> str:
     QScrollArea#SnapshotList > QWidget > QWidget {{ background: transparent; }}
     QWidget#SnapshotListBody {{ background: transparent; }}
     QWidget#SnapshotDetailsBody {{ background: transparent; }}
+
+    /* --- Recientes: como las listas (fondo BG) con filas SURFACE encima --- */
+    QWidget#RecentView {{ background-color: {t.BG}; }}
+    QFrame#RecentRow {{
+        background-color: {t.SURFACE};
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.35);
+    }}
+    QFrame#RecentRow:hover {{ background-color: {t.SURFACE_ALT}; }}
+    QScrollArea#RecentScroll {{ background: transparent; border: none; }}
+    QScrollArea#RecentScroll > QWidget > QWidget {{ background: transparent; }}
+    QWidget#RecentBody {{ background: transparent; }}
     /* El candado cerrado, en ámbar: que "aquí no se escribe" se vea de un
        vistazo y no haya que pasar el ratón por encima para enterarse. */
     QPushButton#CardButton[writable="false"] {{
@@ -453,21 +465,21 @@ def build_qss() -> str:
     /* --- Menú de la bandeja del sistema --- */
     /* Sin esto el QMenu sale con el estilo claro del escritorio y desentona
        con el tema oscuro (mismo motivo por el que los diálogos son propios). */
-    QMenu#TrayMenu {{
+    QMenu#TrayMenu, QMenu#CardMenu {{
         background-color: {t.SURFACE};
         color: {t.TEXT};
         border: 1px solid {t.BORDER};
         padding: 4px;
     }}
-    QMenu#TrayMenu::item {{
+    QMenu#TrayMenu::item, QMenu#CardMenu::item {{
         padding: 6px 18px;
         border-radius: 4px;
     }}
-    QMenu#TrayMenu::item:selected {{
+    QMenu#TrayMenu::item:selected, QMenu#CardMenu::item:selected {{
         background-color: {t.ACCENT};
         color: {t.TEXT_SEL};
     }}
-    QMenu#TrayMenu::separator {{
+    QMenu#TrayMenu::separator, QMenu#CardMenu::separator {{
         height: 1px;
         background: {t.BORDER};
         margin: 4px 8px;

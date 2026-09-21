@@ -283,6 +283,11 @@ _TRANSLATIONS = {
             "¿Devolver a Blender {version} los ajustes guardados el {date}?\n\n"
             "Lo que tiene ahora se guarda aparte, así que esto se puede "
             "deshacer.",
+        "Keep at most": "Conservar como mucho",
+        "How many saved copies to keep per version. The oldest are deleted "
+        "when a new one is saved.":
+            "Cuántas copias guardadas se conservan por versión. Las más viejas "
+            "se borran al guardar una nueva.",
         "Delete all saved settings": "Borrar todos los ajustes guardados",
         "Delete every saved copy of this version for good.":
             "Borra para siempre todas las copias guardadas de esta versión.",
@@ -381,8 +386,29 @@ _TRANSLATIONS = {
         "No": "No",
         "Launch options": "Opciones de lanzamiento",
         "Launch arguments": "Argumentos de lanzamiento",
+        "Launch with console": "Lanzar con consola",
+        "Launch with the console visible: Python output and script errors.":
+            "Lanza con la consola visible: salida de Python y errores de "
+            "scripts.",
+        "No terminal found; launching without console.":
+            "No se encontró terminal; se lanza sin consola.",
         "Local versions": "Versiones locales",
         "Local build": "Local",
+        "Recent files": "Recientes",
+        "Show the .blend files you opened recently, by Blender version.":
+            "Muestra los ficheros .blend que abriste hace poco, por versión de "
+            "Blender.",
+        "No installed Blender versions.": "No hay versiones de Blender "
+            "instaladas.",
+        "No recent files yet.": "Todavía no hay ficheros recientes.",
+        "Open file location": "Abrir ubicación del fichero",
+        "Open in Blender {version}": "Abrir en Blender {version}",
+        "Open in another version": "Abrir en otra versión",
+        "No installed versions.": "No hay versiones instaladas.",
+        "That version has no executable.": "Esa versión no tiene ejecutable.",
+        "Opening {name} in Blender {version}":
+            "Abriendo {name} en Blender {version}",
+        "Blender {version}": "Blender {version}",
         "No local versions found": "No se encontraron versiones locales",
         "Try clearing the search or another channel filter.":
             "Prueba a borrar la búsqueda o a cambiar el filtro de canal.",
@@ -819,6 +845,11 @@ _TRANSLATIONS = {
             "Cierra Blender {version} antes de migrar: si no, sobrescribirá "
             "los cambios al salir.",
         "Blender {version} is running": "Blender {version} está abierto",
+        "Blender is running": "Blender está abierto",
+        "Close every Blender window before continuing: Blender saves its "
+        "preferences when it quits and would overwrite the changes.":
+            "Cierra todas las ventanas de Blender antes de continuar: Blender "
+            "guarda sus preferencias al salir y sobrescribiría los cambios.",
         "No add-ons to migrate": "No hay addons que migrar",
 
         # --- Migración de preferencias (ficheros de config/) ---

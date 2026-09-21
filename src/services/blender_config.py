@@ -753,13 +753,15 @@ SNAPSHOT_DIR = ".blendermanager-snapshots"
 SNAPSHOT_PREFIX = "config"
 
 
-def snapshot_config(target: BlenderConfig, label: str = "") -> Path | None:
+def snapshot_config(target: BlenderConfig, label: str = "",
+                    keep: int = 0) -> Path | None:
     """Aparta la carpeta ``config`` de una versión y devuelve dónde quedó.
 
     Es lo que hace a mano quien quiere probar una versión "de fábrica": renombrar
     ``config`` y dejar que Blender la recree. Aquí se guarda además en una
     carpeta de instantáneas para poder **volver a ponerla** después. No borra
-    nada: si no hay ``config``, devuelve ``None``.
+    la config: si no existe, devuelve ``None``. ``keep`` > 0 poda las
+    instantáneas más viejas (ver ``prune_snapshots``).
     """
     source = target.config_dir
     if not source.exists():
@@ -777,6 +779,8 @@ def snapshot_config(target: BlenderConfig, label: str = "") -> Path | None:
         destination = snapshots / f"{name}-{counter}"
         counter += 1
     shutil.move(str(source), str(destination))
+    if keep > 0:
+        prune_snapshots(target, keep)
     return destination
 
 
@@ -881,7 +885,8 @@ def snapshot_details(snapshot) -> dict:
     }
 
 
-def restore_snapshot(target: BlenderConfig, snapshot) -> Path | None:
+def restore_snapshot(target: BlenderConfig, snapshot,
+                     keep: int = 0) -> Path | None:
     """Copia una instantánea a su sitio (``config``), sin consumirla.
 
     Antes se **movía** (el guardado desaparecía). Eso dejaba al usuario sin
@@ -891,7 +896,8 @@ def restore_snapshot(target: BlenderConfig, snapshot) -> Path | None:
 
     La config que había se aparta como ``factory`` para poder deshacer, pero
     solo si tenía algo: aparcar una carpeta vacía solo añade ruido. Devuelve ese
-    aparte (o ``None``).
+    aparte (o ``None``). ``keep`` > 0 poda las más viejas sin tocar la que se
+    acaba de restaurar.
     """
     snapshot = Path(snapshot)
     if not snapshot.is_dir():
@@ -902,6 +908,8 @@ def restore_snapshot(target: BlenderConfig, snapshot) -> Path | None:
     target.config_dir.mkdir(parents=True, exist_ok=True)
     shutil.copytree(snapshot, target.config_dir, dirs_exist_ok=True,
                     symlinks=True)
+    if keep > 0:
+        prune_snapshots(target, keep, protect=snapshot)
     return aside
 
 
@@ -915,6 +923,26 @@ def delete_snapshot(snapshot) -> bool:
     except OSError:
         return False
     return True
+
+
+def prune_snapshots(target: BlenderConfig, keep: int, protect=None) -> list:
+    """Borra las instantáneas más viejas y deja las ``keep`` más nuevas.
+
+    ``keep`` <= 0 no borra nada. ``protect`` (una ruta) nunca se borra: es la
+    que se acaba de restaurar. Nunca se toca la más nueva tampoco: el guardado
+    que el usuario acaba de hacer tiene que seguir ahí aunque algo falle.
+    """
+    if keep <= 0:
+        return []
+    snapshots = snapshot_dirs(target)      # de la más nueva a la más vieja
+    protected = Path(protect) if protect is not None else None
+    removed = []
+    for index, snapshot in enumerate(snapshots):
+        if index < keep or snapshot == protected:
+            continue
+        if delete_snapshot(snapshot):
+            removed.append(snapshot)
+    return removed
 
 
 @dataclass

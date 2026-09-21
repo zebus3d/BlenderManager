@@ -601,6 +601,53 @@ class FactoryResetTest(unittest.TestCase):
             self.assertEqual((config.config_dir / "userpref.blend").read_bytes(),
                              b"MIO")
 
+    def test_poda_conserva_las_mas_nuevas(self):
+        from datetime import datetime as _datetime
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            snaps = []
+            for second in range(4):
+                config.config_dir.mkdir(parents=True, exist_ok=True)
+                (config.config_dir / "userpref.blend").write_bytes(
+                    str(second).encode())
+                with mock.patch.object(bc, "datetime") as clock:
+                    clock.now.return_value = _datetime(2026, 9, 21, 10, 0,
+                                                       second)
+                    snaps.append(bc.snapshot_config(config))
+            removed = bc.prune_snapshots(config, 2)
+            self.assertEqual(len(removed), 2)
+            # Las que quedan son las dos más nuevas, de nueva a vieja.
+            self.assertEqual(bc.snapshots_for(config), [snaps[3], snaps[2]])
+
+    def test_poda_sin_limite_no_borra(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            snapshot = bc.snapshot_config(config)
+            self.assertEqual(bc.prune_snapshots(config, 0), [])
+            self.assertTrue(snapshot.is_dir())
+
+    def test_poda_nunca_borra_la_protegida(self):
+        from datetime import datetime as _datetime
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            first = None
+            for second in range(4):
+                config.config_dir.mkdir(parents=True, exist_ok=True)
+                (config.config_dir / "userpref.blend").write_bytes(b"x")
+                with mock.patch.object(bc, "datetime") as clock:
+                    clock.now.return_value = _datetime(2026, 9, 21, 10, 0,
+                                                       second)
+                    snapshot = bc.snapshot_config(config)
+                if second == 0:
+                    first = snapshot
+            # La más vieja (que se acaba de restaurar) no se borra aunque el
+            # límite sea 1.
+            bc.prune_snapshots(config, 1, protect=first)
+            self.assertTrue(first.is_dir())
+            self.assertEqual(len(bc.snapshots_for(config)), 2)
+
     def test_snapshot_label(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")

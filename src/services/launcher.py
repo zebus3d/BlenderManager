@@ -9,11 +9,62 @@ Guardamos las referencias a los procesos lanzados solo para poder descartar
 los que ya han terminado y no acumularlas indefinidamente.
 """
 
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 from services.opener import clean_env
+
+# Emuladores de terminal que sabemos abrir en Linux, por orden de preferencia.
+# El segundo elemento es cómo se le pasa el comando: unos usan ``-e`` y otros
+# ``--`` (gnome-terminal) o nada (kitty lo ejecuta tal cual).
+_TERMINALS = (
+    ("x-terminal-emulator", ["-e"]),
+    ("gnome-terminal", ["--"]),
+    ("konsole", ["-e"]),
+    ("xfce4-terminal", ["-e"]),
+    ("mate-terminal", ["-e"]),
+    ("alacritty", ["-e"]),
+    ("kitty", []),
+    ("foot", ["-e"]),
+    ("xterm", ["-e"]),
+)
+
+
+def _applescript_string(text: str) -> str:
+    """Texto entre comillas para AppleScript (escapa ``\\`` y ``"``)."""
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def console_command(command) -> list | None:
+    """Comando que abre Blender con consola visible, o ``None`` si no se puede.
+
+    Linux: busca un emulador de terminal en el ``PATH``. macOS: Terminal, vía
+    ``osascript``. Windows no necesita comando aparte (se usa
+    ``CREATE_NEW_CONSOLE`` al crear el proceso), así que devuelve ``None``.
+    """
+    if sys.platform.startswith("win"):
+        return None
+    if sys.platform == "darwin":
+        if not shutil.which("osascript"):
+            return None
+        script = ('tell application "Terminal" to do script '
+                  + _applescript_string(shlex.join(command)))
+        return ["osascript", "-e", script]
+    for name, prefix in _TERMINALS:
+        path = shutil.which(name)
+        if path:
+            return [path, *prefix, *command]
+    return None
+
+
+def terminal_available() -> bool:
+    """True si se puede lanzar con consola en este equipo."""
+    if sys.platform.startswith("win"):
+        return True   # CREATE_NEW_CONSOLE no necesita nada más
+    return console_command(["true"]) is not None
 
 
 class Launcher:
@@ -25,33 +76,49 @@ class Launcher:
     def __init__(self):
         self._processes = []
 
-    def launch(self, executable, args=None, cwd=None):
-        """Ejecuta esa versión instalada y devuelve el proceso lanzado."""
+    def launch(self, executable, args=None, cwd=None, console=False):
+        """Ejecuta esa versión instalada y devuelve el proceso lanzado.
+
+        ``console=True`` abre Blender con su consola visible (salida de Python y
+        errores de scripts). Si no hay terminal disponible, lanza normal: es un
+        extra, no algo que deba impedir abrir Blender.
+        """
         executable = Path(executable)
         command = [str(executable)]
         command.extend(args or [])
 
-        # Opciones para desacoplar el proceso hijo del gestor.
-        kwargs = {
-            "cwd": str(cwd or executable.parent),
-            # Sin entrada estándar y descartando la salida, para que al cerrar
-            # el gestor el hijo no dependa de su terminal.
-            "stdin": subprocess.DEVNULL,
-            "stdout": subprocess.DEVNULL,
-            "stderr": subprocess.DEVNULL,
-            # Entorno limpio: sin el LD_LIBRARY_PATH que PyInstaller mete para
-            # el AppImage, o Blender cargaría las librerías del gestor en vez
-            # de las suyas (mismo fallo que al abrir el navegador).
-            "env": clean_env(),
-        }
-        if sys.platform.startswith("win"):
-            # Grupo de procesos propio y sin consola asociada.
+        # Entorno limpio: sin el LD_LIBRARY_PATH que PyInstaller mete para el
+        # AppImage, o Blender cargaría las librerías del gestor en vez de las
+        # suyas (mismo fallo que al abrir el navegador).
+        kwargs = {"cwd": str(cwd or executable.parent), "env": clean_env()}
+
+        if console and sys.platform.startswith("win"):
+            # Consola nueva de Windows. NO se redirige la salida: si se manda a
+            # DEVNULL, Blender escribiría en NUL y la consola saldría vacía.
             kwargs["creationflags"] = (
-                subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                subprocess.CREATE_NEW_CONSOLE
+                | subprocess.CREATE_NEW_PROCESS_GROUP
             )
+        elif console:
+            wrapped = console_command(command)
+            if wrapped is not None:
+                command = wrapped
+            # El emulador de terminal se descarta igual: su ventana enseña la
+            # salida del hijo, que corre en su propia sesión.
+            kwargs.update(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL, start_new_session=True)
         else:
-            # Nueva sesión: no recibe el SIGHUP del terminal ni del gestor.
-            kwargs["start_new_session"] = True
+            # Desacoplado del gestor y sin terminal asociado.
+            kwargs.update(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL)
+            if sys.platform.startswith("win"):
+                kwargs["creationflags"] = (
+                    subprocess.DETACHED_PROCESS
+                    | subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+            else:
+                # Nueva sesión: no recibe el SIGHUP del terminal ni del gestor.
+                kwargs["start_new_session"] = True
 
         process = subprocess.Popen(command, **kwargs)
         self._processes.append(process)

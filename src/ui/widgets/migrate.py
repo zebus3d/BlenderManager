@@ -630,6 +630,7 @@ class MigrateView(QWidget):
     prefs_applied = Signal(object)     # {"result", "version"}
     source_read = Signal(object)       # {"version", "enabled", "error"}
     snapshots_analyzed = Signal(object)  # {"version", "results", "live"}
+    snapshot_keep_changed = Signal(int)  # cuántas copias guardadas conservar
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -680,6 +681,9 @@ class MigrateView(QWidget):
         self._analyzed_for = ""
         self._snapshots_waiting = False
         self._factory_live_count = None
+        # Cuántas copias guardadas se conservan (lo fija MainWindow desde los
+        # ajustes; aquí se usa al crear o restaurar una).
+        self.snapshot_keep = 5
         self._build_ui()
         self.activation_done.connect(self._on_activation_done)
         self.prefs_loaded.connect(self._on_prefs_loaded)
@@ -1525,8 +1529,49 @@ class MigrateView(QWidget):
         self.delete_all_btn.clicked.connect(self.delete_all_snapshots)
         row.addWidget(self.delete_all_btn)
         lay.addLayout(row)
+
+        # Retención: cuántas copias se conservan por versión. Va aquí (y no en
+        # Ajustes) porque es justo donde se ven y se borran.
+        keep_row = QHBoxLayout()
+        keep_row.addWidget(QLabel(tr("Keep at most")))
+        keep_row.addStretch()
+        self.snapshot_keep_combo = QComboBox()
+        for value, label in ((3, "3"), (5, "5"), (10, "10"), (0, tr("All"))):
+            self.snapshot_keep_combo.addItem(label, value)
+        index = self.snapshot_keep_combo.findData(self.snapshot_keep)
+        self.snapshot_keep_combo.setCurrentIndex(index if index >= 0 else 1)
+        self.snapshot_keep_combo.setToolTip(tr(
+            "How many saved copies to keep per version. The oldest are deleted "
+            "when a new one is saved."))
+        self.snapshot_keep_combo.currentIndexChanged.connect(
+            self._on_snapshot_keep_changed)
+        keep_row.addWidget(self.snapshot_keep_combo)
+        lay.addLayout(keep_row)
+
         self._refresh_factory()
         return card
+
+    def set_snapshot_keep(self, value: int) -> None:
+        """Fija cuántas copias se conservan (lo llama MainWindow con el ajuste)."""
+        self.snapshot_keep = int(value)
+        if hasattr(self, "snapshot_keep_combo"):
+            index = self.snapshot_keep_combo.findData(self.snapshot_keep)
+            if index >= 0:
+                self.snapshot_keep_combo.blockSignals(True)
+                self.snapshot_keep_combo.setCurrentIndex(index)
+                self.snapshot_keep_combo.blockSignals(False)
+
+    def _on_snapshot_keep_changed(self, index: int) -> None:
+        """El usuario cambió la retención: se guarda y se poda ya."""
+        value = self.snapshot_keep_combo.itemData(index)
+        if value is None:
+            return
+        self.snapshot_keep = int(value)
+        self.snapshot_keep_changed.emit(self.snapshot_keep)
+        config = self._factory_config()
+        if config is not None and self.snapshot_keep > 0:
+            bc.prune_snapshots(config, self.snapshot_keep)
+        self._refresh_factory()
 
     def _factory_entry(self):
         """Instalada elegida en la pestaña de fábrica (su propio selector)."""
@@ -1766,7 +1811,8 @@ class MigrateView(QWidget):
                    "this same screen.", version=version),
                 accept_text=tr("Reset"), danger=True):
             return
-        snapshot = bc.snapshot_config(config, label=f"v{version}")
+        snapshot = bc.snapshot_config(config, label=f"v{version}",
+                                      keep=self.snapshot_keep)
         if snapshot is None:
             self.factory_status.setText(tr(
                 "This version has no settings yet."))
@@ -1802,7 +1848,7 @@ class MigrateView(QWidget):
                    "undone.", version=version, date=date),
                 accept_text=tr("Restore")):
             return
-        bc.restore_snapshot(config, target)
+        bc.restore_snapshot(config, target, keep=self.snapshot_keep)
         self._analysis = {}
         self._analyzed_for = ""
         self.status_message.emit(tr("Settings restored."))
@@ -2028,23 +2074,23 @@ class MigrateView(QWidget):
                   "overwrite the changes when it quits.", version=version)
 
     def _blocked_by_running(self, entry=None) -> bool:
-        """True si ese Blender está abierto (y avisa); bloquea la acción.
+        """True si hay **cualquier** Blender abierto (y avisa); bloquea la acción.
 
-        El chequeo no depende de que encontremos el ejecutable: pisar las
-        preferencias con Blender abierto es malo aunque la build esté en una
-        ruta rara, y ``running_blenders`` se apaña con la ruta que le den.
-        Sin ``entry`` se refiere al destino de la migración.
+        No se comprueba solo el destino: dos builds de la misma serie (5.2.0 y
+        5.2.2) comparten carpeta de configuración, así que un Blender abierto
+        que no es el elegido también pisaría el cambio al cerrarse. Como no hay
+        forma fiable de saber qué serie tiene abierta cada proceso (en Windows
+        ni se detectan), se cierra todo.
         """
-        executable, version = _entry_info(
-            entry if entry is not None else self.target_entry)
         try:
-            running = blender_runner.is_running(executable)
+            running = blender_runner.is_running(None)
         except Exception:  # noqa: BLE001 - el chequeo no puede tumbar la acción
             running = False
         if not running:
             return False
-        show_info(self, tr("Blender {version} is running", version=version),
-                  self._running_message(version))
+        show_info(self, tr("Blender is running"), tr(
+            "Close every Blender window before continuing: Blender saves its "
+            "preferences when it quits and would overwrite the changes."))
         return True
 
     def _update_summary(self) -> None:

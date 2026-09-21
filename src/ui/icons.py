@@ -25,3 +25,7 @@ ARROW_RIGHT = "\uf061"  # flecha hacia la derecha (sentido de la migración)
 LOCK = "\uf023"        # candado cerrado (la app no escribe ahi)
 LOCK_OPEN = "\uf3c1"   # candado abierto (se puede descargar ahi)
 PLUS = "\uf067"        # anadir una carpeta a la biblioteca
+CLOCK = "\uf017"       # reloj (ficheros recientes)
+ELLIPSIS = "\uf141"    # tres puntos (mas opciones)
+PUZZLE = "\uf12e"      # pieza de puzzle (addons)
+TERMINAL = "\uf120"    # terminal (lanzar con consola)

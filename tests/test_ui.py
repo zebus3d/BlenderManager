@@ -708,6 +708,24 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertNotEqual(window.view, "migrate")
         self.assertTrue(window.side_buttons["migrate"].isHidden())
 
+    def test_reescanea_al_recuperar_el_foco(self):
+        from PySide6.QtCore import QEvent
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        calls = []
+        window.refresh_installed = lambda: calls.append(1)
+        window.isActiveWindow = lambda: False
+        window.changeEvent(QEvent(QEvent.ActivationChange))
+        self.assertEqual(calls, [])
+        window.isActiveWindow = lambda: True
+        window.changeEvent(QEvent(QEvent.ActivationChange))
+        self.assertEqual(len(calls), 1)
+        # El cooldown evita reescanear en cada cambio de ventana.
+        window.changeEvent(QEvent(QEvent.ActivationChange))
+        self.assertEqual(len(calls), 1)
+
     def test_ajustes_en_pestanas(self):
         from PySide6.QtWidgets import QTabWidget
 
@@ -3304,6 +3322,38 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                     view.show_snapshot_details(snap)
             self.assertTrue(run.called)
 
+    def test_la_retencion_de_guardados_se_puede_cambiar(self):
+        from unittest import mock as _mock
+
+        view = self._view()
+        view.set_snapshot_keep(10)
+        self.assertEqual(view.snapshot_keep, 10)
+        self.assertEqual(view.snapshot_keep_combo.currentData(), 10)
+        seen = []
+        view.snapshot_keep_changed.connect(seen.append)
+        with _mock.patch.object(view, "_factory_config", return_value=None):
+            view.snapshot_keep_combo.setCurrentIndex(
+                view.snapshot_keep_combo.findData(3))
+        self.assertEqual(seen, [3])
+        self.assertEqual(view.snapshot_keep, 3)
+
+    def test_bloquea_con_cualquier_blender_abierto(self):
+        """Escribir la config se bloquea si hay CUALQUIER Blender abierto.
+
+        Dos builds de la misma serie comparten carpeta, así que un Blender
+        abierto que no es el elegido también pisaría el cambio al cerrarse.
+        """
+        from unittest import mock as _mock
+
+        view = self._view()
+        view.target_entry = _fake_installed("5.3.0")
+        with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                         return_value=True) as running, \
+                _mock.patch("ui.widgets.migrate.show_info") as info:
+            self.assertTrue(view._blocked_by_running())
+        running.assert_called_with(None)
+        self.assertTrue(info.called)
+
     def test_review_explica_como_revisar(self):
         """El amarillo "Review" tiene que decir qué hacer, no solo el motivo."""
         from services import blender_config as bc
@@ -3375,6 +3425,74 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         # Y al volver, los filtros reaparecen.
         window.set_view("store")
         self.assertTrue(window.filters.isVisibleTo(window))
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class RecentViewTests(SettingsIsolated, unittest.TestCase):
+    """La vista de ficheros recientes."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def setUp(self):
+        # Otros tests dejan el idioma en español; aquí se comprueban textos.
+        import i18n
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+
+    def _labels(self, view):
+        return [view.body.itemAt(i).widget() for i in range(view.body.count())]
+
+    def test_sin_instaladas_avisa(self):
+        from ui.widgets.recent import RecentView
+
+        view = RecentView()
+        view.set_installed([])
+        texts = [getattr(w, "text", lambda: "")() for w in self._labels(view)]
+        self.assertIn("No installed Blender versions.", texts)
+
+    def test_muestra_un_grupo_por_serie(self):
+        from unittest import mock as _mock
+
+        from model.build import InstalledBuild
+        from services import recent as rp
+        from ui.widgets.recent import RecentView, _RecentRow
+
+        entry = InstalledBuild(name="b", path=Path("/tmp/b"), version="5.2.2",
+                               executable=Path("/tmp/b/blender"))
+        group = rp.RecentGroup(series="5.2", version="5.2.2",
+                               files=[Path("/tmp/a.blend")])
+        view = RecentView()
+        view.set_system("linux", "x86_64")
+        with _mock.patch("ui.widgets.recent.recent_service.grouped",
+                         return_value=[group]):
+            view.set_installed([entry])
+        rows = [w for w in self._labels(view) if isinstance(w, _RecentRow)]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].path, Path("/tmp/a.blend"))
+
+    def test_abrir_lanza_esa_version(self):
+        from unittest import mock as _mock
+
+        from model.build import InstalledBuild
+        from ui.widgets.recent import RecentView
+
+        entry = InstalledBuild(name="b", path=Path("/tmp/b"), version="5.2.2",
+                               executable=Path("/tmp/b/blender"))
+        view = RecentView()
+        with _mock.patch.object(view.launcher, "launch") as launch:
+            view._open(Path("/tmp/a.blend"), entry)
+        self.assertTrue(launch.called)
+        self.assertEqual(launch.call_args[0][0], entry.executable)
+        self.assertEqual(launch.call_args[1]["args"], ["/tmp/a.blend"])
 
 
 if __name__ == "__main__":

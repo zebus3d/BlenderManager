@@ -278,6 +278,19 @@ def _clean_string_list(value) -> list[str]:
     return cleaned
 
 
+def _clean_snapshot_keep(value) -> int:
+    """Normaliza cuántas instantáneas se conservan (0 = sin límite).
+
+    Un valor no numérico o negativo editado a mano cae al de fábrica; no puede
+    dejar la poda en un número absurdo.
+    """
+    try:
+        keep = int(value)
+    except (TypeError, ValueError):
+        return 5
+    return keep if keep >= 0 else 5
+
+
 @dataclass
 class Settings:
     """Ajustes persistentes (por usuario, o por carpeta en modo
@@ -296,6 +309,9 @@ class Settings:
     language: str = "auto"
     delete_archive: bool = True
     launch_args: str = ""
+    # Lanzar Blender con su consola visible (salida de Python y errores de
+    # scripts). Se puede alternar por lanzamiento desde la tarjeta.
+    launch_console: bool = False
     layout_mode: str = "grid"
     zoom: float = DEFAULT_ZOOM
     # Valor al que vuelve la rejilla con Ctrl+0 o Ctrl+clic en el slider. Es
@@ -355,6 +371,9 @@ class Settings:
     # de Migración, que sigue en desarrollo: así se puede publicar como release
     # estable y quien la quiera la activa a mano.
     experimental_features: bool = False
+    # Cuántos ajustes guardados (instantáneas) se conservan por versión. Al
+    # crear uno nuevo se borran los más viejos. 0 = sin límite.
+    snapshot_keep: int = 5
 
     @classmethod
     def load(cls) -> "Settings":
@@ -381,6 +400,7 @@ class Settings:
             language=str(data.get("language") or "auto"),
             delete_archive=bool(data.get("delete_archive", True)),
             launch_args=str(data.get("launch_args") or ""),
+            launch_console=bool(data.get("launch_console", False)),
             layout_mode=str(data.get("layout_mode") or "grid"),
             zoom=float(data.get("zoom") or DEFAULT_ZOOM),
             reset_zoom=float(data.get("reset_zoom") or DEFAULT_ZOOM),
@@ -403,6 +423,7 @@ class Settings:
             folders_hint_shown=bool(data.get("folders_hint_shown", True)),
             experimental_features=bool(data.get("experimental_features",
                                                 False)),
+            snapshot_keep=_clean_snapshot_keep(data.get("snapshot_keep")),
         )
         # La biblioteca de carpetas: o se lee, o se convierte la del esquema
         # viejo. El número de versión es lo que distingue "vengo de una app

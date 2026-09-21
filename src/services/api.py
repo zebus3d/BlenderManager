@@ -13,6 +13,7 @@ extra al empaquetado.
 import json
 import re
 import time
+import urllib.error
 import urllib.request
 from dataclasses import asdict, fields
 
@@ -45,13 +46,28 @@ def cache_path():
     return cache_dir() / "builds.json"
 
 
-def _fetch_json(url: str, timeout: int = 20):
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+def _fetch_json(url: str, timeout: int = 20, etag: str | None = None):
+    """Descarga un JSON y devuelve ``(datos, etag)``.
+
+    Con ``etag`` manda ``If-None-Match``; si el servidor responde 304 (no ha
+    cambiado), ``datos`` es ``None`` y se reutiliza la caché. Así, refrescar no
+    vuelve a bajarse un listado que ya tenemos.
+    """
+    headers = {"User-Agent": USER_AGENT}
+    if etag:
+        headers["If-None-Match"] = etag
+    request = urllib.request.Request(url, headers=headers)
     # El contexto va explicito: el OpenSSL del binario no encuentra las CAs en
     # distros que no son Debian (ver services/tls.py).
-    with urllib.request.urlopen(request, timeout=timeout,
-                                context=tls.ssl_context()) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout,
+                                    context=tls.ssl_context()) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data, response.headers.get("ETag")
+    except urllib.error.HTTPError as error:
+        if error.code == 304:
+            return None, etag
+        raise
 
 
 def normalize_arch(value: str) -> str:
@@ -85,35 +101,85 @@ def _to_build(entry: dict, experimental: bool = False) -> Build:
     )
 
 
-def _fetch_builds_from(url: str, timeout: int, experimental: bool):
-    """Descarga un listado y se queda con las extensiones que sabemos abrir."""
-    entries = _fetch_json(url, timeout=timeout)
+def _fetch_builds_from(url: str, timeout: int, experimental: bool,
+                       etag: str | None = None):
+    """Descarga un listado y se queda con las extensiones que sabemos abrir.
+
+    Devuelve ``(builds, etag)``; ``builds`` es ``None`` si el servidor dijo 304
+    (no ha cambiado), para que quien llame reutilice la caché.
+    """
+    entries, new_etag = _fetch_json(url, timeout=timeout, etag=etag)
+    if entries is None:
+        return None, etag
     builds = []
     for entry in entries:
         if entry.get("file_extension") not in VALID_EXTENSIONS:
             continue
         builds.append(_to_build(entry, experimental=experimental))
-    return builds
+    return builds, new_etag
 
 
-def fetch_builds(timeout: int = 20):
+def fetch_builds(timeout: int = 20, etags: dict | None = None,
+                 cached=None):
     """Descarga el listado completo: diarias + ramas experimentales.
 
-    El listado experimental va en su propio try: casi siempre está vacío y eso
-    no debe impedir que se vean las compilaciones normales.
+    ``etags``/``cached`` son de la última vez: si un listado responde 304, se
+    reutilizan las builds de la caché en vez de volver a bajarlo. El listado
+    experimental va en su propio try: casi siempre está vacío y eso no debe
+    impedir que se vean las compilaciones normales. Devuelve
+    ``(builds, etags)``.
     """
-    builds = _fetch_builds_from(API_URL, timeout, experimental=False)
+    etags = etags or {}
+    cached = list(cached or [])
+    new_etags = {}
+
+    daily, daily_etag = _fetch_builds_from(API_URL, timeout, experimental=False,
+                                           etag=etags.get(API_URL))
+    if daily is None:
+        daily = [build for build in cached if not build.experimental]
+    if daily_etag:
+        new_etags[API_URL] = daily_etag
+    builds = list(daily)
+
     try:
-        builds += _fetch_builds_from(EXPERIMENTAL_URL, timeout, experimental=True)
+        experimental, exp_etag = _fetch_builds_from(
+            EXPERIMENTAL_URL, timeout, experimental=True,
+            etag=etags.get(EXPERIMENTAL_URL))
+        if experimental is None:
+            experimental = [build for build in cached if build.experimental]
+        if exp_etag:
+            new_etags[EXPERIMENTAL_URL] = exp_etag
+        builds += experimental
     except Exception as error:
         log(f"experimental builds unavailable: {error}")
-    return builds
+    return builds, new_etags
 
 
-def save_cache(builds) -> None:
-    """Guarda el listado en disco, para poder arrancar sin red."""
-    payload = {"saved_at": int(time.time()), "builds": [asdict(build) for build in builds]}
+def save_cache(builds, etags: dict | None = None) -> None:
+    """Guarda el listado en disco, para poder arrancar sin red.
+
+    Los ``etags`` se guardan con él: en el siguiente refresco se mandan como
+    ``If-None-Match`` y, si nada cambió, el servidor contesta 304.
+    """
+    payload = {
+        "saved_at": int(time.time()),
+        "builds": [asdict(build) for build in builds],
+        "etags": etags or {},
+    }
     write_json_atomic(cache_path(), payload)
+
+
+def load_etags() -> dict:
+    """ETags del último listado guardado (por URL), o ``{}``."""
+    path = cache_path()
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    etags = payload.get("etags")
+    return etags if isinstance(etags, dict) else {}
 
 
 def load_cache(max_age=CACHE_MAX_AGE):
@@ -149,13 +215,16 @@ def get_builds(force: bool = False):
         cached = load_cache()
         if cached:
             return cached
+    # La caché (aunque esté caducada) sirve para dos cosas: reutilizar las
+    # builds de un listado que responda 304 y tener algo que enseñar sin red.
+    stale = load_cache(max_age=None)
     try:
-        builds = fetch_builds()
-        save_cache(builds)
+        builds, etags = fetch_builds(etags=load_etags(), cached=stale)
+        save_cache(builds, etags)
         return builds
     except Exception:
         # Sin conexión: mejor mostrar algo (aunque esté caducado) que nada.
-        return load_cache(max_age=None)
+        return stale
 
 
 def available_for(builds, platform: str, arch: str):
