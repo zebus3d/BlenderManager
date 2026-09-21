@@ -88,6 +88,7 @@ from ui.widgets.dialogs import (
 )
 from ui.widgets.folders import MAX_VISIBLE_ROWS, TYPE_LABELS, FolderRow
 from ui.widgets.labels import ElidedLabel
+from ui.widgets.addons import AddonsView
 from ui.widgets.migrate import MigrateView
 from ui.widgets.recent import RecentView
 from ui.widgets.tray import TrayIcon
@@ -430,6 +431,10 @@ class MainWindow(QWidget):
         self.recent_view.set_system(self.system.os_name, self.system.arch)
         self.recent_view.status_message.connect(self._show_message)
         self.stack.addWidget(self.recent_view)
+        self.addons_view = AddonsView()
+        self.addons_view.set_system(self.system.os_name, self.system.arch)
+        self.addons_view.status_message.connect(self._show_message)
+        self.stack.addWidget(self.addons_view)
         self.stack.addWidget(self._build_settings_view())
         body.addWidget(self.stack, 1)
         root.addLayout(body, 1)
@@ -441,6 +446,7 @@ class MainWindow(QWidget):
         self._rebuild_installed()
         self.migrate_view.set_installed(self.installed)
         self.recent_view.set_installed(self.installed)
+        self.addons_view.set_installed(self.installed)
         self._install_shortcuts()
 
     def _install_shortcuts(self) -> None:
@@ -594,6 +600,9 @@ class MainWindow(QWidget):
             ("recent", icons.CLOCK, tr(
                 "Show the .blend files you opened recently, by Blender "
                 "version.")),
+            ("addons", icons.PUZZLE, tr(
+                "Manage the add-ons and extensions of an installed version "
+                "without opening Blender.")),
         ):
             btn = SideButton(glyph, tip)
             btn.setFont(icon_font(20))
@@ -1515,6 +1524,11 @@ class MainWindow(QWidget):
             # Los recientes se leen al entrar: Blender puede haber abierto
             # ficheros desde la última vez.
             self.recent_view.set_installed(self.installed)
+        elif view == "addons":
+            # Los addons se leen al entrar (arranca Blender): no tiene sentido
+            # hacerlo al abrir la app si el usuario no va a mirarlos.
+            self.addons_view.set_installed(self.installed)
+            self.addons_view.read()
 
     def _set_view(self, view: str, animate: bool = True) -> None:
         # Tienda e Instaladas comparten la zona de listas (con sus filtros); lo
@@ -1525,7 +1539,8 @@ class MainWindow(QWidget):
             show_tools = True
         else:
             self.stack.setCurrentIndex(
-                {"migrate": 1, "recent": 2, "settings": 3}.get(view, 0))
+                {"migrate": 1, "recent": 2, "addons": 3,
+                 "settings": 4}.get(view, 0))
             show_tools = False
         for key, btn in self.side_buttons.items():
             btn.setChecked(key == view)
@@ -1539,7 +1554,7 @@ class MainWindow(QWidget):
         """Cambia entre rejilla y lista y recuerda la elección."""
         self.layout_mode = mode
         self.zoom_box.setVisible(
-            self.view not in ("settings", "migrate", "recent")
+            self.view not in ("settings", "migrate", "recent", "addons")
             and mode == "grid")
         (self.grid_btn if mode == "grid" else self.list_btn).setChecked(True)
         self.settings.layout_mode = mode
@@ -1582,7 +1597,7 @@ class MainWindow(QWidget):
 
     def _zoom_enabled(self) -> bool:
         """El zoom solo pinta algo en rejilla y fuera de ajustes/migración."""
-        return (self.view not in ("settings", "migrate", "recent")
+        return (self.view not in ("settings", "migrate", "recent", "addons")
                 and self.layout_mode == "grid")
 
     def _set_zoom_value(self, value: float) -> None:
@@ -1959,6 +1974,7 @@ class MainWindow(QWidget):
         self._rebuild_installed()
         self.migrate_view.set_installed(self.installed)
         self.recent_view.set_installed(self.installed)
+        self.addons_view.set_installed(self.installed)
 
     def _recompute_updates(self) -> None:
         """Recalcula qué instaladas tienen parche o serie nueva disponible.

@@ -7,6 +7,7 @@
 El aspecto vive en ``ui/qss.py`` (equivalente a los antiguos ``views/*.kv``).
 """
 
+from ui.widgets.addons import AddonsView
 from ui.widgets.buttons import (
     CardButton,
     IconFlatButton,
@@ -37,6 +38,7 @@ from ui.widgets.recent import RecentView
 from ui.widgets.tray import TrayIcon
 
 __all__ = [
+    "AddonsView",
     "AppDialog",
     "BuildCard",
     "CardButton",

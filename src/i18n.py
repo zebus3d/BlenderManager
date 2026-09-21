@@ -392,6 +392,64 @@ _TRANSLATIONS = {
             "scripts.",
         "No terminal found; launching without console.":
             "No se encontró terminal; se lanza sin consola.",
+
+        # --- Gestor de addons (vista "Add-ons") ---
+        "Manage the add-ons and extensions of an installed version without "
+        "opening Blender.":
+            "Gestiona los addons y extensiones de una versión instalada sin "
+            "abrir Blender.",
+        "Add-on": "Addon",
+        "Extension": "Extensión",
+        "Extensions": "Extensiones",
+        "Add-ons (legacy)": "Addons (legacy)",
+        "All types": "Todos los tipos",
+        "More options": "Más opciones",
+        "Version whose add-ons you are managing. Versions of the same series "
+        "share their add-on folder.":
+            "Versión cuyos addons gestionas. Las versiones de la misma serie "
+            "comparten su carpeta de addons.",
+        "Search add-ons...": "Buscar addons...",
+        "Reading add-ons...": "Leyendo addons...",
+        "Could not read the add-ons.": "No se pudieron leer los addons.",
+        "{count} add-ons.": "{count} addons.",
+        "No add-ons found.": "No se encontraron addons.",
+        "Enable or disable this add-on without opening Blender.":
+            "Activa o desactiva este addon sin abrir Blender.",
+        "Linked to a development folder: {path}":
+            "Enlazado a una carpeta de desarrollo: {path}",
+        "Install add-on": "Instalar addon",
+        "Install an add-on or extension from a .zip or .py.":
+            "Instala un addon o extensión desde un .zip o .py.",
+        "Add-ons (*.zip *.py)": "Addons (*.zip *.py)",
+        "Link folder": "Enlazar carpeta",
+        "Link a development folder": "Enlazar una carpeta de desarrollo",
+        "Link a development folder in place, so Blender loads the add-on from "
+        "your project.":
+            "Enlaza una carpeta de desarrollo en su sitio, para que Blender "
+            "cargue el addon desde tu proyecto.",
+        "Read the add-ons from Blender again.":
+            "Vuelve a leer los addons desde Blender.",
+        "Delete add-on": "Borrar addon",
+        "Delete {name}? Its files are removed from Blender {version}.":
+            "¿Borrar {name}? Sus ficheros se quitan de Blender {version}.",
+        "Could not finish": "No se pudo terminar",
+        "Enabled {name}.": "Activado {name}.",
+        "Disabled {name}.": "Desactivado {name}.",
+        "Installed {name}.": "Instalado {name}.",
+        "Linked {name}.": "Enlazado {name}.",
+        "Removed {name}.": "Borrado {name}.",
+        "That file does not exist.": "Ese fichero no existe.",
+        "That folder does not exist.": "Esa carpeta no existe.",
+        "That folder is not an add-on (no manifest or __init__.py).":
+            "Esa carpeta no es un addon (no tiene manifiesto ni __init__.py).",
+        "Only .zip and .py files can be installed.":
+            "Solo se pueden instalar ficheros .zip y .py.",
+        "Could not create the link (on Windows, symbolic links need "
+        "permission).":
+            "No se pudo crear el enlace (en Windows los enlaces simbólicos "
+            "necesitan permisos).",
+        "Blender could not apply the change.":
+            "Blender no pudo aplicar el cambio.",
         "Local versions": "Versiones locales",
         "Local build": "Local",
         "Recent files": "Recientes",

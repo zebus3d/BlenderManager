@@ -1,0 +1,519 @@
+"""Vista para gestionar los addons y extensiones de una versión instalada.
+
+Lista lo que hay con su estado, activa/desactiva sin abrir Blender, instala
+desde un ``.zip``/``.py``, enlaza una carpeta de desarrollo y borra. Todo el
+trabajo de disco/Blender vive en ``services/addons``; aquí solo se pinta y se
+lanzan las operaciones en un hilo.
+
+No es una pestaña de compilaciones: la fila de filtros y el buscador de la
+cabecera se ocultan (lo decide ``MainWindow._set_view``).
+"""
+
+import threading
+from pathlib import Path
+
+from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
+from i18n import tr
+from model.build import minor_of, version_tuple
+from services import addons as addons_service
+from services import blender_runner, opener
+from ui import icons
+from ui import theme as t
+from ui.fonts import icon_font
+from ui.widgets.buttons import CardButton, IconFlatButton, SwitchPill
+from ui.widgets.dialogs import confirm, show_error, show_info
+from ui.widgets.labels import ElidedLabel
+
+# Filtros de tipo de la barra: (clave, etiqueta).
+_TYPE_FILTERS = (
+    ("", "All types"),
+    (addons_service.EXTENSION, "Extensions"),
+    (addons_service.LEGACY, "Add-ons (legacy)"),
+)
+
+
+def _menu(parent) -> QMenu:
+    menu = QMenu(parent)
+    menu.setObjectName("CardMenu")
+    return menu
+
+
+def _clear(layout) -> None:
+    while layout.count():
+        item = layout.takeAt(0)
+        widget = item.widget()
+        if widget is not None:
+            widget.setParent(None)
+            widget.deleteLater()
+
+
+class _AddonRow(QFrame):
+    """Fila de un addon: nombre, tipo/versión, interruptor y acciones."""
+
+    def __init__(self, state, on_toggle, on_open, on_delete, parent=None):
+        super().__init__(parent)
+        self.state = state
+        self._on_toggle = on_toggle
+        self._on_open = on_open
+        self._on_delete = on_delete
+        self.setObjectName("AddonRow")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 8, 8, 8)
+        lay.setSpacing(10)
+
+        info = QVBoxLayout()
+        info.setSpacing(1)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
+        title = ElidedLabel(state.name, Qt.ElideRight)
+        title.setObjectName("Title")
+        title.setToolTip(state.addon.path.name)
+        title_row.addWidget(title)
+        if state.linked:
+            link = QLabel(icons.FOLDER)
+            link.setObjectName("Muted")
+            link.setFont(icon_font(13))
+            link.setToolTip(tr("Linked to a development folder: {path}",
+                               path=state.addon.path.resolve()))
+            title_row.addWidget(link)
+        title_row.addStretch()
+        info.addLayout(title_row)
+        meta = ElidedLabel(self._meta_text(state), Qt.ElideRight)
+        meta.setObjectName("Muted")
+        info.addWidget(meta)
+        lay.addLayout(info, 1)
+
+        self.switch = SwitchPill(
+            state.enabled,
+            tooltip=tr("Enable or disable this add-on without opening Blender."))
+        self.switch.toggled.connect(lambda on: self._on_toggle(self.state, on))
+        lay.addWidget(self.switch)
+
+        self._menu_btn = IconFlatButton(icons.ELLIPSIS,
+                                        tr("More options"))
+        self._menu_btn.setFont(icon_font(16))
+        self._menu_btn.clicked.connect(self._show_menu)
+        lay.addWidget(self._menu_btn)
+
+    @staticmethod
+    def _meta_text(state) -> str:
+        kind = tr("Extension") if state.kind == addons_service.EXTENSION \
+            else tr("Add-on")
+        parts = [f"Blender {state.addon.version}"] if state.addon.version \
+            else []
+        parts.append(kind)
+        return "  ·  ".join(parts)
+
+    def set_enabled(self, enabled: bool) -> None:
+        """Fija el interruptor sin volver a disparar la acción."""
+        self.switch.blockSignals(True)
+        self.switch.setChecked(enabled)
+        self.switch.blockSignals(False)
+        self.state.enabled = enabled
+
+    def contextMenuEvent(self, event) -> None:
+        self._show_menu(event.globalPos())
+
+    def _show_menu(self, position=None) -> None:
+        menu = _menu(self)
+        open_action = menu.addAction(tr("Open file location"))
+        open_action.triggered.connect(lambda: self._on_open(self.state))
+        delete_action = menu.addAction(tr("Delete add-on"))
+        delete_action.triggered.connect(lambda: self._on_delete(self.state))
+        if position is None:
+            position = self._menu_btn.mapToGlobal(
+                QPoint(0, self._menu_btn.height()))
+        menu.exec(position)
+
+
+class AddonsView(QWidget):
+    """Pantalla de gestión de addons de la versión instalada elegida."""
+
+    status_message = Signal(str)
+    addons_loaded = Signal(object)   # {"version", "addons", "error"}
+    action_done = Signal(object)     # {"action", "name", "result", "error"}
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("AddonsView")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.platform = ""
+        self.installed = []
+        self._choices = []
+        self.entry = None
+        self.addons = []
+        self._rows = []
+        self._reading = False
+        self._acting = False
+        self._build_ui()
+        self.addons_loaded.connect(self._on_addons_loaded)
+        self.action_done.connect(self._on_action_done)
+
+    # ------------------------------------------------------------------ UI
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 20, 24, 20)
+        root.setSpacing(12)
+
+        header, header_lay = self._card()
+        row = QHBoxLayout()
+        row.addWidget(QLabel(tr("Version")))
+        self.version_combo = QComboBox()
+        self.version_combo.setSizePolicy(QSizePolicy.Expanding,
+                                         QSizePolicy.Fixed)
+        self.version_combo.setMinimumWidth(150)
+        self.version_combo.setToolTip(tr(
+            "Version whose add-ons you are managing. Versions of the same "
+            "series share their add-on folder."))
+        self.version_combo.currentIndexChanged.connect(lambda _: self.read())
+        row.addWidget(self.version_combo, 1)
+        header_lay.addLayout(row)
+        self.path_label = QLabel("")
+        self.path_label.setObjectName("Muted")
+        self.path_label.setWordWrap(True)
+        header_lay.addWidget(self.path_label)
+        root.addWidget(header)
+
+        card, lay = self._card()
+        toolbar = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText(tr("Search add-ons..."))
+        self.search.textChanged.connect(lambda _: self._fill_rows())
+        toolbar.addWidget(self.search, 1)
+        self.type_combo = QComboBox()
+        for key, label in _TYPE_FILTERS:
+            self.type_combo.addItem(tr(label), key)
+        self.type_combo.currentIndexChanged.connect(lambda _: self._fill_rows())
+        toolbar.addWidget(self.type_combo)
+        lay.addLayout(toolbar)
+
+        actions = QHBoxLayout()
+        self.install_btn = CardButton(
+            tr("Install add-on"),
+            tooltip=tr("Install an add-on or extension from a .zip or .py."))
+        self.install_btn.clicked.connect(self.install)
+        actions.addWidget(self.install_btn)
+        self.link_btn = CardButton(
+            tr("Link folder"),
+            tooltip=tr("Link a development folder in place, so Blender loads "
+                       "the add-on from your project."))
+        self.link_btn.clicked.connect(self.link)
+        actions.addWidget(self.link_btn)
+        actions.addStretch()
+        self.reload_btn = CardButton(tr("Read again"),
+                                     tooltip=tr("Read the add-ons from Blender "
+                                                "again."))
+        self.reload_btn.clicked.connect(self.read)
+        actions.addWidget(self.reload_btn)
+        lay.addLayout(actions)
+
+        self.status = QLabel("")
+        self.status.setObjectName("Muted")
+        self.status.setWordWrap(True)
+        lay.addWidget(self.status)
+
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("AddonsScroll")
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        body = QWidget()
+        body.setObjectName("AddonsBody")
+        self.rows = QVBoxLayout(body)
+        self.rows.setContentsMargins(0, 0, 0, 0)
+        self.rows.setSpacing(4)
+        self.rows.setAlignment(Qt.AlignTop)
+        self.scroll.setWidget(body)
+        lay.addWidget(self.scroll, 1)
+        root.addWidget(card, 1)
+
+        self._set_enabled_controls(False)
+
+    @staticmethod
+    def _card() -> tuple:
+        card = QFrame()
+        card.setObjectName("SettingsCard")
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
+        return card, lay
+
+    def _set_enabled_controls(self, enabled: bool) -> None:
+        for widget in (self.install_btn, self.link_btn, self.reload_btn):
+            widget.setEnabled(enabled)
+
+    # -------------------------------------------------------------- origen
+    def set_system(self, platform: str, arch: str) -> None:
+        self.platform = platform or ""
+
+    def set_installed(self, installed) -> None:
+        """Rellena el selector con las versiones instaladas (una por serie)."""
+        self.installed = list(installed or [])
+        index = self.version_combo.currentIndex()
+        keep = (self._choices[index].version
+                if 0 <= index < len(self._choices) else "")
+        seen = set()
+        choices = []
+        for entry in sorted(self.installed,
+                            key=lambda item: version_tuple(
+                                getattr(item, "version", "") or ""),
+                            reverse=True):
+            series = minor_of(getattr(entry, "version", "") or "")
+            if not series or series in seen:
+                continue
+            seen.add(series)
+            choices.append(entry)
+        self._choices = choices
+        self.version_combo.blockSignals(True)
+        self.version_combo.clear()
+        for entry in choices:
+            self.version_combo.addItem(f"Blender {entry.version}  ·  {entry.name}")
+        index = next((i for i, entry in enumerate(choices)
+                      if entry.version == keep), 0 if choices else -1)
+        self.version_combo.setCurrentIndex(index)
+        self.version_combo.blockSignals(False)
+        # No se lee aquí: leer arranca Blender. Lo pide quien entra en la vista
+        # (``MainWindow.set_view``), para no lanzarlo al abrir la app.
+
+    def _selected(self):
+        index = self.version_combo.currentIndex()
+        if 0 <= index < len(self._choices):
+            return self._choices[index]
+        return None
+
+    # -------------------------------------------------------------- lectura
+    def read(self) -> None:
+        """Lee los addons de la versión elegida (en un hilo)."""
+        entry = self._selected()
+        self.entry = entry
+        if entry is None:
+            self.addons = []
+            self.path_label.setText("")
+            self._set_enabled_controls(False)
+            self.status.setText(tr("No installed Blender versions."))
+            self._fill_rows()
+            return
+        self.path_label.setText(str(getattr(entry, "path", "")))
+        self._set_enabled_controls(False)
+        self.status.setText(tr("Reading add-ons..."))
+        self._reading = True
+
+        platform = self.platform
+
+        def worker():
+            try:
+                states = addons_service.list_addons(entry, platform)
+            except Exception as error:  # noqa: BLE001
+                self.addons_loaded.emit({"version": entry.version,
+                                         "error": str(error)})
+                return
+            self.addons_loaded.emit({"version": entry.version,
+                                     "addons": states})
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_addons_loaded(self, payload) -> None:
+        self._reading = False
+        if self.entry is None or payload.get("version") != self.entry.version:
+            return
+        self._set_enabled_controls(True)
+        if payload.get("error"):
+            self.addons = []
+            self.status.setText(tr("Could not read the add-ons."))
+            self._fill_rows()
+            return
+        self.addons = list(payload.get("addons") or [])
+        self.status.setText(tr("{count} add-ons.", count=len(self.addons)))
+        self._fill_rows()
+
+    def _fill_rows(self) -> None:
+        _clear(self.rows)
+        self._rows = []
+        query = self.search.text().strip().lower()
+        kind = self.type_combo.currentData()
+        shown = [state for state in self.addons
+                 if (not kind or state.kind == kind)
+                 and (not query or query in state.name.lower()
+                      or query in state.module.lower())]
+        if not shown:
+            empty = QLabel(tr("No add-ons found."))
+            empty.setObjectName("Muted")
+            empty.setAlignment(Qt.AlignHCenter)
+            self.rows.addWidget(empty)
+            return
+        for state in shown:
+            row = _AddonRow(state, self._toggle, self._open, self._delete)
+            self.rows.addWidget(row)
+            self._rows.append(row)
+
+    # ------------------------------------------------------------- acciones
+    def _blocked(self) -> bool:
+        """True si hay cualquier Blender abierto (y avisa)."""
+        try:
+            running = blender_runner.is_running(None)
+        except Exception:  # noqa: BLE001
+            running = False
+        if not running:
+            return False
+        show_info(self, tr("Blender is running"), tr(
+            "Close every Blender window before continuing: Blender saves its "
+            "preferences when it quits and would overwrite the changes."))
+        return True
+
+    def _toggle(self, state, enabled: bool) -> None:
+        if self._acting or self.entry is None:
+            return
+        if self._blocked():
+            self._refresh_row(state, not enabled)
+            return
+        self._acting = True
+        entry = self.entry
+
+        def worker():
+            try:
+                addons_service.set_enabled(entry, state.module, enabled)
+                self.action_done.emit({"action": "toggle", "name": state.name,
+                                       "enabled": enabled, "state": state})
+            except addons_service.AddonError as error:
+                self.action_done.emit({"action": "toggle", "name": state.name,
+                                       "error": error.reason})
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _refresh_row(self, state, enabled: bool) -> None:
+        for row in self._rows:
+            if row.state is state:
+                row.set_enabled(enabled)
+                return
+
+    def install(self) -> None:
+        if self._acting or self.entry is None:
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("Install add-on"), "",
+            tr("Add-ons (*.zip *.py)"))
+        if not path:
+            return
+        if self._blocked():
+            return
+        self._acting = True
+        entry, platform = self.entry, self.platform
+
+        def worker():
+            try:
+                result = addons_service.install(entry, path, platform)
+                self.action_done.emit({"action": "install",
+                                       "name": Path(path).name,
+                                       "module": result["module"]})
+            except addons_service.AddonError as error:
+                self.action_done.emit({"action": "install",
+                                       "name": Path(path).name,
+                                       "error": error.reason})
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def link(self) -> None:
+        if self._acting or self.entry is None:
+            return
+        folder = QFileDialog.getExistingDirectory(
+            self, tr("Link a development folder"))
+        if not folder:
+            return
+        if self._blocked():
+            return
+        self._acting = True
+        entry, platform = self.entry, self.platform
+
+        def worker():
+            try:
+                addons_service.link(entry, folder, platform)
+                self.action_done.emit({"action": "link",
+                                       "name": Path(folder).name})
+            except addons_service.AddonError as error:
+                self.action_done.emit({"action": "link",
+                                       "name": Path(folder).name,
+                                       "error": error.reason})
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _open(self, state) -> None:
+        opener.open_path(state.addon.path)
+
+    def _delete(self, state) -> None:
+        if self._acting or self.entry is None:
+            return
+        if not confirm(self, tr("Delete add-on"),
+                       tr("Delete {name}? Its files are removed from Blender "
+                          "{version}.", name=state.name,
+                          version=self.entry.version),
+                       accept_text=tr("Delete"), danger=True):
+            return
+        if self._blocked():
+            return
+        self._acting = True
+        entry = self.entry
+
+        def worker():
+            try:
+                addons_service.remove(entry, state.addon, self.platform)
+                self.action_done.emit({"action": "remove", "name": state.name})
+            except addons_service.AddonError as error:
+                self.action_done.emit({"action": "remove", "name": state.name,
+                                       "error": error.reason})
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_action_done(self, payload) -> None:
+        if not self._acting:
+            return
+        self._acting = False
+        action = payload.get("action")
+        name = payload.get("name") or ""
+        if payload.get("error"):
+            show_error(self, tr("Could not finish"), _error_text(payload))
+            self.read()
+            return
+        if action == "toggle":
+            self.status_message.emit(
+                tr("Enabled {name}.", name=name) if payload.get("enabled")
+                else tr("Disabled {name}.", name=name))
+            return
+        if action == "install":
+            self.status_message.emit(tr("Installed {name}.", name=name))
+        elif action == "link":
+            self.status_message.emit(tr("Linked {name}.", name=name))
+        elif action == "remove":
+            self.status_message.emit(tr("Removed {name}.", name=name))
+        self.read()
+
+
+def _error_text(payload) -> str:
+    """Mensaje legible de un fallo del gestor de addons."""
+    reason = payload.get("error")
+    name = payload.get("name") or ""
+    messages = {
+        "no_executable": tr("That version has no executable."),
+        "missing_file": tr("That file does not exist."),
+        "missing_folder": tr("That folder does not exist."),
+        "no_addon": tr("That folder is not an add-on (no manifest or "
+                       "__init__.py)."),
+        "unsupported": tr("Only .zip and .py files can be installed."),
+        "symlink_failed": tr("Could not create the link (on Windows, "
+                             "symbolic links need permission)."),
+        "failed": tr("Blender could not apply the change."),
+    }
+    return messages.get(reason, str(reason)) + (f"\n\n{name}" if name else "")

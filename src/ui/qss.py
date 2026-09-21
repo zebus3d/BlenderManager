@@ -304,6 +304,17 @@ def build_qss() -> str:
     QScrollArea#RecentScroll {{ background: transparent; border: none; }}
     QScrollArea#RecentScroll > QWidget > QWidget {{ background: transparent; }}
     QWidget#RecentBody {{ background: transparent; }}
+
+    /* --- Add-ons: tarjetas con filas dentro (fondo BG, filas CARD_DIM) --- */
+    QWidget#AddonsView {{ background-color: {t.BG}; }}
+    QFrame#AddonRow {{
+        background-color: {t.CARD_DIM};
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.35);
+    }}
+    QScrollArea#AddonsScroll {{ background: transparent; border: none; }}
+    QScrollArea#AddonsScroll > QWidget > QWidget {{ background: transparent; }}
+    QWidget#AddonsBody {{ background: transparent; }}
     /* El candado cerrado, en ámbar: que "aquí no se escribe" se vea de un
        vistazo y no haya que pasar el ratón por encima para enterarse. */
     QPushButton#CardButton[writable="false"] {{

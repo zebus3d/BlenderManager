@@ -29,28 +29,44 @@ PY_MARKER = "BLENDERMANAGER_PY="
 # segundos; si pasa de aquí, algo va mal (addon colgado) y se mata.
 DEFAULT_TIMEOUT = 180
 
-# Guion que habilita los módulos que llegan por entorno y guarda las
+# Guion que activa/desactiva los módulos que llegan por entorno y guarda las
 # preferencias. Los módulos van por variable de entorno (no interpolados en el
 # código) para no pelearse con comillas ni con el límite de longitud de los
-# argumentos. ``addon_utils.enable`` ya rechaza las extensiones incompatibles
-# (Blender las marca en su propio chequeo), y ese error se recoge por addon.
-_ENABLE_SCRIPT = r'''
+# argumentos. ``addon_utils`` ya rechaza las extensiones incompatibles (Blender
+# las marca en su propio chequeo), y ese error se recoge por addon.
+_ADDON_SCRIPT = r'''
 import addon_utils
 import bpy
 import json
 import os
 
-wanted = set(json.loads(os.environ.get("BLENDERMANAGER_MODULES", "[]")))
+payload = json.loads(os.environ.get("BLENDERMANAGER_ADDONS", "{}"))
+enable = set(payload.get("enable") or [])
+disable = set(payload.get("disable") or [])
 enabled = []
+disabled = []
 errors = []
-for mod in addon_utils.modules():
-    if mod.__name__ not in wanted:
+known = {mod.__name__: mod for mod in addon_utils.modules()}
+
+for name in sorted(enable):
+    if name not in known:
+        errors.append({"module": name, "error": "unknown add-on"})
         continue
     try:
-        addon_utils.enable(mod.__name__, default_set=True)
-        enabled.append(mod.__name__)
+        addon_utils.enable(name, default_set=True)
+        enabled.append(name)
     except Exception as exc:
-        errors.append({"module": mod.__name__, "error": str(exc)})
+        errors.append({"module": name, "error": str(exc)})
+
+for name in sorted(disable):
+    if name not in known:
+        errors.append({"module": name, "error": "unknown add-on"})
+        continue
+    try:
+        addon_utils.disable(name, default_set=True)
+        disabled.append(name)
+    except Exception as exc:
+        errors.append({"module": name, "error": str(exc)})
 
 # `save_userpref` NO crea la carpeta de configuración: en segundo plano hay que
 # asegurarla o el guardado falla en silencio y los addons no quedan activados
@@ -64,7 +80,8 @@ try:
 except Exception as exc:
     errors.append({"module": "", "error": "save_userpref: " + str(exc)})
 
-print("BLENDERMANAGER_RESULT=" + json.dumps({"enabled": enabled, "errors": errors}))
+print("BLENDERMANAGER_RESULT=" + json.dumps(
+    {"enabled": enabled, "disabled": disabled, "errors": errors}))
 '''
 
 _PY_SCRIPT = (
@@ -154,23 +171,28 @@ def python_version(executable, timeout=30) -> str:
     return str(version) if version else ""
 
 
-def enable_addons(executable, modules, timeout=DEFAULT_TIMEOUT) -> dict:
-    """Habilita esos módulos en el Blender destino y guarda sus preferencias.
+def set_addons(executable, enable=None, disable=None,
+               timeout=DEFAULT_TIMEOUT) -> dict:
+    """Activa y/o desactiva esos módulos en el Blender destino y guarda.
 
-    Devuelve ``{"ok", "enabled", "errors", "log"}``. Nunca lanza: si Blender no
-    está o se cuelga, se devuelve el motivo en ``errors`` para que la interfaz
-    lo cuente. Los addons ya se han copiado antes, así que un fallo aquí solo
-    significa "aparecen en la lista, pero no activados".
+    Devuelve ``{"ok", "enabled", "disabled", "errors", "log"}``. Nunca lanza:
+    si Blender no está o se cuelga, el motivo viaja en ``errors`` para que la
+    interfaz lo cuente. Los addons ya están copiados/instalados, así que un
+    fallo aquí solo significa "aparecen en la lista, pero no como se pidió".
     """
-    wanted = [name for name in (modules or []) if name]
-    result = {"ok": False, "enabled": [], "errors": [], "log": ""}
-    if not wanted or not executable:
+    wanted = {
+        "enable": [name for name in (enable or []) if name],
+        "disable": [name for name in (disable or []) if name],
+    }
+    result = {"ok": False, "enabled": [], "disabled": [], "errors": [],
+              "log": ""}
+    if not executable or not (wanted["enable"] or wanted["disable"]):
         result["errors"].append({"module": "", "error": "no Blender to run"})
         return result
     code, out, err = _run(
         executable,
-        ["--background", "--python-expr", _ENABLE_SCRIPT],
-        extra_env={"BLENDERMANAGER_MODULES": json.dumps(wanted)},
+        ["--background", "--python-expr", _ADDON_SCRIPT],
+        extra_env={"BLENDERMANAGER_ADDONS": json.dumps(wanted)},
         timeout=timeout,
     )
     result["log"] = (err or "")[-4000:]
@@ -184,9 +206,15 @@ def enable_addons(executable, modules, timeout=DEFAULT_TIMEOUT) -> dict:
                                     f"{code})"})
         return result
     result["enabled"] = list(payload.get("enabled") or [])
+    result["disabled"] = list(payload.get("disabled") or [])
     result["errors"] = list(payload.get("errors") or [])
     result["ok"] = code == 0
     return result
+
+
+def enable_addons(executable, modules, timeout=DEFAULT_TIMEOUT) -> dict:
+    """Habilita esos módulos (envoltorio de ``set_addons`` para Migración)."""
+    return set_addons(executable, enable=modules, timeout=timeout)
 
 
 # Devuelve los módulos de addon **habilitados** en esa build. Se pregunta a

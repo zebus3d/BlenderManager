@@ -3428,6 +3428,74 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class AddonsViewTests(SettingsIsolated, unittest.TestCase):
+    """La vista de gestión de addons."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def setUp(self):
+        import i18n
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+
+    def _state(self, kind="legacy", module="mi_addon", name="Mi Addon",
+               enabled=False, path="/tmp/mi_addon"):
+        from services import addons as ap
+
+        addon = ap.bc.Addon(kind=kind, module=module, name=name, version="1.0",
+                            min_version="", max_version="", path=Path(path))
+        return ap.AddonState(addon, enabled=enabled)
+
+    def test_lista_y_filtra_por_tipo(self):
+        from ui.widgets.addons import AddonsView
+
+        view = AddonsView()
+        view.addons = [self._state(kind="legacy"),
+                       self._state(kind="extension", module="bl_ext.repo.otro",
+                                   name="Otro")]
+        view._fill_rows()
+        self.assertEqual(view.rows.count(), 2)
+        view.type_combo.setCurrentIndex(
+            view.type_combo.findData("extension"))
+        self.assertEqual(view.rows.count(), 1)
+
+    def test_set_installed_no_arranca_blender(self):
+        from unittest import mock as _mock
+
+        from model.build import InstalledBuild
+        from ui.widgets.addons import AddonsView
+
+        entry = InstalledBuild(name="b", path=Path("/tmp/b"), version="5.3.0",
+                               executable=Path("/tmp/b/blender"))
+        view = AddonsView()
+        with _mock.patch.object(view, "read") as read:
+            view.set_installed([entry])
+        read.assert_not_called()
+        self.assertEqual(view.version_combo.count(), 1)
+
+    def test_bloquea_si_hay_blender_abierto(self):
+        from unittest import mock as _mock
+
+        from ui.widgets.addons import AddonsView
+
+        view = AddonsView()
+        with _mock.patch("ui.widgets.addons.blender_runner.is_running",
+                         return_value=True), \
+                _mock.patch("ui.widgets.addons.show_info") as info:
+            self.assertTrue(view._blocked())
+        self.assertTrue(info.called)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class RecentViewTests(SettingsIsolated, unittest.TestCase):
     """La vista de ficheros recientes."""
 

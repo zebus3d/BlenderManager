@@ -239,7 +239,7 @@ class Addon:
     has_meta: bool = True   # False si no se pudo leer ni versión ni nombre
 
 
-def _read_manifest(folder: Path) -> dict:
+def read_manifest(folder: Path) -> dict:
     """Lee ``blender_manifest.toml``; si falta o está roto, ``{}``."""
     path = Path(folder) / MANIFEST_NAME
     if not path.is_file():
@@ -366,7 +366,7 @@ def _extensions(config: BlenderConfig) -> list[Addon]:
         for entry in sorted(folder.iterdir()):
             if not entry.is_dir() or entry.name.startswith("."):
                 continue
-            manifest = _read_manifest(entry)
+            manifest = read_manifest(entry)
             if not manifest:
                 continue
             addon_id = str(manifest.get("id") or entry.name)
@@ -645,11 +645,11 @@ class MigrationResult:
 
 
 # Sufijo de las copias de seguridad. **Solo se conserva una por destino** (ver
-# ``_park_existing``), no un histórico con fecha.
+# ``park_existing``), no un histórico con fecha.
 BACKUP_SUFFIX = ".blendermanager-bak"
 
 
-def _delete_path(path: Path) -> None:
+def delete_path(path: Path) -> None:
     """Borra un fichero o una carpeta entera, sin fallar si no está."""
     path = Path(path)
     try:
@@ -661,7 +661,7 @@ def _delete_path(path: Path) -> None:
         pass
 
 
-def _park_existing(destination: Path, backed_up: list, actions: list) -> None:
+def park_existing(destination: Path, backed_up: list, actions: list) -> None:
     """Aparta lo que ya hay en ``destination`` a su copia de seguridad.
 
     **Una sola copia por destino, reutilizable**: los usuarios migran más de una
@@ -680,7 +680,7 @@ def _park_existing(destination: Path, backed_up: list, actions: list) -> None:
     # que sí ponían fecha) antes de reutilizar el nombre.
     for old in destination.parent.glob(f"{base}{BACKUP_SUFFIX}*"):
         if old != destination:
-            _delete_path(old)
+            delete_path(old)
     backup = destination.with_name(f"{base}{BACKUP_SUFFIX}")
     destination.rename(backup)
     backed_up.append(backup)
@@ -729,7 +729,7 @@ def apply_migration(plans, target: BlenderConfig,
         try:
             destination = Path(plan.destination)
             destination.parent.mkdir(parents=True, exist_ok=True)
-            _park_existing(destination, result.backed_up, actions)
+            park_existing(destination, result.backed_up, actions)
             # ``symlinks=True`` como el propio ``preferences.copy_prev`` de
             # Blender: los addons enlazados (muy típicos en desarrollo) tienen
             # que seguir apuntando a su sitio, no duplicarse.
@@ -996,11 +996,11 @@ def undo_migration(target: BlenderConfig, dry_run: bool = False) -> UndoResult:
             continue
         try:
             if backup and Path(backup).exists():
-                _delete_path(destination)
+                delete_path(destination)
                 Path(backup).rename(destination)
                 result.restored.append((destination, Path(backup)))
             elif destination.exists():
-                _delete_path(destination)
+                delete_path(destination)
                 result.removed.append(destination)
         except OSError as error:
             result.failed.append((destination, str(error)))
@@ -1110,7 +1110,7 @@ def apply_preferences(items, target: BlenderConfig,
         try:
             destination = Path(item.destination)
             destination.parent.mkdir(parents=True, exist_ok=True)
-            _park_existing(destination, result.backed_up, actions)
+            park_existing(destination, result.backed_up, actions)
             shutil.copy2(item.source, destination)
             result.copied.append(item)
             actions.append({"path": str(destination)})
