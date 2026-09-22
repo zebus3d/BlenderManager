@@ -53,14 +53,17 @@ class AddonState:
 
     @property
     def kind(self) -> str:
+        """``"extension"`` o ``"legacy"``: de eso depende dónde vive y cómo se activa."""
         return self.addon.kind
 
     @property
     def name(self) -> str:
+        """Nombre legible que declara el addon (el que se enseña en la lista)."""
         return self.addon.name
 
     @property
     def module(self) -> str:
+        """Módulo con el que Blender lo conoce (``bl_ext.<repo>.<id>`` o el suyo)."""
         return self.addon.module
 
 

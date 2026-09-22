@@ -77,7 +77,14 @@ _PYTHON_BY_SERIES = {
 def python_for_version(version: str) -> str:
     """Versión de Python probable de una build, o "" si no la conocemos.
 
-    Se busca la última serie conocida que no supere la versión pedida.
+    Se busca la última serie conocida que no supere la versión pedida, así que
+    para una serie **más nueva que todas las de la tabla** esto *extrapola*:
+    devuelve el Python de la última conocida. Mientras Blender no cambie de
+    Python acierta, y el día que lo cambie el aviso de wheels de esa serie será
+    erróneo hasta que se añada la fila (una línea). La alternativa —preguntarle
+    al Blender destino con ``blender_runner.python_version``, que es la fuente
+    de verdad— cuesta un arranque de Blender por cada recálculo del plan, y el
+    plan se recalcula al cambiar de versión en los desplegables.
     """
     target = version_tuple(version)
     if not target:

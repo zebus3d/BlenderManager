@@ -68,7 +68,18 @@ def updates_dir() -> Path:
 # --- Comprobación de versión ------------------------------------------------
 
 def _version_key(text: str):
-    """Convierte 'v1.2.3' en (1, 2, 3) para poder comparar."""
+    """Convierte 'v1.2.3' en (1, 2, 3) para poder comparar.
+
+    No usa ``model.build.version_tuple`` a propósito, aunque se parezcan: aquí
+    las versiones son **tags de la app**, y en modo fuente llegan como el
+    describe del checkout (``1.2.0-19-g24a0b43``). ``version_tuple`` saca todos
+    los grupos de dígitos del texto, así que de ese describe sacaría
+    ``(1, 2, 0, 19, 24, 0, 43)`` —los dígitos del hash incluidos— y la
+    comparación dejaría de significar nada. Aquí se toma el primer número de
+    cada tramo separado por puntos y se para ahí. Comparar mal estas versiones
+    es justo lo que provoca el bucle infinito de actualización que avisa
+    AGENTS.md, así que se quedan separadas.
+    """
     key = []
     for chunk in (text or "").strip().lstrip("vV").split("."):
         digits = re.findall(r"\d+", chunk)

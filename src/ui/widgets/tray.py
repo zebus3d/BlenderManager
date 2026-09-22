@@ -66,9 +66,11 @@ class TrayIcon(QObject):
         return self._tray.isVisible()
 
     def show(self) -> None:
+        """Pone el icono en la bandeja (solo está mientras la ventana se esconde)."""
         self._tray.show()
 
     def hide(self) -> None:
+        """Lo retira: sin ventana escondida no hay nada que restaurar."""
         self._tray.hide()
 
     def notify(self, title: str, text: str) -> None:
