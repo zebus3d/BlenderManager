@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QScrollArea, QWidget
 
 from i18n import tr
 from services import blender_config as bc
+from services import blender_addons as baddons
 from services import blender_prefs as bprefs
 from ui import icons
 from ui import theme as t
@@ -142,7 +143,7 @@ def _meta_text(addon) -> str:
 def _destination_text(plan) -> str:
     """Carpeta donde quedará el addon (``user_default/<id>``, ``addons/<x>``).
 
-    Sale de ``plan.destination``, que ya decidió ``bc.destination_for`` (el
+    Sale de ``plan.destination``, que ya decidió ``baddons.destination_for`` (el
     mismo que usa la copia de verdad): así lo que se enseña y donde se escribe
     no pueden discrepar. Se enseñan los dos últimos tramos, que es lo que
     distingue una extensión de un addon clásico.

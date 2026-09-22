@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QSizePolicy,
 
 from i18n import tr
 from model.build import minor_of
-from services import blender_config as bc
+from services import blender_addons as baddons
+from services import blender_snapshots as bsnap
 from services import blender_prefs as bprefs
 from services import blender_runner
 from services import blender_style as bstyle
@@ -315,7 +316,7 @@ class PrefsTabMixin:
         if self.source_cfg is None or self.target_cfg is None:
             self.copy_prefs_btn.setEnabled(False)
             return
-        self.pref_items = bc.preference_plan(self.source_cfg, self.target_cfg)
+        self.pref_items = baddons.preference_plan(self.source_cfg, self.target_cfg)
         none = True
         for item in self.pref_items:
             if not item.exists:
@@ -353,7 +354,7 @@ class PrefsTabMixin:
         if not any(item.selected and item.safe for item in self.pref_items):
             self.status_message.emit(tr("Nothing selected"))
             return
-        result = bc.copy_preference_files(self.pref_items, self.target_cfg)
+        result = baddons.copy_preference_files(self.pref_items, self.target_cfg)
         self._finish_copy(
             result, tr("Copied {count} preference files.",
                        count=len(result.copied)),
@@ -530,7 +531,7 @@ class PrefsTabMixin:
         version = payload.get("version") or ""
         if payload.get("enabled") is not None:
             self._source_read_for = version
-            self.source_enabled = {bc.addon_id_of(name)
+            self.source_enabled = {baddons.addon_id_of(name)
                                    for name in payload["enabled"]}
         # Recalcula el plan con el estado real (marca ``was_enabled``).
         if self.source_cfg is not None and self.target_cfg is not None:
@@ -608,7 +609,7 @@ class PrefsTabMixin:
         """
         base = tr("You have no settings changed from Blender's defaults.")
         config = self.source_cfg
-        snapshots = bc.snapshots_with_settings(config) if config is not None else []
+        snapshots = bsnap.snapshots_with_settings(config) if config is not None else []
         if not snapshots:
             return base
         _, version = _entry_info(self.source_entry)

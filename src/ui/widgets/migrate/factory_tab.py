@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
 from i18n import tr
 from model.build import human_size
 from services import blender_config as bc
+from services import blender_snapshots as bsnap
 from services import blender_prefs as bprefs
 from ui.widgets.buttons import CardButton
 from ui.widgets.cards import settings_card
@@ -38,7 +39,7 @@ def _snapshot_origin(snapshot) -> str:
     los ajustes del usuario que se apartaron al restablecer esa versión. Sin la
     frase, dos carpetas con fechas distintas no dicen cuál es cuál.
     """
-    label = bc.snapshot_label(snapshot)
+    label = bsnap.snapshot_label(snapshot)
     if label == "factory":
         return tr("Clean settings replaced by a restore")
     if label.startswith("v"):
@@ -84,7 +85,7 @@ class _SnapshotRow(QFrame):
         info.setSpacing(2)
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
-        date = bc.snapshot_date(self.snapshot) or self.snapshot.name
+        date = bsnap.snapshot_date(self.snapshot) or self.snapshot.name
         origin = _snapshot_origin(self.snapshot)
         title = QLabel(f"{date}  ·  {origin}")
         title.setToolTip(tr("Saved on {date}. {origin}", date=date,
@@ -162,7 +163,7 @@ def _show_snapshot_details(parent, snapshot, preferences) -> None:
     En un scroll: un guardado puede traer decenas de claves y el diálogo no
     puede crecer hasta salirse de la pantalla.
     """
-    date = bc.snapshot_date(snapshot) or Path(snapshot).name
+    date = bsnap.snapshot_date(snapshot) or Path(snapshot).name
     dialog = dialogs.AppDialog(parent, tr("Saved settings of {date}", date=date),
                        tr("These are the settings this copy changes from "
                           "Blender's defaults."))
@@ -392,7 +393,7 @@ class FactoryTabMixin:
         self.snapshot_keep_changed.emit(self.snapshot_keep)
         config = self._factory_config()
         if config is not None and self.snapshot_keep > 0:
-            bc.prune_snapshots(config, self.snapshot_keep)
+            bsnap.prune_snapshots(config, self.snapshot_keep)
         self._fill_factory()
 
     def _forget_analysis(self) -> None:
@@ -425,7 +426,7 @@ class FactoryTabMixin:
         self._snapshot_widgets = {}
         for snapshot in snapshots:
             row = _SnapshotRow(
-                snapshot, bc.snapshot_details(snapshot),
+                snapshot, bsnap.snapshot_details(snapshot),
                 on_restore=self.restore_factory_snapshot,
                 on_delete=self.delete_snapshot,
                 on_details=self.show_snapshot_details)
@@ -472,8 +473,8 @@ class FactoryTabMixin:
             "Start Blender {version} as if it were freshly installed. Its "
             "current settings are saved aside and can be put back.",
             version=version))
-        snapshots = bc.snapshots_with_settings(config)
-        self.delete_all_btn.setEnabled(bool(bc.all_snapshots(config)))
+        snapshots = bsnap.snapshots_with_settings(config)
+        self.delete_all_btn.setEnabled(bool(bsnap.all_snapshots(config)))
         if not snapshots:
             self.factory_status.setText("")
             self.factory_empty.setVisible(True)
@@ -506,7 +507,7 @@ class FactoryTabMixin:
         config = self._factory_config()
         if config is None or not executable or not Path(executable).is_file():
             return
-        snapshots = list(bc.snapshots_with_settings(config))
+        snapshots = list(bsnap.snapshots_with_settings(config))
         if not snapshots:
             return
         self._analyzed_for = version
@@ -581,14 +582,14 @@ class FactoryTabMixin:
     def delete_snapshot(self, snapshot) -> None:
         """Borra un guardado concreto (irreversible)."""
         snapshot = Path(snapshot)
-        date = bc.snapshot_date(snapshot) or snapshot.name
+        date = bsnap.snapshot_date(snapshot) or snapshot.name
         if not dialogs.confirm(
                 self, tr("Delete saved settings"),
                 tr("Delete the settings saved on {date} for good? You will not "
                    "be able to restore them.", date=date),
                 accept_text=tr("Delete"), danger=True):
             return
-        bc.delete_snapshot(snapshot)
+        bsnap.delete_snapshot(snapshot)
         self._analysis.pop(str(snapshot), None)
         self.status_message.emit(tr("Saved settings deleted."))
         self._fill_factory()
@@ -600,7 +601,7 @@ class FactoryTabMixin:
             return
         # ``all_snapshots`` (no ``snapshots_with_settings``): se borra también lo vacío,
         # que si no quedaría ahí sin forma de limpiarlo desde la interfaz.
-        snapshots = bc.all_snapshots(config)
+        snapshots = bsnap.all_snapshots(config)
         if not snapshots:
             return
         if not dialogs.confirm(
@@ -610,7 +611,7 @@ class FactoryTabMixin:
                 accept_text=tr("Delete"), danger=True):
             return
         for snapshot in snapshots:
-            bc.delete_snapshot(snapshot)
+            bsnap.delete_snapshot(snapshot)
         self._forget_analysis()
         self.status_message.emit(tr("Saved settings deleted."))
         self._fill_factory()
@@ -631,7 +632,7 @@ class FactoryTabMixin:
                    "this same screen.", version=version),
                 accept_text=tr("Reset"), danger=True):
             return
-        snapshot = bc.set_config_aside(config, label=f"v{version}",
+        snapshot = bsnap.set_config_aside(config, label=f"v{version}",
                                       keep=self.snapshot_keep)
         if snapshot is None:
             self.factory_status.setText(tr(
@@ -650,7 +651,7 @@ class FactoryTabMixin:
         config = self._factory_config()
         if config is None:
             return
-        snapshots = bc.snapshots_with_settings(config)
+        snapshots = bsnap.snapshots_with_settings(config)
         if not snapshots:
             return
         target = Path(snapshot) if snapshot is not None else snapshots[0]
@@ -659,7 +660,7 @@ class FactoryTabMixin:
         if self._blocked_by_running(entry):
             return
         _, version = _entry_info(entry)
-        date = bc.snapshot_date(target) or target.name
+        date = bsnap.snapshot_date(target) or target.name
         if not dialogs.confirm(
                 self, tr("Restore settings"),
                 tr("Put back in Blender {version} the settings saved on "
@@ -667,7 +668,7 @@ class FactoryTabMixin:
                    "undone.", version=version, date=date),
                 accept_text=tr("Restore")):
             return
-        bc.restore_snapshot(config, target, keep=self.snapshot_keep)
+        bsnap.restore_snapshot(config, target, keep=self.snapshot_keep)
         self._forget_analysis()
         self.status_message.emit(tr("Settings restored."))
         self._fill_factory()

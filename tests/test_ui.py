@@ -3072,6 +3072,8 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         """
         from model.build import minor_of
         from services import blender_config as bc
+        from services import blender_addons as baddons
+        from services import blender_snapshots as bsnap
 
         def fake_config_for(version, platform, env=None):
             series = minor_of(version)
@@ -3571,6 +3573,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         Alto fijo (ni el layout la aplasta cuando la ventana se queda corta, ni
         abre encogida), suelo de una tarjeta entera y lienzo hundido con barra.
         """
+        from services import blender_snapshots as bsnap
         from unittest import mock as _mock
         from services import blender_config as bc
 
@@ -3579,7 +3582,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             for i in range(4):
                 config.config_dir.mkdir(parents=True, exist_ok=True)
                 (config.config_dir / "userpref.blend").write_bytes(b"X" * (i + 1))
-                bc.set_config_aside(config, label=f"v5.2.{i}")
+                bsnap.set_config_aside(config, label=f"v5.2.{i}")
             view = self._view()
             with _mock.patch("services.blender_runner.is_running",
                              return_value=False),                     _mock.patch.object(view, "_factory_config",
@@ -3677,6 +3680,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             view.detail_scroll.widget().property("scrolling"), "true")
 
     def test_reset_fabrica_aparta_la_config_y_permite_recuperar(self):
+        from services import blender_snapshots as bsnap
         from unittest import mock as _mock
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -3698,9 +3702,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 with _mock.patch.object(view, "_factory_config",
                                         return_value=target):
                     view.reset_to_factory()
-                    snapshots = __import__(
-                        "services.blender_config", fromlist=["x"]
-                    ).snapshots_with_settings(target)
+                    snapshots = bsnap.snapshots_with_settings(target)
                     self.assertEqual(len(snapshots), 1)
                     self.assertFalse(target.config_dir.exists())
                     view.restore_factory_snapshot()
@@ -3715,13 +3717,14 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         decía «recupéralos en la pestaña Valores de fábrica» a secas y el
         usuario la abría con otra versión y no encontraba nada.
         """
+        from services import blender_snapshots as bsnap
         from services import blender_config as bc
 
         with tempfile.TemporaryDirectory() as tmp:
             source = self._config(tmp, "5.2.2")
             source.config_dir.mkdir(parents=True)
             (source.config_dir / "userpref.blend").write_bytes(b"MIO")
-            bc.set_config_aside(source, label="v5.2.2")
+            bsnap.set_config_aside(source, label="v5.2.2")
             view = self._view()
             view.source_cfg = source
             view.source_entry = _fake_installed("5.2.2")
@@ -3737,6 +3740,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         Solo hay que elegir una versión: si allí aparecen "Desde" y "Hacia" se
         cree que la operación usa los dos y no se sabe cuál manda.
         """
+        from services import blender_snapshots as bsnap
         from unittest import mock as _mock
 
         from services import blender_config as bc
@@ -3745,7 +3749,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             config = self._config(tmp, "5.2.2")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"MIO")
-            bc.set_config_aside(config, label="v5.2.2")
+            bsnap.set_config_aside(config, label="v5.2.2")
             view = self._view()
             with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
@@ -3791,6 +3795,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
 
     def test_gestor_de_guardados_lista_analiza_y_borra(self):
         """El gestor: una fila por guardado, con análisis y borrado individual."""
+        from services import blender_snapshots as bsnap
         from unittest import mock as _mock
         from services import blender_config as bc
         from services import blender_prefs as bprefs
@@ -3799,11 +3804,11 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             config = self._config(tmp, "5.2.2")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"MIO")
-            first = bc.set_config_aside(config, label="v5.2.2")
+            first = bsnap.set_config_aside(config, label="v5.2.2")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"OTRA")
-            second = bc.set_config_aside(config, label="v5.2.2")
-            newest = bc.snapshots_with_settings(config)[0]
+            second = bsnap.set_config_aside(config, label="v5.2.2")
+            newest = bsnap.snapshots_with_settings(config)[0]
             view = self._view()
             with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
@@ -3845,6 +3850,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
 
     def test_el_detalle_de_un_guardado_lista_sus_ajustes(self):
         """"Ver ajustes" abre un diálogo con las claves de ese guardado."""
+        from services import blender_snapshots as bsnap
         from unittest import mock as _mock
         from services import blender_config as bc
         from services import blender_prefs as bprefs
@@ -3853,7 +3859,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             config = self._config(tmp, "5.2.2")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"MIO")
-            snap = bc.set_config_aside(config, label="v5.2.2")
+            snap = bsnap.set_config_aside(config, label="v5.2.2")
             view = self._view()
             with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
@@ -3910,18 +3916,19 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
 
     def test_review_explica_como_revisar(self):
         """El amarillo "Review" tiene que decir qué hacer, no solo el motivo."""
+        from services import blender_addons as baddons
         from services import blender_config as bc
         from ui.widgets.migrate.common import _status_tooltip
 
-        addon = bc.Addon(kind="legacy", module="x", name="X", version="1.0",
+        addon = baddons.Addon(kind="legacy", module="x", name="X", version="1.0",
                          min_version="", max_version="", path=Path("/tmp/x"))
-        unknown = bc.AddonPlan(addon, bc.WARN, bc.REASON_UNKNOWN_VERSION,
+        unknown = baddons.AddonPlan(addon, bc.WARN, bc.REASON_UNKNOWN_VERSION,
                                Path("/tmp/x"))
         tip = _status_tooltip(unknown)
         self.assertIn("minimum version", tip)      # el motivo
         self.assertIn("test", tip.lower())          # y cómo comprobarlo
 
-        wheels = bc.AddonPlan(addon, bc.WARN, bc.REASON_WHEEL_ABI,
+        wheels = baddons.AddonPlan(addon, bc.WARN, bc.REASON_WHEEL_ABI,
                               Path("/tmp/x"), detail="numpy",
                               target_python="3.13")
         tip = _status_tooltip(wheels)
@@ -3932,12 +3939,13 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         self.assertIn("3.13", tip)
 
     def test_compatible_explica_que_se_copia(self):
+        from services import blender_addons as baddons
         from services import blender_config as bc
         from ui.widgets.migrate.common import _status_tooltip
 
-        addon = bc.Addon(kind="legacy", module="x", name="X", version="1.0",
+        addon = baddons.Addon(kind="legacy", module="x", name="X", version="1.0",
                          min_version="4.0.0", max_version="", path=Path("/tmp/x"))
-        plan = bc.AddonPlan(addon, bc.OK, "", Path("/tmp/x"))
+        plan = baddons.AddonPlan(addon, bc.OK, "", Path("/tmp/x"))
         # La verde también lleva tooltip: dice que no hay nada que revisar.
         self.assertIn("destination version", _status_tooltip(plan))
 
@@ -4003,9 +4011,10 @@ class AddonsViewTests(SettingsIsolated, unittest.TestCase):
 
     def _state(self, kind="legacy", module="mi_addon", name="Mi Addon",
                enabled=False, path="/tmp/mi_addon"):
+        from services import blender_addons as baddons
         from services import addons as ap
 
-        addon = ap.bc.Addon(kind=kind, module=module, name=name, version="1.0",
+        addon = ap.baddons.Addon(kind=kind, module=module, name=name, version="1.0",
                             min_version="", max_version="", path=Path(path))
         return ap.AddonState(addon, enabled=enabled)
 

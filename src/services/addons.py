@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from services import blender_config as bc
+from services import blender_addons as baddons
 from services import blender_runner
 from services import extractor
 
@@ -46,7 +47,7 @@ class AddonError(Exception):
 class AddonState:
     """Un addon con lo que la interfaz necesita para pintarlo."""
 
-    addon: bc.Addon
+    addon: baddons.Addon
     enabled: bool = False
     linked: bool = False
 
@@ -74,13 +75,13 @@ def list_addons(entry, platform: str, env=None) -> list:
     enabled = set()
     executable = getattr(entry, "executable", None)
     if executable:
-        enabled = {bc.addon_id_of(name)
+        enabled = {baddons.addon_id_of(name)
                    for name in blender_runner.enabled_addons(executable)}
     states = []
-    for addon in bc.addons_in(config):
+    for addon in baddons.addons_in(config):
         states.append(AddonState(
             addon=addon,
-            enabled=bc.addon_id_of(addon.module) in enabled,
+            enabled=baddons.addon_id_of(addon.module) in enabled,
             linked=addon.path.is_symlink(),
         ))
     return states
@@ -130,7 +131,7 @@ def install(entry, source, platform: str, env=None) -> dict:
         extracted = Path(extractor.extract(source, Path(tmp)))
         kind, root = _find_addon_root(extracted)
         if kind == EXTENSION:
-            manifest = bc.read_manifest(root)
+            manifest = baddons.read_manifest(root)
             addon_id = str(manifest.get("id") or root.name)
             destination = config.extensions_dir / bc.LOCAL_REPO / addon_id
             _install_tree(root, destination)
@@ -163,7 +164,7 @@ def link(entry, folder, platform: str, env=None) -> dict:
         raise AddonError("missing_folder", str(folder))
     config = bc.config_for(entry.version, platform, env)
     if (folder / bc.MANIFEST_NAME).is_file():
-        manifest = bc.read_manifest(folder)
+        manifest = baddons.read_manifest(folder)
         addon_id = str(manifest.get("id") or folder.name)
         destination = config.extensions_dir / bc.LOCAL_REPO / addon_id
         module = f"bl_ext.{bc.LOCAL_REPO}.{addon_id}"
@@ -173,7 +174,7 @@ def link(entry, folder, platform: str, env=None) -> dict:
     else:
         raise AddonError("no_addon", str(folder))
     destination.parent.mkdir(parents=True, exist_ok=True)
-    bc.park_existing(destination)
+    baddons.park_existing(destination)
     try:
         destination.symlink_to(folder.resolve(), target_is_directory=True)
     except OSError as error:
@@ -182,7 +183,7 @@ def link(entry, folder, platform: str, env=None) -> dict:
             "module": module, "destination": destination}
 
 
-def remove(entry, addon: bc.Addon, platform: str, env=None) -> None:
+def remove(entry, addon: baddons.Addon, platform: str, env=None) -> None:
     """Borra los ficheros de un addon (desactivándolo antes si hace falta).
 
     Si es un enlace de desarrollo, borra el enlace y deja la carpeta original
@@ -194,7 +195,7 @@ def remove(entry, addon: bc.Addon, platform: str, env=None) -> None:
             blender_runner.set_addons(executable, disable=[addon.module])
         except Exception:  # noqa: BLE001 - borrar no debe fallar por desactivar
             pass
-    bc.delete_path(addon.path)
+    baddons.delete_path(addon.path)
 
 
 def _find_addon_root(folder: Path):
@@ -217,11 +218,11 @@ def _find_addon_root(folder: Path):
 
 def _install_file(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    bc.park_existing(destination)
+    baddons.park_existing(destination)
     shutil.copy2(source, destination)
 
 
 def _install_tree(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    bc.park_existing(destination)
+    baddons.park_existing(destination)
     shutil.copytree(source, destination, symlinks=True)

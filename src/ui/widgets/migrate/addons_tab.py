@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QVBoxLayout,
 
 from i18n import tr
 from services import blender_config as bc
+from services import blender_addons as baddons
 from services import blender_runner
 from ui import icons
 from ui.fonts import icon_font
@@ -268,7 +269,7 @@ class AddonsTabMixin:
         self._update_summary()
 
     def _update_summary(self) -> None:
-        counts = bc.summary_counts(self.plans)
+        counts = baddons.summary_counts(self.plans)
         self.summary.setText(tr(
             "{total} add-ons · {ok} compatible · {warn} to review · "
             "{blocked} not compatible",
@@ -278,7 +279,7 @@ class AddonsTabMixin:
     def _rebuild_plan(self) -> None:
         """Recalcula el plan de addons con el estado activado del origen."""
         python = bc.python_for_version(self.target_entry.version)
-        self.plans = bc.plan_migration(
+        self.plans = baddons.plan_migration(
             self.source_cfg, self.target_cfg, self.platform, self.arch, python,
             enabled_ids=self.source_enabled)
         self._fill_board()
@@ -297,7 +298,7 @@ class AddonsTabMixin:
         if not selected:
             self.status_message.emit(tr("Nothing selected"))
             return
-        result = bc.apply_migration(self.plans, self.target_cfg)
+        result = baddons.apply_migration(self.plans, self.target_cfg)
         self._finish_copy(
             result, tr("Copied {count} add-ons.", count=len(result.copied)),
             tr("Some add-ons could not be copied:"),
@@ -326,7 +327,7 @@ class AddonsTabMixin:
                    version=version),
                 accept_text=tr("Undo"), danger=True):
             return
-        result = bc.undo_migration(self.target_cfg)
+        result = baddons.undo_migration(self.target_cfg)
         lines = []
         if result.restored:
             lines.append(tr("Restored {count} items to their previous state.",
@@ -358,7 +359,7 @@ class AddonsTabMixin:
         if self.target_cfg is None or not hasattr(self, "undo_btn"):
             return
         self.undo_btn.setVisible(
-            bool(bc.read_migration_marker(self.target_cfg)))
+            bool(baddons.read_migration_marker(self.target_cfg)))
 
     def _start_activation(self, executable, modules, version) -> None:
         """Habilita los addons copiados en un hilo (Blender tarda en arrancar)."""

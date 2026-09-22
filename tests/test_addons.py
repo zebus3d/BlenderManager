@@ -122,7 +122,7 @@ class LinkAddonTest(unittest.TestCase):
             result = ap.link(_entry(tmp), dev, "linux", _env(tmp))
             self.assertTrue(result["destination"].is_symlink())
             # Borrar el addon quita el enlace, no la carpeta del proyecto.
-            addon = ap.bc.Addon(kind=ap.LEGACY, module="mi_addon",
+            addon = ap.baddons.Addon(kind=ap.LEGACY, module="mi_addon",
                                 name="Mi Addon", version="", min_version="",
                                 max_version="", path=result["destination"])
             ap.remove(_entry(tmp), addon, "linux", _env(tmp))

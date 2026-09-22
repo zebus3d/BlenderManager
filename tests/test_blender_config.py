@@ -13,6 +13,8 @@ from pathlib import Path
 from unittest import mock
 
 from services import blender_config as bc
+from services import blender_addons as baddons
+from services import blender_snapshots as bsnap
 
 
 def _config(root, version="4.5", platform="linux"):
@@ -94,7 +96,7 @@ class BlInfoTest(unittest.TestCase):
                 'bl_info = {"name": "Test", "version": (1, 2, 3), '
                 '"blender": (4, 5, 0)}\n',
                 encoding="utf-8")
-            info = bc.read_bl_info(init)
+            info = baddons.read_bl_info(init)
             self.assertEqual(info["name"], "Test")
             self.assertEqual(info["blender"], (4, 5, 0))
 
@@ -107,7 +109,7 @@ class BlInfoTest(unittest.TestCase):
                 'bl_info = {"name": "Dyn", "blender": (4, 2, 0), '
                 '"version": VERSION}\n',
                 encoding="utf-8")
-            info = bc.read_bl_info(init)
+            info = baddons.read_bl_info(init)
             # No se puede evaluar (VERSION no es literal), pero el regex lo saca.
             self.assertEqual(info.get("blender"), [4, 2, 0])
 
@@ -115,7 +117,7 @@ class BlInfoTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             init = Path(tmp) / "__init__.py"
             init.write_text("print('hola')\n", encoding="utf-8")
-            self.assertEqual(bc.read_bl_info(init), {})
+            self.assertEqual(baddons.read_bl_info(init), {})
 
 
 class AddonsInTest(unittest.TestCase):
@@ -130,7 +132,7 @@ class AddonsInTest(unittest.TestCase):
                        'name = "MatPlus"\nversion = "1.3.0"\n'
                        'blender_version_min = "4.5.0"\n'
                        'tags = ["Paint"]\n')
-            addons = bc.addons_in(config)
+            addons = baddons.addons_in(config)
             by_module = {addon.module: addon for addon in addons}
             self.assertIn("old_addon", by_module)
             self.assertIn("bl_ext.user_default.MatPlus", by_module)
@@ -147,7 +149,7 @@ class AddonsInTest(unittest.TestCase):
             _extension(config, "blender_org", "kitsu",
                        'id = "kitsu"\nname = "Kitsu"\nversion = "1.0.0"\n'
                        'blender_version_min = "4.2.0"\n')
-            addons = bc.addons_in(config)
+            addons = baddons.addons_in(config)
             self.assertEqual([a.module for a in addons],
                              ["bl_ext.blender_org.kitsu"])
 
@@ -156,7 +158,7 @@ class AddonsInTest(unittest.TestCase):
             config = _config(tmp)
             (config.addons_dir / "no_addon").mkdir(parents=True)
             (config.extensions_dir / ".cache").mkdir(parents=True)
-            self.assertEqual(bc.addons_in(config), [])
+            self.assertEqual(baddons.addons_in(config), [])
 
 
 class CompatReportTest(unittest.TestCase):
@@ -165,50 +167,50 @@ class CompatReportTest(unittest.TestCase):
                     name="X", version="1.0.0", min_version="", max_version="",
                     path=Path("/tmp/x"))
         base.update(kwargs)
-        return bc.Addon(**base)
+        return baddons.Addon(**base)
 
     def test_compatible(self):
         addon = self._addon(min_version="4.2.0")
-        self.assertEqual(bc.compat_report(addon, "5.2.1"), (bc.OK, ""))
+        self.assertEqual(baddons.compat_report(addon, "5.2.1"), (bc.OK, ""))
 
     def test_requiere_version_mas_nueva(self):
         addon = self._addon(min_version="5.3.0")
-        self.assertEqual(bc.compat_report(addon, "5.2.1"),
+        self.assertEqual(baddons.compat_report(addon, "5.2.1"),
                          (bc.BLOCKED, bc.REASON_REQUIRES_NEWER))
 
     def test_no_soporta_la_version_destino(self):
         addon = self._addon(min_version="4.2.0", max_version="5.0.0")
-        self.assertEqual(bc.compat_report(addon, "5.2.1"),
+        self.assertEqual(baddons.compat_report(addon, "5.2.1"),
                          (bc.BLOCKED, bc.REASON_TOO_NEW))
 
     def test_plataforma_no_publicada(self):
         addon = self._addon(min_version="4.2.0",
                             platforms=("windows-x64", "macos-arm64"))
-        self.assertEqual(bc.compat_report(addon, "5.2.1", "linux", "x86_64"),
+        self.assertEqual(baddons.compat_report(addon, "5.2.1", "linux", "x86_64"),
                          (bc.BLOCKED, bc.REASON_PLATFORM))
-        self.assertEqual(bc.compat_report(addon, "5.2.1", "windows", "amd64"),
+        self.assertEqual(baddons.compat_report(addon, "5.2.1", "windows", "amd64"),
                          (bc.OK, ""))
 
     def test_avisa_de_wheels_de_otro_python(self):
         addon = self._addon(min_version="4.2.0",
                             wheels=("numpy-1.26-cp311-cp311-linux_x86_64.whl",))
-        self.assertEqual(bc.compat_report(addon, "5.2.1", "linux", "x86_64",
+        self.assertEqual(baddons.compat_report(addon, "5.2.1", "linux", "x86_64",
                                           "3.13"),
                          (bc.WARN, bc.REASON_WHEEL_ABI))
 
     def test_avisa_si_no_declara_version(self):
         addon = self._addon()
-        self.assertEqual(bc.compat_report(addon, "5.2.1"),
+        self.assertEqual(baddons.compat_report(addon, "5.2.1"),
                          (bc.WARN, bc.REASON_UNKNOWN_VERSION))
 
 
 class WheelTest(unittest.TestCase):
     def test_cp_distinto_choca(self):
-        self.assertTrue(bc.wheel_problem(["a-1-cp311-cp311-linux_x86_64.whl"],
+        self.assertTrue(baddons.wheel_problem(["a-1-cp311-cp311-linux_x86_64.whl"],
                                           "3.13"))
 
     def test_cp_igual_no_choca(self):
-        self.assertFalse(bc.wheel_problem(["a-1-cp313-cp313-linux_x86_64.whl"],
+        self.assertFalse(baddons.wheel_problem(["a-1-cp313-cp313-linux_x86_64.whl"],
                                            "3.13"))
 
     def test_un_paquete_con_wheels_para_varios_python_no_choca(self):
@@ -222,10 +224,10 @@ class WheelTest(unittest.TestCase):
             "./wheels/pillow-11.1.0-cp311-cp311-manylinux_2_28_x86_64.whl",
             "./wheels/pillow-11.1.0-cp313-cp313-manylinux_2_28_x86_64.whl",
         ]
-        self.assertEqual(bc.wheel_problem(wheels, "3.13"), "")
-        self.assertEqual(bc.wheel_problem(wheels, "3.11"), "")
+        self.assertEqual(baddons.wheel_problem(wheels, "3.13"), "")
+        self.assertEqual(baddons.wheel_problem(wheels, "3.11"), "")
         # Y con un Python que no cubre ninguno de los dos, sí avisa.
-        self.assertEqual(bc.wheel_problem(wheels, "3.10"), "pillow")
+        self.assertEqual(baddons.wheel_problem(wheels, "3.10"), "pillow")
 
     def test_solo_avisa_del_paquete_que_falla(self):
         wheels = [
@@ -233,7 +235,7 @@ class WheelTest(unittest.TestCase):
             "./wheels/numpy-2.2.3-cp311-cp311-manylinux_2_17_x86_64.whl",
             "./wheels/send2trash-1.8-py3-none-any.whl",
         ]
-        self.assertEqual(bc.wheel_problem(wheels, "3.13"), "numpy")
+        self.assertEqual(baddons.wheel_problem(wheels, "3.13"), "numpy")
 
     def test_el_mismo_paquete_en_varias_plataformas_no_choca(self):
         """Un wheel por plataforma, todos del mismo Python: no hay conflicto."""
@@ -242,28 +244,28 @@ class WheelTest(unittest.TestCase):
             "numpy-2.2.3-cp313-cp313-macosx_11_0_arm64.whl",
             "numpy-2.2.3-cp313-cp313-manylinux_2_17_x86_64.whl",
         ]
-        self.assertEqual(bc.wheel_problem(wheels, "3.13"), "")
+        self.assertEqual(baddons.wheel_problem(wheels, "3.13"), "")
 
     def test_python_puro_y_abi_estable_no_chocan(self):
-        self.assertFalse(bc.wheel_problem(["a-1-py3-none-any.whl"], "3.13"))
-        self.assertFalse(bc.wheel_problem(["a-1-cp39-abi3-linux_x86_64.whl"],
+        self.assertFalse(baddons.wheel_problem(["a-1-py3-none-any.whl"], "3.13"))
+        self.assertFalse(baddons.wheel_problem(["a-1-cp39-abi3-linux_x86_64.whl"],
                                            "3.13"))
 
     def test_sin_python_destino_no_avisa(self):
-        self.assertFalse(bc.wheel_problem(["a-1-cp39-cp39-linux_x86_64.whl"],
+        self.assertFalse(baddons.wheel_problem(["a-1-cp39-cp39-linux_x86_64.whl"],
                                            ""))
 
     def test_el_plan_dice_que_paquete_falla(self):
         """El aviso tiene que poder nombrar al culpable y al Python destino."""
-        addon = bc.Addon(
+        addon = baddons.Addon(
             kind="extension", module="bl_ext.user_default.x", name="X",
             version="1.0.0", min_version="4.2.0", max_version="",
             path=Path("/tmp/x"),
             wheels=("./wheels/numpy-2.2.3-cp311-cp311-linux_x86_64.whl",))
         source = _config("/tmp/origen", version="5.2")
         target = _config("/tmp/destino", version="5.3")
-        with mock.patch.object(bc, "addons_in", return_value=[addon]):
-            plan = bc.plan_migration(source, target, "linux", "x86_64", "3.13")[0]
+        with mock.patch.object(baddons, "addons_in", return_value=[addon]):
+            plan = baddons.plan_migration(source, target, "linux", "x86_64", "3.13")[0]
         self.assertEqual(plan.reason, bc.REASON_WHEEL_ABI)
         self.assertEqual(plan.detail, "numpy")
         self.assertEqual(plan.target_python, "3.13")
@@ -284,7 +286,7 @@ class PlanMigrationTest(unittest.TestCase):
             _extension(source, "user_default", "matplus",
                        'id = "matplus"\nname = "MatPlus"\nversion = "1.0.0"\n'
                        'blender_version_min = "4.5.0"\n')
-            plans = bc.plan_migration(source, target, "linux", "x86_64", "3.13")
+            plans = baddons.plan_migration(source, target, "linux", "x86_64", "3.13")
             by_module = {plan.addon.module: plan for plan in plans}
             self.assertEqual(by_module["viejo"].status, bc.OK)
             self.assertTrue(by_module["viejo"].selected)
@@ -306,12 +308,12 @@ class PlanMigrationTest(unittest.TestCase):
 
 class ApplyMigrationTest(unittest.TestCase):
     def _plan(self, addon, destination, selected=True):
-        status, reason = bc.compat_report(addon, "5.3")
-        return bc.AddonPlan(addon=addon, status=status, reason=reason,
+        status, reason = baddons.compat_report(addon, "5.3")
+        return baddons.AddonPlan(addon=addon, status=status, reason=reason,
                             destination=Path(destination), selected=selected)
 
     def _addon(self, path, module="x"):
-        return bc.Addon(kind="legacy", module=module, name="X", version="1.0",
+        return baddons.Addon(kind="legacy", module=module, name="X", version="1.0",
                         min_version="4.0.0", max_version="", path=Path(path))
 
     def test_dry_run_no_toca_el_disco(self):
@@ -321,7 +323,7 @@ class ApplyMigrationTest(unittest.TestCase):
             (source / "a.py").write_text("x", encoding="utf-8")
             target = _config(Path(tmp) / "target")
             plan = self._plan(self._addon(source), target.addons_dir / "addon")
-            result = bc.apply_migration([plan], target, dry_run=True)
+            result = baddons.apply_migration([plan], target, dry_run=True)
             self.assertTrue(result.dry_run)
             self.assertEqual(len(result.copied), 1)
             self.assertFalse(plan.destination.exists())
@@ -334,7 +336,7 @@ class ApplyMigrationTest(unittest.TestCase):
             (source / "a.py").write_text("hola", encoding="utf-8")
             target = _config(Path(tmp) / "target")
             plan = self._plan(self._addon(source), target.addons_dir / "addon")
-            result = bc.apply_migration([plan], target)
+            result = baddons.apply_migration([plan], target)
             self.assertEqual(len(result.copied), 1)
             self.assertEqual((plan.destination / "a.py").read_text(), "hola")
             self.assertEqual(result.modules, ["x"])
@@ -352,7 +354,7 @@ class ApplyMigrationTest(unittest.TestCase):
             destination.mkdir(parents=True)
             (destination / "a.py").write_text("viejo", encoding="utf-8")
             plan = self._plan(self._addon(source), destination)
-            result = bc.apply_migration([plan], target)
+            result = baddons.apply_migration([plan], target)
             self.assertEqual(len(result.backed_up), 1)
             self.assertEqual((destination / "a.py").read_text(), "nuevo")
             self.assertEqual((result.backed_up[0] / "a.py").read_text(), "viejo")
@@ -373,9 +375,9 @@ class ApplyMigrationTest(unittest.TestCase):
             destination.mkdir(parents=True)
             (destination / "a.py").write_text("v1", encoding="utf-8")
             plan = self._plan(self._addon(source), destination)
-            bc.apply_migration([plan], target)   # v1 -> v3 (bak v1)
+            baddons.apply_migration([plan], target)   # v1 -> v3 (bak v1)
             (destination / "a.py").write_text("v2", encoding="utf-8")
-            bc.apply_migration([plan], target)   # v2 -> v3 (bak v2)
+            baddons.apply_migration([plan], target)   # v2 -> v3 (bak v2)
             backups = [p for p in destination.parent.iterdir()
                        if "blendermanager-bak" in p.name]
             self.assertEqual(len(backups), 1)
@@ -391,9 +393,9 @@ class ApplyMigrationTest(unittest.TestCase):
             destination.mkdir(parents=True)
             (destination / "a.py").write_text("viejo", encoding="utf-8")
             plan = self._plan(self._addon(source), destination)
-            bc.apply_migration([plan], target)
+            baddons.apply_migration([plan], target)
             self.assertEqual((destination / "a.py").read_text(), "nuevo")
-            result = bc.undo_migration(target)
+            result = baddons.undo_migration(target)
             self.assertEqual(len(result.restored), 1)
             self.assertEqual((destination / "a.py").read_text(), "viejo")
 
@@ -411,7 +413,7 @@ class ApplyMigrationTest(unittest.TestCase):
             destination = target.addons_dir / "addon"
             destination.mkdir(parents=True)
             (destination / "a.py").write_text("viejo", encoding="utf-8")
-            bc.apply_migration([self._plan(self._addon(source), destination)],
+            baddons.apply_migration([self._plan(self._addon(source), destination)],
                                target)
             # Y después, el fichero de preferencias.
             origin = _config(Path(tmp) / "origin")
@@ -419,8 +421,8 @@ class ApplyMigrationTest(unittest.TestCase):
             target.config_dir.mkdir(parents=True)
             (origin.config_dir / "userpref.blend").write_bytes(b"NUEVO")
             (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
-            bc.copy_preference_files(bc.preference_plan(origin, target), target)
-            result = bc.undo_migration(target)
+            baddons.copy_preference_files(baddons.preference_plan(origin, target), target)
+            result = baddons.undo_migration(target)
             self.assertEqual(len(result.restored), 2)
             self.assertEqual((destination / "a.py").read_text(), "viejo")
             self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
@@ -433,15 +435,15 @@ class ApplyMigrationTest(unittest.TestCase):
             (source / "a.py").write_text("nuevo", encoding="utf-8")
             target = _config(Path(tmp) / "target")
             plan = self._plan(self._addon(source), target.addons_dir / "addon")
-            bc.apply_migration([plan], target)
-            result = bc.undo_migration(target)
+            baddons.apply_migration([plan], target)
+            result = baddons.undo_migration(target)
             self.assertEqual(len(result.removed), 1)
             self.assertFalse(plan.destination.exists())
 
     def test_undo_sin_marcador_no_hace_nada(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = _config(Path(tmp) / "target")
-            result = bc.undo_migration(target)
+            result = baddons.undo_migration(target)
             self.assertFalse(result.marker_found)
             self.assertEqual(result.restored, [])
 
@@ -453,9 +455,9 @@ class ApplyMigrationTest(unittest.TestCase):
             (source / "a.py").write_text("nuevo", encoding="utf-8")
             target = _config(Path(tmp) / "target")
             plan = self._plan(self._addon(source), target.addons_dir / "addon")
-            bc.apply_migration([plan], target)
-            first = bc.undo_migration(target)
-            second = bc.undo_migration(target)
+            baddons.apply_migration([plan], target)
+            first = baddons.undo_migration(target)
+            second = baddons.undo_migration(target)
             self.assertTrue(first.marker_found)
             self.assertFalse(second.marker_found)
             self.assertEqual(second.removed, [])
@@ -467,7 +469,7 @@ class ApplyMigrationTest(unittest.TestCase):
             target = _config(Path(tmp) / "target")
             plan = self._plan(self._addon(source), target.addons_dir / "addon",
                               selected=False)
-            result = bc.apply_migration([plan], target)
+            result = baddons.apply_migration([plan], target)
             self.assertEqual(result.copied, [])
             self.assertEqual(result.skipped, [plan])
 
@@ -485,7 +487,7 @@ class PreferenceTest(unittest.TestCase):
             source.config_dir.mkdir(parents=True)
             (source.config_dir / "userpref.blend").write_bytes(b"P")
             (source.config_dir / "startup.blend").write_bytes(b"S")
-            items = {item.key: item for item in bc.preference_plan(source, target)}
+            items = {item.key: item for item in baddons.preference_plan(source, target)}
             self.assertTrue(items["userpref"].exists)
             self.assertTrue(items["userpref"].selected)
             self.assertTrue(items["startup"].exists)
@@ -500,14 +502,14 @@ class PreferenceTest(unittest.TestCase):
             target.config_dir.mkdir(parents=True)
             (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
             (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
-            items = {item.key: item for item in bc.preference_plan(source, target)}
+            items = {item.key: item for item in baddons.preference_plan(source, target)}
             self.assertTrue(items["userpref"].overwrites)
 
     def test_plan_sin_ficheros_en_origen(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = self._config(tmp, "4.5")
             target = self._config(tmp, "5.3")
-            items = bc.preference_plan(source, target)
+            items = baddons.preference_plan(source, target)
             self.assertFalse(any(item.exists for item in items))
 
     def test_aplicar_copia_y_respalda(self):
@@ -518,8 +520,8 @@ class PreferenceTest(unittest.TestCase):
             target.config_dir.mkdir(parents=True)
             (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
             (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
-            items = bc.preference_plan(source, target)
-            result = bc.copy_preference_files(items, target)
+            items = baddons.preference_plan(source, target)
+            result = baddons.copy_preference_files(items, target)
             self.assertEqual(len(result.copied), 1)
             self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
                              b"NUEVO")
@@ -532,8 +534,8 @@ class PreferenceTest(unittest.TestCase):
             target = self._config(tmp, "5.3")
             source.config_dir.mkdir(parents=True)
             (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
-            items = bc.preference_plan(source, target)
-            result = bc.copy_preference_files(items, target, dry_run=True)
+            items = baddons.preference_plan(source, target)
+            result = baddons.copy_preference_files(items, target, dry_run=True)
             self.assertEqual(len(result.copied), 1)
             self.assertFalse((target.config_dir / "userpref.blend").exists())
 
@@ -553,7 +555,7 @@ class FactoryResetTest(unittest.TestCase):
     def test_snapshot_aparta_la_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.set_config_aside(config, label="v5.3")
+            snapshot = bsnap.set_config_aside(config, label="v5.3")
             self.assertIsNotNone(snapshot)
             self.assertFalse(config.config_dir.exists())
             self.assertEqual((snapshot / "userpref.blend").read_bytes(), b"MIO")
@@ -561,16 +563,16 @@ class FactoryResetTest(unittest.TestCase):
     def test_snapshot_sin_config_no_hace_nada(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp, "5.3")
-            self.assertIsNone(bc.set_config_aside(config))
+            self.assertIsNone(bsnap.set_config_aside(config))
 
     def test_restaurar_devuelve_la_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.set_config_aside(config, label="v5.3")
+            snapshot = bsnap.set_config_aside(config, label="v5.3")
             # Blender recrea una config "limpia"
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"FABRICA")
-            aside = bc.restore_snapshot(config, snapshot)
+            aside = bsnap.restore_snapshot(config, snapshot)
             self.assertEqual((config.config_dir / "userpref.blend").read_bytes(),
                              b"MIO")
             # La limpia se aparta, no se pierde (se puede deshacer).
@@ -581,7 +583,7 @@ class FactoryResetTest(unittest.TestCase):
             # unos ajustes (se perdieron unos así).
             self.assertTrue(snapshot.is_dir())
             self.assertEqual((snapshot / "userpref.blend").read_bytes(), b"MIO")
-            self.assertIn(snapshot, bc.snapshots_with_settings(config))
+            self.assertIn(snapshot, bsnap.snapshots_with_settings(config))
 
     def test_restaurar_reemplaza_en_vez_de_fundir(self):
         """Lo que hubiera en ``config`` y no esté en el guardado, desaparece.
@@ -592,11 +594,11 @@ class FactoryResetTest(unittest.TestCase):
         """
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.set_config_aside(config, label="v5.3")
+            snapshot = bsnap.set_config_aside(config, label="v5.3")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"FABRICA")
             (config.config_dir / "solo_en_la_viva.txt").write_text("x")
-            bc.restore_snapshot(config, snapshot)
+            bsnap.restore_snapshot(config, snapshot)
             self.assertEqual((config.config_dir / "userpref.blend").read_bytes(),
                              b"MIO")
             self.assertFalse((config.config_dir / "solo_en_la_viva.txt").exists())
@@ -605,10 +607,10 @@ class FactoryResetTest(unittest.TestCase):
         """Sin ajustes que apartar, el ``aside`` es ``None`` (no añade ruido)."""
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.set_config_aside(config, label="v5.3")
+            snapshot = bsnap.set_config_aside(config, label="v5.3")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "platform_support.txt").write_bytes(b"x")
-            self.assertIsNone(bc.restore_snapshot(config, snapshot))
+            self.assertIsNone(bsnap.restore_snapshot(config, snapshot))
             self.assertEqual((config.config_dir / "userpref.blend").read_bytes(),
                              b"MIO")
 
@@ -622,20 +624,20 @@ class FactoryResetTest(unittest.TestCase):
                 config.config_dir.mkdir(parents=True, exist_ok=True)
                 (config.config_dir / "userpref.blend").write_bytes(
                     str(second).encode())
-                with mock.patch.object(bc, "datetime") as clock:
+                with mock.patch.object(bsnap, "datetime") as clock:
                     clock.now.return_value = _datetime(2026, 9, 21, 10, 0,
                                                        second)
-                    snaps.append(bc.set_config_aside(config))
-            removed = bc.prune_snapshots(config, 2)
+                    snaps.append(bsnap.set_config_aside(config))
+            removed = bsnap.prune_snapshots(config, 2)
             self.assertEqual(len(removed), 2)
             # Las que quedan son las dos más nuevas, de nueva a vieja.
-            self.assertEqual(bc.snapshots_with_settings(config), [snaps[3], snaps[2]])
+            self.assertEqual(bsnap.snapshots_with_settings(config), [snaps[3], snaps[2]])
 
     def test_poda_sin_limite_no_borra(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.set_config_aside(config)
-            self.assertEqual(bc.prune_snapshots(config, 0), [])
+            snapshot = bsnap.set_config_aside(config)
+            self.assertEqual(bsnap.prune_snapshots(config, 0), [])
             self.assertTrue(snapshot.is_dir())
 
     def test_poda_nunca_borra_la_protegida(self):
@@ -647,28 +649,28 @@ class FactoryResetTest(unittest.TestCase):
             for second in range(4):
                 config.config_dir.mkdir(parents=True, exist_ok=True)
                 (config.config_dir / "userpref.blend").write_bytes(b"x")
-                with mock.patch.object(bc, "datetime") as clock:
+                with mock.patch.object(bsnap, "datetime") as clock:
                     clock.now.return_value = _datetime(2026, 9, 21, 10, 0,
                                                        second)
-                    snapshot = bc.set_config_aside(config)
+                    snapshot = bsnap.set_config_aside(config)
                 if second == 0:
                     first = snapshot
             # La más vieja (que se acaba de restaurar) no se borra aunque el
             # límite sea 1.
-            bc.prune_snapshots(config, 1, protect=first)
+            bsnap.prune_snapshots(config, 1, protect=first)
             self.assertTrue(first.is_dir())
-            self.assertEqual(len(bc.snapshots_with_settings(config)), 2)
+            self.assertEqual(len(bsnap.snapshots_with_settings(config)), 2)
 
     def test_snapshot_label(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            reset = bc.set_config_aside(config, label="v5.3.0")
-            self.assertEqual(bc.snapshot_label(reset), "v5.3.0")
+            reset = bsnap.set_config_aside(config, label="v5.3.0")
+            self.assertEqual(bsnap.snapshot_label(reset), "v5.3.0")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"x")
-            factory = bc.set_config_aside(config, label="factory")
-            self.assertEqual(bc.snapshot_label(factory), "factory")
-            self.assertEqual(bc.snapshot_label(Path(tmp) / "otra"), "")
+            factory = bsnap.set_config_aside(config, label="factory")
+            self.assertEqual(bsnap.snapshot_label(factory), "factory")
+            self.assertEqual(bsnap.snapshot_label(Path(tmp) / "otra"), "")
 
     def test_snapshot_details(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -676,7 +678,7 @@ class FactoryResetTest(unittest.TestCase):
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"x" * 100)
             (config.config_dir / "bookmarks.txt").write_text("a\nb\n\n")
-            details = bc.snapshot_details(config.config_dir)
+            details = bsnap.snapshot_details(config.config_dir)
             self.assertTrue(details["has_userpref"])
             self.assertFalse(details["has_startup"])
             self.assertEqual(details["bookmarks"], 2)
@@ -685,11 +687,11 @@ class FactoryResetTest(unittest.TestCase):
     def test_varias_snapshots_y_orden(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            first = bc.set_config_aside(config, label="a")
+            first = bsnap.set_config_aside(config, label="a")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"DOS")
-            second = bc.set_config_aside(config, label="b")
-            shots = bc.snapshots_with_settings(config)
+            second = bsnap.set_config_aside(config, label="b")
+            shots = bsnap.snapshots_with_settings(config)
             self.assertEqual(len(shots), 2)
             # La más nueva va primero.
             self.assertEqual(shots[0], second)
@@ -698,14 +700,14 @@ class FactoryResetTest(unittest.TestCase):
     def test_borrar_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.set_config_aside(config, label="a")
-            self.assertTrue(bc.delete_snapshot(snapshot))
-            self.assertEqual(bc.snapshots_with_settings(config), [])
+            snapshot = bsnap.set_config_aside(config, label="a")
+            self.assertTrue(bsnap.delete_snapshot(snapshot))
+            self.assertEqual(bsnap.snapshots_with_settings(config), [])
 
     def test_sin_snapshots(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp, "5.3")
-            self.assertEqual(bc.snapshots_with_settings(config), [])
+            self.assertEqual(bsnap.snapshots_with_settings(config), [])
 
     def test_las_snapshots_vacias_no_cuentan_como_ajustes(self):
         """Restaurar tiene que apuntar a la instantánea con ajustes, no a una vacía.
@@ -716,37 +718,37 @@ class FactoryResetTest(unittest.TestCase):
         """
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            real = bc.set_config_aside(config, label="v5.3")
+            real = bsnap.set_config_aside(config, label="v5.3")
             config.config_dir.mkdir(parents=True)
-            vacia = bc.set_config_aside(config, label="factory")
+            vacia = bsnap.set_config_aside(config, label="factory")
             self.assertIsNotNone(vacia)
             # La cruda las ve las dos; la que se ofrece restaurar, solo la real.
-            self.assertEqual(len(bc.all_snapshots(config)), 2)
-            self.assertEqual(bc.snapshots_with_settings(config), [real])
+            self.assertEqual(len(bsnap.all_snapshots(config)), 2)
+            self.assertEqual(bsnap.snapshots_with_settings(config), [real])
 
     def test_snapshot_date(self):
         from datetime import datetime as _datetime
 
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            with mock.patch.object(bc, "datetime") as reloj:
+            with mock.patch.object(bsnap, "datetime") as reloj:
                 reloj.now.return_value = _datetime(2026, 9, 18, 14, 21, 31)
-                snapshot = bc.set_config_aside(config, label="v5.3")
-            self.assertEqual(bc.snapshot_date(snapshot), "2026-09-18 14:21")
-            self.assertEqual(bc.snapshot_date(Path(tmp) / "otra"), "")
+                snapshot = bsnap.set_config_aside(config, label="v5.3")
+            self.assertEqual(bsnap.snapshot_date(snapshot), "2026-09-18 14:21")
+            self.assertEqual(bsnap.snapshot_date(Path(tmp) / "otra"), "")
 
 
 class SummaryTest(unittest.TestCase):
     def test_cuenta_por_estado(self):
-        addon = bc.Addon(kind="legacy", module="x", name="X", version="",
+        addon = baddons.Addon(kind="legacy", module="x", name="X", version="",
                          min_version="", max_version="", path=Path("/tmp/x"))
         plans = [
-            bc.AddonPlan(addon, bc.OK, "", Path("/a")),
-            bc.AddonPlan(addon, bc.WARN, bc.REASON_UNKNOWN_VERSION, Path("/b")),
-            bc.AddonPlan(addon, bc.WARN, bc.REASON_WHEEL_ABI, Path("/c")),
-            bc.AddonPlan(addon, bc.BLOCKED, bc.REASON_PLATFORM, Path("/d")),
+            baddons.AddonPlan(addon, bc.OK, "", Path("/a")),
+            baddons.AddonPlan(addon, bc.WARN, bc.REASON_UNKNOWN_VERSION, Path("/b")),
+            baddons.AddonPlan(addon, bc.WARN, bc.REASON_WHEEL_ABI, Path("/c")),
+            baddons.AddonPlan(addon, bc.BLOCKED, bc.REASON_PLATFORM, Path("/d")),
         ]
-        self.assertEqual(bc.summary_counts(plans),
+        self.assertEqual(baddons.summary_counts(plans),
                          {bc.OK: 1, bc.WARN: 2, bc.BLOCKED: 1})
 
 
