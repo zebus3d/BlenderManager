@@ -46,6 +46,11 @@ def _load(language: str) -> dict:
     return table
 
 
+# Idioma en uso. Arranca en inglés (las claves) hasta que ``set_language`` lo
+# fije con lo que diga el sistema o los ajustes.
+_current = DEFAULT
+
+
 def detect_language() -> str:
     """Idioma según las variables de entorno (LANG, LC_ALL...)."""
     for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
