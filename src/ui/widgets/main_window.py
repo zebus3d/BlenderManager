@@ -421,12 +421,16 @@ class MainWindow(QWidget):
         self.source_chosen.connect(self._start_download)
 
         self._build_ui()
-        QTimer.singleShot(100, lambda: self.refresh(force=False))
+        # Los temporizadores llevan ``self`` de contexto: si la ventana se
+        # destruye antes de que disparen (pasa en los tests, que crean y
+        # borran ventanas a docenas), Qt no llama al callback en vez de
+        # hacerlo sobre un objeto ya borrado.
+        QTimer.singleShot(100, self, lambda: self.refresh(force=False))
         # Quien venga de una versión anterior merece enterarse de que ahora
         # puede repartir sus Blender por varias carpetas. Se enseña una sola
         # vez y **después** de que la ventana esté montada.
         if not self.settings.folders_hint_shown:
-            QTimer.singleShot(400, self._show_folders_hint)
+            QTimer.singleShot(400, self, self._show_folders_hint)
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -1788,7 +1792,7 @@ class MainWindow(QWidget):
                 and getattr(self, "minimize_to_tray", False)
                 and not getattr(self, "_force_quit", False)
                 and TrayIcon.available()):
-            QTimer.singleShot(0, self._hide_to_tray)
+            QTimer.singleShot(0, self, self._hide_to_tray)
         if (event.type() == QEvent.ActivationChange
                 and getattr(self, "_focus_refresh", None) is not None
                 and self.isActiveWindow()):
@@ -2031,19 +2035,28 @@ class MainWindow(QWidget):
         grid = self.layout_mode == "grid"
         cards = []
         for index, build in enumerate(builds):
-            installed = any(e.version == build.version for e in self.installed)
+            entry = next((e for e in self.installed
+                          if e.version == build.version), None)
+            installed = entry is not None
             # La cebra es para la lista (filas contiguas); en rejilla las
             # tarjetas van sueltas sobre el fondo y alternar el gris solo
             # ensucia el conjunto.
             zebra = (not grid) and bool(index % 2)
             marked = build.favorite_key in self.settings.favorites
+            # Una versión instalada se lanza desde aquí igual que desde Local,
+            # así que lleva el mismo botón de consola (misma clave: la serie).
+            console = (self._console_state(entry)
+                       if installed and self.settings.experimental_features
+                       else None)
             if grid:
-                card = GridBuildCard(build, installed, zebra, self.zoom, marked)
+                card = GridBuildCard(build, installed, zebra, self.zoom, marked,
+                                     console=console)
             else:
-                card = BuildCard(build, installed, zebra, marked)
+                card = BuildCard(build, installed, zebra, marked, console=console)
             card.action_clicked.connect(self.install_build)
             card.notes_clicked.connect(self.open_release_notes)
             card.favorite_toggled.connect(self.set_favorite)
+            card.console_toggled.connect(self.set_console_for)
             card.setContextMenuPolicy(Qt.CustomContextMenu)
             card.customContextMenuRequested.connect(
                 lambda pos, b=build, c=card: self._show_store_menu(b, c, pos))
@@ -2207,7 +2220,7 @@ class MainWindow(QWidget):
         self._rebuild_installed()
         # La ventana puede no tener todavía su ancho final: refloweamos en
         # cuanto el layout esté asentado para calcular bien las columnas.
-        QTimer.singleShot(250, self._reflow)
+        QTimer.singleShot(250, self, self._reflow)
         if self.updates_by_path:
             self._show_message(
                 tr("{count} Blender updates available",
@@ -2215,11 +2228,11 @@ class MainWindow(QWidget):
         else:
             self._set_status(tr("Ready"), 2)
         # El salto de serie (5.2 -> 5.3) se ofrece aparte, en un diálogo.
-        QTimer.singleShot(400, self._offer_series_update)
+        QTimer.singleShot(400, self, self._offer_series_update)
         if not self._auto_checked:
             self._auto_checked = True
             if self.auto_update:
-                QTimer.singleShot(2000, lambda: self.check_updates(manual=False))
+                QTimer.singleShot(2000, self, lambda: self.check_updates(manual=False))
 
     # -------------------------------------------------------------- acciones
     def open_release_notes(self, version_text: str) -> None:
@@ -3013,7 +3026,9 @@ class MainWindow(QWidget):
             return
         self.settings.launch_console_overrides[key] = bool(value)
         self.settings.save()
+        # Las dos listas enseñan el botón (la tienda, en las ya instaladas).
         self._rebuild_installed()
+        self._rebuild_store()
 
     def _on_console_default_toggled(self, value: bool) -> None:
         """Cambió el valor por defecto (Ajustes > Launch)."""
@@ -3215,7 +3230,7 @@ class MainWindow(QWidget):
         self._set_status(tr("Restarting..."))
         # El diálogo es modal: hay que cerrarlo para que ``exec()`` devuelva y
         # el cierre de la ventana llegue a terminar el bucle de eventos.
-        QTimer.singleShot(800, self._restart_from_source)
+        QTimer.singleShot(800, self, self._restart_from_source)
 
     def _restart_from_source(self) -> None:
         dialog = getattr(self, "_source_dialog", None)
@@ -3310,4 +3325,4 @@ class MainWindow(QWidget):
     def _on_update_applied(self, path: str) -> None:
         self._set_status(tr("Restarting to install the update..."))
         # Salida de verdad: no puede acabar escondida en la bandeja.
-        QTimer.singleShot(1000, self._quit_app)
+        QTimer.singleShot(1000, self, self._quit_app)

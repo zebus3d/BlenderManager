@@ -367,10 +367,19 @@ class _PrefRow(QWidget):
     que permite comprobarlo en Blender sin adivinar.
 
     Con ``checkable`` la fila lleva casilla (lista para migrar); sin ella es
-    solo lectura (el detalle de un guardado). Las etiquetas largas van en
+    solo lectura (el detalle de un guardado). La descripción va en
     ``ElidedLabel`` **con factor de estirado**: sin él, en un ``QHBoxLayout``
-    se quedan a 0 px (ver AGENTS.md).
+    se queda a 0 px (ver AGENTS.md).
+
+    Cada fila es un widget suelto, así que por sí solas no forman columnas: el
+    nombre y el valor se fijan al mismo ancho en todas (``align_columns``) y
+    las descripciones quedan alineadas a la izquierda, como otra columna.
     """
+
+    # Topes de las dos primeras columnas: un nombre o un valor larguísimo se
+    # recorta con "…" en vez de empujar las descripciones fuera de la vista.
+    NAME_MAX = 260
+    VALUE_MAX = 180
 
     def __init__(self, pref, checkable: bool = True, environment: bool = False,
                  parent=None):
@@ -384,19 +393,18 @@ class _PrefRow(QWidget):
             self.check.setChecked(pref.selected)
             self.check.toggled.connect(
                 lambda checked: setattr(pref, "selected", checked))
-            lay.addWidget(self.check)
+            self.name = self.check
         else:
             self.check = None
-            name = ElidedLabel(pref.label, Qt.ElideRight)
-            lay.addWidget(name, 2)
-        value = ElidedLabel(pref.display_value, Qt.ElideRight)
-        value.setObjectName("Info")
-        lay.addWidget(value, 1)
-        # Apagada y estirada más que el valor: es texto de apoyo, no el dato.
-        description = ElidedLabel(pref.description, Qt.ElideRight)
-        description.setObjectName("Muted")
-        description.setVisible(bool(pref.description))
-        lay.addWidget(description, 3)
+            self.name = ElidedLabel(pref.label, Qt.ElideRight)
+        lay.addWidget(self.name)
+        self.value = ElidedLabel(pref.display_value, Qt.ElideRight)
+        self.value.setObjectName("Info")
+        lay.addWidget(self.value)
+        # Apagada y la única que se estira: es texto de apoyo, no el dato.
+        self.description = ElidedLabel(pref.description, Qt.ElideRight)
+        self.description.setObjectName("Muted")
+        lay.addWidget(self.description, 1)
 
         lines = []
         if pref.description:
@@ -415,6 +423,43 @@ class _PrefRow(QWidget):
         """Marca o desmarca la casilla (si la fila la tiene)."""
         if self.check is not None:
             self.check.setChecked(checked)
+
+    def natural_widths(self) -> tuple:
+        """Ancho que piden el nombre y el valor con su texto entero.
+
+        Se pule antes de medir: el valor va en negrita por QSS y, sin el
+        estilo aplicado, las métricas son las de la fuente normal (más
+        estrecha) y "OPTIX" salía recortado a "OP…".
+        """
+        self.name.ensurePolished()
+        self.value.ensurePolished()
+        if self.check is not None:
+            name = self.check.sizeHint().width()
+        else:
+            name = self.name.fontMetrics().horizontalAdvance(self.pref.label)
+        value = self.value.fontMetrics().horizontalAdvance(self.pref.display_value)
+        # Un par de píxeles de aire: la elisión salta con el ancho justo.
+        return name + 2, value + 4
+
+    @staticmethod
+    def align_columns(rows) -> None:
+        """Da a todas las filas el mismo ancho de nombre y de valor.
+
+        Se mide el más ancho de cada columna (con tope) y se fija en todas:
+        es lo que hace que las descripciones empiecen en la misma vertical.
+        """
+        rows = list(rows)
+        if not rows:
+            return
+        widths = [row.natural_widths() for row in rows]
+        name = min(_PrefRow.NAME_MAX, max(w[0] for w in widths))
+        value = min(_PrefRow.VALUE_MAX, max(w[1] for w in widths))
+        for row in rows:
+            for widget, width in ((row.name, name), (row.value, value)):
+                # ``ElidedLabel`` tiene política ``Ignored`` (no pide ancho);
+                # para que respete un ancho fijo hay que cambiársela también.
+                widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+                widget.setFixedWidth(width)
 
 
 def _snapshot_origin(snapshot) -> str:
@@ -570,12 +615,15 @@ def _show_snapshot_details(parent, snapshot, preferences) -> None:
         empty.setObjectName("Muted")
         body_lay.addWidget(empty)
     else:
+        rows = []
         for section, items in bprefs.group_by_section(preferences):
             head = QLabel(tr(bprefs.section_label(section)))
             head.setObjectName("Muted")
             body_lay.addWidget(head)
             for pref in items:
-                body_lay.addWidget(_PrefRow(pref, checkable=False))
+                rows.append(_PrefRow(pref, checkable=False))
+                body_lay.addWidget(rows[-1])
+        _PrefRow.align_columns(rows)
     body_lay.addStretch()
     scroll.setWidget(body)
     layout = dialog.layout()
@@ -1717,6 +1765,7 @@ class MigrateView(QWidget):
                 row = _PrefRow(pref, environment=bprefs.is_environment(pref.path))
                 self.detail_rows.addWidget(row)
                 self.detail_checks.append(row)
+        _PrefRow.align_columns(self.detail_checks)
         # La casilla de activar addons solo tiene sentido si hay ajustes de
         # addons en la lista.
         self.enable_addons_check.setVisible(

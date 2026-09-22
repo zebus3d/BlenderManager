@@ -243,12 +243,16 @@ class BaseBuildCard(_HoverCard, QFrame):
     action_clicked = Signal(object)   # build
     notes_clicked = Signal(str)       # version
     favorite_toggled = Signal(object, bool)   # build, marcada
+    console_toggled = Signal(object, bool)    # build, con consola
 
     def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
-                 marked: bool = False, parent=None):
+                 marked: bool = False, console=None, parent=None):
         super().__init__(parent)
         self.build = build
         self.installed = installed
+        # ``console`` solo llega para las versiones que ya están instaladas
+        # (la tienda las lanza igual que Local): ``None`` es "sin botón".
+        self.console = console
         self.setObjectName("Card")
         self.setProperty("zebra", "true" if zebra else "false")
         self.setProperty("installed", "true" if installed else "false")
@@ -288,13 +292,24 @@ class BaseBuildCard(_HoverCard, QFrame):
         return _favorite_star(
             marked, lambda on: self.favorite_toggled.emit(self.build, on))
 
+    def _console(self):
+        """Botón de consola de una versión instalada, o ``None`` si no toca.
+
+        La clave de la consola es la serie (``favorite_key``), igual que en
+        Local: encenderla aquí se ve allí, y al revés.
+        """
+        if self.console is None:
+            return None
+        return _console_button(self.console, self.build, self.console_toggled)
+
 
 class BuildCard(BaseBuildCard):
-    """Tarjeta en modo lista (una fila por compilación)."""
+    """Tarjeta en modo lista (una fila por versión)."""
 
     def __init__(self, build, installed: bool, zebra: bool,
-                 marked: bool = False, parent=None):
-        super().__init__(build, installed, zebra, marked=marked, parent=parent)
+                 marked: bool = False, console=None, parent=None):
+        super().__init__(build, installed, zebra, marked=marked,
+                         console=console, parent=parent)
         self.setFixedHeight(68)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(16, 9, 12, 9)
@@ -309,7 +324,14 @@ class BuildCard(BaseBuildCard):
         title.setObjectName("Title")
         if not installed:
             title.setStyleSheet("color: rgba(230,230,230,0.6);")
-        top.addWidget(title)
+        # ``ElidedLabel`` no pide ancho: en esta fila con ``addStretch`` se
+        # quedaba a 0 px y en modo lista solo se veía la insignia ("LTS",
+        # "Alfa"), sin la versión. Con factor de estirado **y** tope en su
+        # ancho natural ocupa lo que mide su texto y la insignia va pegada.
+        title.ensurePolished()
+        title.setMaximumWidth(
+            title.fontMetrics().horizontalAdvance(title.text()) + 6)
+        top.addWidget(title, 1)
         top.addWidget(self._badge())
         top.addStretch()
         text_col.addLayout(top)
@@ -322,6 +344,9 @@ class BuildCard(BaseBuildCard):
 
         lay.addWidget(self._star(marked))
         lay.addWidget(self._info())
+        console = self._console()
+        if console is not None:
+            lay.addWidget(console)
 
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
@@ -357,9 +382,9 @@ class GridBuildCard(BaseBuildCard):
     """Tarjeta en modo rejilla (icono grande y botón debajo)."""
 
     def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
-                 marked: bool = False, parent=None):
+                 marked: bool = False, console=None, parent=None):
         super().__init__(build, installed, zebra, zoom, marked=marked,
-                         parent=parent)
+                         console=console, parent=parent)
         # La fila de la insignia ("Instalada") se reserva SIEMPRE, aunque la
         # compilación no esté instalada: en el Kivy original la etiqueta existía
         # con el texto vacío y así todas las tarjetas de la tienda medían lo
@@ -400,6 +425,10 @@ class GridBuildCard(BaseBuildCard):
         row.addStretch()
         row.addWidget(self._star(marked))
         row.addWidget(self._info())
+        console = self._console()
+        if console is not None:
+            console.setFixedWidth(max(int(42 * zoom), MIN_ICON_BUTTON_WIDTH))
+            row.addWidget(console)
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
             variant="dark" if installed else "accent",

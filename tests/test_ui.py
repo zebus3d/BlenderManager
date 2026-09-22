@@ -77,6 +77,26 @@ class SettingsIsolated:
         network.start()
         self.addCleanup(network.stop)
 
+    def tearDown(self):
+        """Borra de verdad lo que los tests dejan pendiente de borrar.
+
+        Las tarjetas se sueltan con ``setParent(None)`` + ``deleteLater()``, y
+        sin un bucle de eventos nunca llegan a borrarse: se acumulaban por
+        miles como ventanas de nivel superior. Al terminar la suite, Qt y
+        Python las destruían en cualquier orden y el proceso reventaba a veces
+        con una violación de segmento (solo al salir, con todo en verde).
+        """
+        from PySide6.QtCore import QEvent
+        from PySide6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            for widget in app.topLevelWidgets():
+                widget.close()
+                widget.deleteLater()
+            app.sendPostedEvents(None, QEvent.DeferredDelete)
+            app.processEvents()
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class MainWindowTests(SettingsIsolated, unittest.TestCase):
@@ -695,6 +715,8 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         Recientes y Migración ya no están aquí: quedaron probadas y se ven
         siempre.
         """
+        from unittest import mock
+
         from ui.widgets.main_window import EXPERIMENTAL_VIEWS, MainWindow
 
         window = MainWindow()
@@ -712,7 +734,11 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.experimental_switch.setChecked(True)
         for key in hidden:
             self.assertFalse(window.side_buttons[key].isHidden(), key)
-        window.set_view("addons")
+        # Entrar en Add-ons arranca Blender en un hilo para leer su estado;
+        # aquí no hay Blender y un hilo vivo al acabar el test revienta la
+        # suite en la salida, así que la lectura se anula.
+        with mock.patch.object(window.addons_view, "read"):
+            window.set_view("addons")
         self.assertEqual(window.view, "addons")
         self.assertFalse(window.console_row.isHidden())
         # Al apagarlo estando dentro de una de ellas, sale.
@@ -924,6 +950,61 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             star = card.findChild(StarButton)
             info = card.findChild(IconLinkButton)
             self.assertLess(star.x(), info.x(), type(card).__name__)
+
+    def test_la_tarjeta_de_la_nube_en_lista_ensena_la_version(self):
+        """El título "Blender x.y.z" no puede quedarse a 0 px junto a la insignia.
+
+        Un ``ElidedLabel`` no pide ancho: en una fila con ``addStretch`` se
+        quedaba invisible y solo se veía "LTS"/"Alfa".
+        """
+        from ui.widgets.cards import BuildCard
+        from ui.widgets.labels import ElidedLabel
+
+        card = BuildCard(_build("5.2.1", "v52", "stable"), False, False)
+        card.resize(900, 68)
+        card.show()
+        self.app.processEvents()
+        title = next(label for label in card.findChildren(ElidedLabel)
+                     if label.text().startswith("Blender "))
+        self.assertGreater(title.width(), 40)
+        self.assertFalse(title.is_elided())
+
+    def test_la_nube_lanza_con_consola_las_versiones_instaladas(self):
+        """Una versión instalada se lanza desde la Nube como desde Local.
+
+        Así que lleva el mismo botón de consola, con la misma clave (la
+        serie): encenderlo en una lista se ve en la otra.
+        """
+        from unittest import mock as _mock
+
+        from model.build import InstalledBuild
+        from ui.widgets.buttons import CardButton
+        from ui.widgets.main_window import MainWindow
+        from ui import icons
+
+        window = MainWindow()
+        window.experimental_switch.setChecked(True)
+        window.set_layout_mode("list")
+        window.installed = [InstalledBuild(
+            name="blender-5.2.1", path=Path("/tmp/b"), version="5.2.1",
+            branch="v52", executable=Path("/tmp/b/blender"))]
+        window.builds = [_build("5.2.1", "v52", "stable"),
+                         _build("5.3.0", "v53", "alpha")]
+        window._rebuild_store()
+        cards = window.store_grid.parentWidget().findChildren(CardButton)
+        consolas = [b for b in cards if b.text() == icons.TERMINAL]
+        # Solo la instalada lleva consola; la que está por descargar, no.
+        self.assertEqual(len(consolas), 1)
+        self.assertEqual(consolas[0].property("variant"), "neutral")
+        with _mock.patch.object(window, "_rebuild_installed") as local:
+            consolas[0].setChecked(True)
+            local.assert_called()
+        key = window.installed[0].favorite_key
+        self.assertTrue(window.settings.launch_console_overrides[key])
+        # Tras repintar, la tarjeta de la tienda sale encendida.
+        cards = window.store_grid.parentWidget().findChildren(CardButton)
+        consola = next(b for b in cards if b.text() == icons.TERMINAL)
+        self.assertEqual(consola.property("variant"), "accent")
 
     def test_los_iconos_de_tarjeta_se_realzan_con_su_color(self):
         """Estrella en ámbar, consola en gris oscuro, "i" en azul al pasar."""
