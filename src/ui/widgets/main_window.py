@@ -107,6 +107,12 @@ FILTERS_HEIGHT = t.FILTERS_HEIGHT
 # Alto de los controles de la fila de filtros (pastillas de vista y combos):
 # el mismo que los tags de canal, para que la fila quede a ras.
 FILTER_CONTROL_HEIGHT = t.CONTROL_HEIGHT
+
+# Vistas que solo se ven con las opciones experimentales (Ajustes > Avanzado).
+# Recientes salió de aquí cuando quedó probada; el gestor de add-ons sigue en
+# desarrollo (arranca Blender para leer el estado) y Migración sale al cerrar
+# la lectura de preferencias v2.
+EXPERIMENTAL_VIEWS = ("migrate", "addons")
 # Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
 ZOOM_STEP = 0.1
 
@@ -442,8 +448,8 @@ class MainWindow(QWidget):
         self.migrate_view.snapshot_keep_changed.connect(self.set_snapshot_keep)
         self.migrate_view.set_snapshot_keep(self.settings.snapshot_keep)
         self.stack.addWidget(self.migrate_view)
-        self.recent_view = RecentView()
-        self.recent_view.set_system(self.system.os_name, self.system.arch)
+        self.recent_view = RecentView(open_file=self.launch_installed)
+        self.recent_view.set_system(self.system.os_name)
         self.recent_view.status_message.connect(self._show_message)
         self.stack.addWidget(self.recent_view)
         self.addons_view = AddonsView()
@@ -647,9 +653,9 @@ class MainWindow(QWidget):
             btn.setFont(icon_font(20))
             self.side_group.addButton(btn)
             btn.clicked.connect(lambda _=False, k=key: self.set_view(k))
-            # Recientes y Add-ons son nuevas: ocultas hasta activar las
-            # opciones experimentales (Ajustes > Avanzado), como Migración.
-            if key in ("recent", "addons"):
+            # El gestor de add-ons es nuevo: oculto hasta activar las opciones
+            # experimentales (Ajustes > Avanzado), como Migración.
+            if key == "addons":
                 btn.setVisible(self.settings.experimental_features)
             lay.addWidget(btn)
             self.side_buttons[key] = btn
@@ -1396,13 +1402,13 @@ class MainWindow(QWidget):
         """Enseña u oculta las vistas nuevas, y sale de ellas si se apaga."""
         self.settings.experimental_features = value
         self.settings.save()
-        for key in ("migrate", "recent", "addons"):
+        for key in EXPERIMENTAL_VIEWS:
             self.side_buttons[key].setVisible(value)
         if hasattr(self, "console_row"):
             self.console_row.setVisible(value)
         # El botón de consola de las tarjetas depende de lo mismo.
         self._rebuild_installed()
-        if not value and self.view in ("migrate", "recent", "addons"):
+        if not value and self.view in EXPERIMENTAL_VIEWS:
             self.set_view("installed" if self.installed else "store")
 
     def _build_footer(self) -> QFrame:
@@ -1550,7 +1556,7 @@ class MainWindow(QWidget):
         que estabas. Entre tienda e instaladas no hay interruptor, el clic
         cambia de pestaña y ya.
         """
-        if (view in ("migrate", "recent", "addons")
+        if (view in EXPERIMENTAL_VIEWS
                 and not self.settings.experimental_features):
             # Esas vistas están ocultas (opciones experimentales apagadas): su
             # botón no se ve, pero cualquier llamada debe quedar sin efecto.
@@ -2950,15 +2956,21 @@ class MainWindow(QWidget):
         self._set_status(tr("Download failed"), 8)
         show_error(self, tr("Download failed"), reason)
 
-    def launch_installed(self, entry) -> None:
-        """Abre una versión instalada (Blender sigue vivo al
-        cerrar el gestor).
+    def launch_installed(self, entry, blend_file=None) -> bool:
+        """Abre una versión instalada (Blender sigue vivo al cerrar el gestor).
+
+        Es el **único** camino para lanzar Blender desde la interfaz: aplica
+        los argumentos de Ajustes > Launch y la consola de esa versión. Con
+        ``blend_file`` abre ese fichero (lo usa Recientes). Devuelve si
+        arrancó.
         """
+        executable = getattr(entry, "executable", None)
+        if executable is None:
+            return False
         try:
             args = shlex.split(self.launch_args or "")
-            executable = getattr(entry, "executable", None)
-            if executable is None:
-                return
+            if blend_file is not None:
+                args.append(str(blend_file))
             console = self._console_state(entry)
             if console and not launcher.terminal_available():
                 self._set_status(tr("No terminal found; launching without "
@@ -2966,6 +2978,10 @@ class MainWindow(QWidget):
             self.launcher.launch(executable, args=args, console=console)
         except Exception as error:
             download_log(f"launch failed: {error}")
+            self._set_status(tr("Could not launch Blender: {error}",
+                                error=error), 8)
+            return False
+        return True
 
     def set_snapshot_keep(self, value: int) -> None:
         """Recuerda cuántas copias guardadas se conservan por versión."""

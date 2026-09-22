@@ -350,6 +350,13 @@ def build_qss() -> str:
         border: 1px solid rgba(0,0,0,0.35);
     }}
     QFrame#RecentRow:hover {{ background-color: {t.SURFACE_ALT}; }}
+    /* Fichero que ya no está en su ruta: apagado y sin realce (no se puede
+       abrir). Va después del :hover para ganarle con la misma especificidad. */
+    QFrame#RecentRow[missing="true"],
+    QFrame#RecentRow[missing="true"]:hover {{
+        background-color: {t.CARD_DIM_ALT};
+        color: {t.MUTED};
+    }}
     QScrollArea#RecentScroll {{ background: transparent; border: none; }}
     QScrollArea#RecentScroll > QWidget > QWidget {{ background: transparent; }}
     QWidget#RecentBody {{ background: transparent; }}

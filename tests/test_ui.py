@@ -690,11 +690,16 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(window.view, "store")
 
     def test_las_vistas_nuevas_estan_tras_experimental(self):
-        """Migración, Recientes y Add-ons no aparecen hasta activar Avanzado."""
-        from ui.widgets.main_window import MainWindow
+        """Migración y Add-ons no aparecen hasta activar Avanzado.
+
+        Recientes ya no está aquí: quedó probada y se ve siempre.
+        """
+        from ui.widgets.main_window import EXPERIMENTAL_VIEWS, MainWindow
 
         window = MainWindow()
-        hidden = ("migrate", "recent", "addons")
+        hidden = EXPERIMENTAL_VIEWS
+        self.assertNotIn("recent", hidden)
+        self.assertFalse(window.side_buttons["recent"].isHidden())
         # Apagado (por defecto): los botones no se ven y no se puede entrar.
         for key in hidden:
             self.assertTrue(window.side_buttons[key].isHidden(), key)
@@ -705,12 +710,12 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.experimental_switch.setChecked(True)
         for key in hidden:
             self.assertFalse(window.side_buttons[key].isHidden(), key)
-        window.set_view("recent")
-        self.assertEqual(window.view, "recent")
+        window.set_view("migrate")
+        self.assertEqual(window.view, "migrate")
         self.assertFalse(window.console_row.isHidden())
         # Al apagarlo estando dentro de una de ellas, sale.
         window.experimental_switch.setChecked(False)
-        self.assertNotEqual(window.view, "recent")
+        self.assertNotEqual(window.view, "migrate")
         for key in hidden:
             self.assertTrue(window.side_buttons[key].isHidden(), key)
 
@@ -3848,9 +3853,9 @@ class RecentViewTests(SettingsIsolated, unittest.TestCase):
         entry = InstalledBuild(name="b", path=Path("/tmp/b"), version="5.2.2",
                                executable=Path("/tmp/b/blender"))
         group = rp.RecentGroup(series="5.2", version="5.2.2",
-                               files=[Path("/tmp/a.blend")])
+                               files=[rp.RecentFile(Path("/tmp/a.blend"))])
         view = RecentView()
-        view.set_system("linux", "x86_64")
+        view.set_system("linux")
         with _mock.patch("ui.widgets.recent.recent_service.grouped",
                          return_value=[group]):
             view.set_installed([entry])
@@ -3858,7 +3863,12 @@ class RecentViewTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].path, Path("/tmp/a.blend"))
 
-    def test_abrir_lanza_esa_version(self):
+    def test_abrir_pasa_por_el_lanzador_de_la_ventana(self):
+        """Recientes no lanza por su cuenta: pide a MainWindow que abra.
+
+        Así el fichero se abre con los argumentos de Ajustes y la consola de
+        esa versión, igual que desde las tarjetas (antes se los saltaba).
+        """
         from unittest import mock as _mock
 
         from model.build import InstalledBuild
@@ -3866,12 +3876,64 @@ class RecentViewTests(SettingsIsolated, unittest.TestCase):
 
         entry = InstalledBuild(name="b", path=Path("/tmp/b"), version="5.2.2",
                                executable=Path("/tmp/b/blender"))
-        view = RecentView()
-        with _mock.patch.object(view.launcher, "launch") as launch:
-            view._open(Path("/tmp/a.blend"), entry)
-        self.assertTrue(launch.called)
-        self.assertEqual(launch.call_args[0][0], entry.executable)
-        self.assertEqual(launch.call_args[1]["args"], ["/tmp/a.blend"])
+        opener = _mock.Mock(return_value=True)
+        view = RecentView(open_file=opener)
+        mensajes = []
+        view.status_message.connect(mensajes.append)
+        view._open(Path("/tmp/a.blend"), entry)
+        opener.assert_called_once_with(entry, Path("/tmp/a.blend"))
+        self.assertTrue(any("a.blend" in m for m in mensajes))
+        # Si no arrancó, no se anuncia que se está abriendo.
+        opener.return_value = False
+        mensajes.clear()
+        view._open(Path("/tmp/a.blend"), entry)
+        self.assertEqual(mensajes, [])
+
+    def test_la_ventana_abre_recientes_con_argumentos_y_consola(self):
+        """``launch_installed`` con fichero: argumentos de Ajustes + consola."""
+        from unittest import mock as _mock
+
+        from model.build import InstalledBuild
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.launch_args = "--debug"
+        entry = InstalledBuild(name="b", path=Path("/tmp/b"), version="5.2.2",
+                               executable=Path("/tmp/b/blender"))
+        with _mock.patch.object(window.launcher, "launch") as launch, \
+                _mock.patch.object(window, "_console_state", return_value=True), \
+                _mock.patch("ui.widgets.main_window.launcher.terminal_available",
+                            return_value=True):
+            self.assertTrue(window.launch_installed(entry, Path("/tmp/a.blend")))
+        launch.assert_called_once_with(
+            entry.executable, args=["--debug", "/tmp/a.blend"], console=True)
+
+    def test_los_ficheros_que_ya_no_estan_se_ven_apagados(self):
+        from unittest import mock as _mock
+
+        from model.build import InstalledBuild
+        from services import recent as rp
+        from ui.widgets.recent import RecentView, _RecentRow
+
+        entry = InstalledBuild(name="b", path=Path("/tmp/b"), version="5.2.2",
+                               executable=Path("/tmp/b/blender"))
+        group = rp.RecentGroup(series="5.2", version="5.2.2", files=[
+            rp.RecentFile(Path("/tmp/a.blend")),
+            rp.RecentFile(Path("/tmp/borrado.blend"), missing=True)])
+        opener = _mock.Mock(return_value=True)
+        view = RecentView(open_file=opener)
+        with _mock.patch("ui.widgets.recent.recent_service.grouped",
+                         return_value=[group]):
+            view.set_installed([entry])
+        rows = [w for w in self._labels(view) if isinstance(w, _RecentRow)]
+        vivo, muerto = rows
+        self.assertEqual(vivo.property("missing"), "false")
+        self.assertEqual(muerto.property("missing"), "true")
+        self.assertIn("no longer", muerto.toolTip())
+        self.assertFalse(muerto._menu_btn.isEnabled())
+        self.assertTrue(muerto.missing)
+        # Y hay botón para releer la lista.
+        self.assertTrue(view.refresh_btn.toolTip())
 
 
 if __name__ == "__main__":

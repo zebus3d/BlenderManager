@@ -18,6 +18,19 @@ RECENT_FILE = "recent-files.txt"
 
 
 @dataclass
+class RecentFile:
+    """Un ``.blend`` de la lista de recientes.
+
+    ``missing`` marca los que ya no están en esa ruta (movidos o borrados). Se
+    devuelven igualmente: si desaparecieran sin más, el usuario no sabría si
+    Blender no tiene recientes o si sus ficheros han cambiado de sitio.
+    """
+
+    path: Path
+    missing: bool = False
+
+
+@dataclass
 class RecentGroup:
     """Los recientes de una serie de Blender.
 
@@ -27,14 +40,15 @@ class RecentGroup:
 
     series: str
     version: str
-    files: list = field(default_factory=list)
+    files: list = field(default_factory=list)   # de ``RecentFile``
 
 
 def recent_files(config) -> list:
-    """Rutas de los ``.blend`` recientes de esa config, la más nueva primero.
+    """``RecentFile`` de esa config, el más nuevo primero.
 
-    Se saltan las líneas vacías, las relativas al fichero (``//``) y las que ya
-    no existen: una lista con ficheros borrados no ayuda a nadie.
+    Se saltan las líneas vacías y las relativas al fichero (``//``). Las rutas
+    que ya no existen se devuelven marcadas con ``missing`` (ver
+    ``RecentFile``), no se ocultan.
     """
     path = Path(config.config_dir) / RECENT_FILE
     try:
@@ -47,8 +61,7 @@ def recent_files(config) -> list:
         if not entry or entry.startswith("//"):
             continue
         candidate = Path(entry)
-        if candidate.is_file():
-            files.append(candidate)
+        files.append(RecentFile(candidate, missing=not candidate.is_file()))
     return files
 
 

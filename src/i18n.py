@@ -723,6 +723,16 @@ _TRANSLATIONS = {
         "Use it if you added or removed one outside this app.":
             "Vuelve a buscar las versiones de Blender instaladas.\n"
             "Úsalo si has añadido o quitado alguna fuera de esta app.",
+        "Read the recent files again.\n"
+        "Blender updates the list when you open or save a file.":
+            "Vuelve a leer los ficheros recientes.\n"
+            "Blender actualiza la lista al abrir o guardar un fichero.",
+        "This file is no longer at that path (moved or deleted).":
+            "Este fichero ya no está en esa ruta (se movió o se borró).",
+        "Show the file in your file manager.":
+            "Muestra el fichero en tu explorador de archivos.",
+        "Could not launch Blender: {error}":
+            "No se pudo lanzar Blender: {error}",
         "Filter by version, branch or file name as you type.":
             "Filtra por versión, rama o nombre de archivo mientras escribes.",
         "Show every build: stable, LTS, daily and alpha.":

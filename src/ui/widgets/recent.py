@@ -3,9 +3,15 @@
 Lee la lista que Blender deja en ``<config>/recent-files.txt`` (ver
 ``services/recent.py``) y la enseña agrupada por serie. Un clic abre el fichero
 en la versión más nueva de su serie; el botón ``⋯`` deja elegir cualquier
-versión instalada; el clic derecho revela el fichero en el explorador.
+versión instalada; el clic derecho revela el fichero en el explorador. Los que
+ya no están en su ruta se enseñan apagados, para que se sepa que se movieron.
 
-No es una pestaña de compilaciones, así que la fila de filtros y el buscador se
+Abrir un fichero es **lanzar esa versión** con el fichero como argumento, así
+que no se lanza desde aquí: se le pide a ``MainWindow`` (``open_file``), que es
+quien sabe los argumentos de lanzamiento y si esa versión va con consola. Con
+un ``Launcher`` propio, Recientes ignoraba los dos ajustes.
+
+No es una pestaña de versiones, así que la fila de filtros y el buscador se
 ocultan (lo decide ``MainWindow._set_view``).
 """
 
@@ -26,9 +32,9 @@ from i18n import tr
 from model.build import minor_of
 from services import opener
 from services import recent as recent_service
-from services.launcher import Launcher
 from ui import icons
 from ui import theme as t
+from ui.fonts import icon_font
 from ui.widgets.buttons import IconFlatButton
 from ui.widgets.labels import ElidedLabel
 
@@ -50,16 +56,24 @@ def _clear(layout) -> None:
 
 
 class _RecentRow(QFrame):
-    """Fila de un fichero reciente: nombre, carpeta y abrir en una versión."""
+    """Fila de un fichero reciente: nombre, carpeta y abrir en una versión.
 
-    def __init__(self, path, versions, on_open, on_reveal, parent=None):
+    Si el fichero ya no está (``missing``), la fila se ve apagada y no abre ni
+    revela nada: solo cuenta que estuvo ahí.
+    """
+
+    def __init__(self, path, versions, on_open, on_reveal, missing=False,
+                 parent=None):
         super().__init__(parent)
         self.path = Path(path)
+        self.missing = missing
         self._versions = list(versions)
         self._on_open = on_open
         self._on_reveal = on_reveal
         self.setObjectName("RecentRow")
-        self.setCursor(Qt.PointingHandCursor)
+        self.setProperty("missing", "true" if missing else "false")
+        if not missing:
+            self.setCursor(Qt.PointingHandCursor)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 6, 8, 6)
         lay.setSpacing(8)
@@ -67,25 +81,44 @@ class _RecentRow(QFrame):
         info = QVBoxLayout()
         info.setSpacing(1)
         name = ElidedLabel(self.path.name, Qt.ElideRight)
-        name.setToolTip(str(self.path))
+        if missing:
+            # Apagado como la carpeta: el QSS de la fila no llega a la etiqueta
+            # (la regla de QLabel tiene su propio color).
+            name.setObjectName("Muted")
         info.addWidget(name)
         folder = ElidedLabel(str(self.path.parent), Qt.ElideMiddle)
         folder.setObjectName("Muted")
         info.addWidget(folder)
         lay.addLayout(info, 1)
+        # El tooltip va en la fila entera (las etiquetas recortadas ponen el
+        # suyo solo cuando no caben).
+        self.setToolTip(
+            tr("This file is no longer at that path (moved or deleted).")
+            if missing else str(self.path))
 
         self._menu_btn = IconFlatButton(
             icons.ELLIPSIS, tr("Open in another version"))
+        # Sin la fuente de iconos el glifo sale como un cuadrado.
+        self._menu_btn.setFont(icon_font(16))
         self._menu_btn.clicked.connect(self._show_versions)
+        self._menu_btn.setEnabled(not missing)
         lay.addWidget(self._menu_btn)
 
     def mouseReleaseEvent(self, event) -> None:
-        if event.button() == Qt.LeftButton and self._versions:
+        super().mouseReleaseEvent(event)
+        # Solo si se suelta dentro de la fila: arrastrar fuera y soltar no es
+        # un clic (antes abría igual).
+        inside = self.rect().contains(event.position().toPoint())
+        if (event.button() == Qt.LeftButton and inside and self._versions
+                and not self.missing):
             self._on_open(self.path, self._versions[0])
 
     def contextMenuEvent(self, event) -> None:
+        if self.missing:
+            return
         menu = _menu(self)
         action = menu.addAction(tr("Open file location"))
+        action.setToolTip(tr("Show the file in your file manager."))
         action.triggered.connect(lambda: self._on_reveal(self.path))
         menu.exec(event.globalPos())
 
@@ -103,11 +136,15 @@ class _RecentRow(QFrame):
 
 
 class RecentView(QWidget):
-    """Pantalla con los ficheros recientes agrupados por versión de Blender."""
+    """Pantalla con los ficheros recientes agrupados por versión de Blender.
+
+    ``open_file(entry, path) -> bool`` es quien lanza de verdad (lo pone
+    ``MainWindow``): devuelve si Blender arrancó.
+    """
 
     status_message = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, open_file=None, parent=None):
         super().__init__(parent)
         # objectName para el QSS (fondo como las listas) y WA_StyledBackground
         # porque una SUBCLASE de QWidget no pinta el fondo del QSS sin él.
@@ -115,7 +152,7 @@ class RecentView(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.platform = ""
         self.installed = []
-        self.launcher = Launcher()
+        self.open_file = open_file or (lambda entry, path: False)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -133,6 +170,14 @@ class RecentView(QWidget):
         title = QLabel(tr("Recent files"))
         head_lay.addWidget(title)
         head_lay.addStretch()
+        # Blender reescribe la lista al abrir o guardar, y esta vista solo la
+        # lee al entrar: el botón sirve para releerla sin salir y volver.
+        self.refresh_btn = IconFlatButton(icons.REFRESH, tr(
+            "Read the recent files again.\n"
+            "Blender updates the list when you open or save a file."))
+        self.refresh_btn.setFont(icon_font(16))
+        self.refresh_btn.clicked.connect(self.refresh)
+        head_lay.addWidget(self.refresh_btn)
         root.addWidget(header)
 
         self.scroll = QScrollArea()
@@ -149,16 +194,17 @@ class RecentView(QWidget):
         self.scroll.setWidget(body)
         root.addWidget(self.scroll, 1)
 
-    def set_system(self, platform: str, arch: str) -> None:
+    def set_system(self, platform: str) -> None:
         """Fija el SO de este equipo (de dónde cuelga la config de cada versión)."""
         self.platform = platform or ""
 
     def set_installed(self, installed) -> None:
         """Recibe las versiones instaladas y repinta la lista."""
         self.installed = list(installed or [])
-        self._rebuild()
+        self.refresh()
 
-    def _rebuild(self) -> None:
+    def refresh(self) -> None:
+        """Vuelve a leer los recientes de cada serie y repinta la lista."""
         _clear(self.body)
         if not self.installed:
             self._placeholder(tr("No installed Blender versions."))
@@ -174,9 +220,10 @@ class RecentView(QWidget):
             header = QLabel(tr("Blender {version}", version=group.version))
             header.setObjectName("Muted")
             self.body.addWidget(header)
-            for path in group.files:
+            for item in group.files:
                 self.body.addWidget(
-                    _RecentRow(path, versions, self._open, self._reveal))
+                    _RecentRow(item.path, versions, self._open, self._reveal,
+                               missing=item.missing))
 
     def _placeholder(self, text: str) -> None:
         label = QLabel(text)
@@ -186,19 +233,16 @@ class RecentView(QWidget):
         self.body.addWidget(label)
 
     def _open(self, path, entry) -> None:
-        """Abre el fichero en esa versión de Blender."""
-        executable = getattr(entry, "executable", None)
-        if entry is None or not executable:
+        """Abre el fichero en esa versión de Blender (vía ``open_file``)."""
+        if entry is None or not getattr(entry, "executable", None):
             self.status_message.emit(tr("That version has no executable."))
             return
-        try:
-            self.launcher.launch(executable, args=[str(path)])
-        except OSError as error:
-            self.status_message.emit(str(error))
-            return
-        self.status_message.emit(
-            tr("Opening {name} in Blender {version}",
-               name=Path(path).name, version=entry.version))
+        if self.open_file(entry, Path(path)):
+            self.status_message.emit(
+                tr("Opening {name} in Blender {version}",
+                   name=Path(path).name, version=entry.version))
 
     def _reveal(self, path) -> None:
-        opener.reveal(path)
+        if not opener.reveal(path):
+            self.status_message.emit(
+                tr("This file is no longer at that path (moved or deleted)."))

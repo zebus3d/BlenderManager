@@ -23,7 +23,7 @@ def _entry(version, root):
 
 
 class RecentServiceTest(unittest.TestCase):
-    def test_lee_solo_los_que_existen(self):
+    def test_lee_todos_y_marca_los_que_ya_no_estan(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             config = bc.BlenderConfig("5.2", base, "linux", base / "config",
@@ -34,7 +34,11 @@ class RecentServiceTest(unittest.TestCase):
             (config.config_dir / rp.RECENT_FILE).write_text(
                 f"{good}\n/base/que/no/existe.blend\n//relativo.blend\n\n",
                 encoding="utf-8")
-            self.assertEqual(rp.recent_files(config), [good])
+            files = rp.recent_files(config)
+            # El que existe y el que no: los dos, y solo el segundo marcado.
+            self.assertEqual([f.path for f in files],
+                             [good, Path("/base/que/no/existe.blend")])
+            self.assertEqual([f.missing for f in files], [False, True])
 
     def test_sin_fichero_no_falla(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -59,7 +63,8 @@ class RecentServiceTest(unittest.TestCase):
             groups = rp.grouped(installed, "linux", env)
             self.assertEqual([group.series for group in groups], ["5.2", "4.5"])
             self.assertEqual(groups[0].version, "5.2.2")
-            self.assertEqual(groups[0].files, [base / "a.blend"])
+            self.assertEqual([f.path for f in groups[0].files],
+                             [base / "a.blend"])
 
     def test_series_sin_recientes_no_aparecen(self):
         with tempfile.TemporaryDirectory() as tmp:
