@@ -520,5 +520,7 @@
   "Your settings were saved. Blender {version} will start clean the next time you open it.": "Tus ajustes se guardaron. Blender {version} arrancará limpio la próxima vez que lo abras.",
   "Blender {version} will start clean on next launch.\n\nYour settings are saved aside, so you can put them back from this same screen.": "Blender {version} arrancará limpio la próxima vez.\n\nTus ajustes se guardan aparte, así que podrás devolverlos desde esta misma pantalla.",
   "Settings restored.": "Ajustes recuperados.",
-  "Saved settings deleted.": "Ajustes guardados borrados."
+  "Saved settings deleted.": "Ajustes guardados borrados.",
+  "That file is not a valid .zip (it may be corrupt or incomplete).": "Ese fichero no es un .zip válido (puede estar corrupto o incompleto).",
+  "Could not write to Blender's add-ons folder.": "No se pudo escribir en la carpeta de addons de Blender."
 }

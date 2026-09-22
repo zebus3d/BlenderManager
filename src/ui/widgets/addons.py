@@ -29,6 +29,7 @@ from i18n import tr
 from model.build import minor_of, version_tuple
 from services import addons as addons_service
 from services import blender_runner, opener
+from services.downloader import log as download_log
 from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, IconFlatButton, SwitchPill
@@ -369,9 +370,9 @@ class AddonsView(QWidget):
                 addons_service.set_enabled(entry, state.module, enabled)
                 self.action_done.emit({"action": "toggle", "name": state.name,
                                        "enabled": enabled, "state": state})
-            except addons_service.AddonError as error:
+            except Exception as error:  # noqa: BLE001 - ver abajo
                 self.action_done.emit({"action": "toggle", "name": state.name,
-                                       "error": error.reason})
+                                       "error": _reason_of(error)})
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -400,10 +401,10 @@ class AddonsView(QWidget):
                 self.action_done.emit({"action": "install",
                                        "name": Path(path).name,
                                        "module": result["module"]})
-            except addons_service.AddonError as error:
+            except Exception as error:  # noqa: BLE001 - ver abajo
                 self.action_done.emit({"action": "install",
                                        "name": Path(path).name,
-                                       "error": error.reason})
+                                       "error": _reason_of(error)})
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -424,10 +425,10 @@ class AddonsView(QWidget):
                 addons_service.link(entry, folder, platform)
                 self.action_done.emit({"action": "link",
                                        "name": Path(folder).name})
-            except addons_service.AddonError as error:
+            except Exception as error:  # noqa: BLE001 - ver abajo
                 self.action_done.emit({"action": "link",
                                        "name": Path(folder).name,
-                                       "error": error.reason})
+                                       "error": _reason_of(error)})
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -452,9 +453,9 @@ class AddonsView(QWidget):
             try:
                 addons_service.remove(entry, state.addon, self.platform)
                 self.action_done.emit({"action": "remove", "name": state.name})
-            except addons_service.AddonError as error:
+            except Exception as error:  # noqa: BLE001 - ver abajo
                 self.action_done.emit({"action": "remove", "name": state.name,
-                                       "error": error.reason})
+                                       "error": _reason_of(error)})
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -482,6 +483,22 @@ class AddonsView(QWidget):
         self.read()
 
 
+def _reason_of(error) -> str:
+    """Clave del fallo para ``_error_text``.
+
+    Los hilos de acción capturan **cualquier** excepción, no solo
+    ``AddonError``: si una se escapaba, el hilo moría sin emitir nada,
+    ``_acting`` se quedaba en ``True`` y la vista se moría en silencio (ni
+    instalar, ni enlazar, ni borrar) hasta reiniciar la app. Un ``.zip``
+    corrupto bastaba. Lo que no sea ``AddonError`` se cuenta como fallo
+    genérico y el detalle va al registro.
+    """
+    if isinstance(error, addons_service.AddonError):
+        return error.reason
+    download_log(f"addons: {type(error).__name__}: {error}")
+    return "failed"
+
+
 def _error_text(payload) -> str:
     """Mensaje legible de un fallo del gestor de addons."""
     reason = payload.get("error")
@@ -493,6 +510,9 @@ def _error_text(payload) -> str:
         "no_addon": tr("That folder is not an add-on (no manifest or "
                        "__init__.py)."),
         "unsupported": tr("Only .zip and .py files can be installed."),
+        "broken_archive": tr("That file is not a valid .zip (it may be "
+                             "corrupt or incomplete)."),
+        "copy_failed": tr("Could not write to Blender's add-ons folder."),
         "symlink_failed": tr("Could not create the link (on Windows, "
                              "symbolic links need permission)."),
         "failed": tr("Blender could not apply the change."),

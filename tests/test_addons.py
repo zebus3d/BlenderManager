@@ -114,6 +114,34 @@ class InstallAddonTest(unittest.TestCase):
 
 
 class LinkAddonTest(unittest.TestCase):
+    def test_un_zip_corrupto_se_cuenta_como_error_del_gestor(self):
+        """Un fallo del sistema no puede escaparse como excepción cruda.
+
+        La vista solo sabe contar ``AddonError``; sus hilos morían sin emitir
+        nada y dejaban el gestor bloqueado (ni instalar, ni enlazar, ni
+        borrar) hasta reiniciar la app. Un .zip a medio bajar bastaba.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            entry = _entry(tmp)
+            malo = Path(tmp) / "corrupto.zip"
+            malo.write_bytes(b"PK\x03\x04 no soy un zip")
+            with self.assertRaises(ap.AddonError) as caso:
+                ap.install(entry, malo, "linux")
+            self.assertEqual(caso.exception.reason, "broken_archive")
+            self.assertTrue(caso.exception.detail)
+
+    def test_si_no_se_puede_escribir_lo_dice(self):
+        """Sin permiso en el destino, ``copy_failed`` y no un PermissionError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            entry = _entry(tmp)
+            suelto = Path(tmp) / "mi_addon.py"
+            suelto.write_text("bl_info = {}\n", encoding="utf-8")
+            with mock.patch("services.addons.shutil.copy2",
+                            side_effect=PermissionError("sin permiso")):
+                with self.assertRaises(ap.AddonError) as caso:
+                    ap.install(entry, suelto, "linux")
+            self.assertEqual(caso.exception.reason, "copy_failed")
+
     def test_enlaza_y_desvincula_sin_tocar_el_origen(self):
         with tempfile.TemporaryDirectory() as tmp:
             dev = Path(tmp) / "proyecto" / "mi_addon"
