@@ -19,7 +19,8 @@ class I18nTests(unittest.TestCase):
 
     def test_format_arguments(self):
         i18n.set_language("es")
-        self.assertEqual(i18n.tr("Downloading {name}", name="x.tar.xz"), "Descargando x.tar.xz")
+        self.assertEqual(i18n.tr("Copied {count} add-ons.", count=3),
+                         "Se copiaron 3 addons.")
 
     def test_broken_placeholder_does_not_raise(self):
         i18n.set_language("es")
@@ -47,6 +48,53 @@ class CoberturaTests(unittest.TestCase):
     en el código van troceadas y la clave es el texto ya unido (justo el error
     que hace que una traducción no enganche y el usuario vea inglés suelto).
     """
+
+    def test_no_hay_claves_repetidas(self):
+        """Una clave repetida en el diccionario pisa a la anterior en silencio.
+
+        Pasó con "Restore", que tenía dos traducciones ("Restaurar" y
+        "Recuperar") y ganaba la segunda; la primera era código muerto.
+        """
+        import ast
+        from pathlib import Path
+
+        source = Path(i18n.__file__).read_text(encoding="utf-8")
+        repetidas = []
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.Dict):
+                continue
+            vistas = set()
+            for key in node.keys:
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    if key.value in vistas:
+                        repetidas.append((key.value, key.lineno))
+                    vistas.add(key.value)
+        self.assertEqual(repetidas, [])
+
+    def test_no_quedan_claves_sin_usar(self):
+        """Una clave que ya no usa nadie es texto que alguien traducirá en balde.
+
+        Se recogen **todas** las cadenas literales de ``src/`` con ``ast``:
+        así entran tanto las de ``tr("...")`` como las que viven en una tabla
+        y se traducen por variable (los tooltips de canal, las etiquetas de
+        tipo de carpeta, las secciones de preferencias...). ``ast`` junta las
+        cadenas partidas en varias líneas, que es justo lo que un ``grep`` no
+        sabe hacer y lo que hace inútil buscarlas a mano.
+        """
+        import ast
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[1] / "src"
+        en_el_codigo = set()
+        for path in sorted(root.rglob("*.py")):
+            if path.name == "i18n.py":
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    en_el_codigo.add(node.value)
+        huerfanas = [key for key in i18n._TRANSLATIONS["es"]
+                     if key not in en_el_codigo]
+        self.assertEqual(huerfanas, [], "claves sin usar en src/")
 
     def test_todas_las_cadenas_tienen_traduccion(self):
         import ast
