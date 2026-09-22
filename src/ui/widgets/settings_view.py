@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -308,6 +309,20 @@ class SettingsViewMixin:
             "Example: --background to start without the interface."))
         self.args_input.textChanged.connect(self._on_args_changed)
         lay.addWidget(self.args_input)
+
+        # Variables de entorno: una ``CLAVE=VALOR`` por línea. Es un campo
+        # aparte de los argumentos porque el apaño típico (desactivar el método
+        # de entrada en Linux) no es un argumento sino entorno.
+        lay.addWidget(QLabel(tr("Environment variables")))
+        self.env_input = QPlainTextEdit(self.launch_env)
+        self.env_input.setPlaceholderText("XMODIFIERS=@im=none")
+        self.env_input.setFixedHeight(64)
+        self.env_input.setToolTip(tr(
+            "Extra environment variables Blender receives when you launch it, "
+            "one KEY=VALUE per line.\n"
+            "Example: XMODIFIERS=@im=none to disable input methods on Linux."))
+        self.env_input.textChanged.connect(self._on_env_changed)
+        lay.addWidget(self.env_input)
         return card
 
     def _settings_updates_card(self) -> QFrame:
@@ -480,6 +495,13 @@ class SettingsViewMixin:
     def _on_args_changed(self, text: str) -> None:
         self.launch_args = text
         self.settings.launch_args = text
+        self.settings.save()
+
+    def _on_env_changed(self) -> None:
+        """Guarda las variables de entorno al editarlas (auto-guardado)."""
+        text = self.env_input.toPlainText()
+        self.launch_env = text
+        self.settings.launch_env = text
         self.settings.save()
 
     def _on_language_changed(self, label: str) -> None:

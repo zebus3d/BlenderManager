@@ -317,6 +317,12 @@ class Settings:
     language: str = "auto"
     delete_archive: bool = True
     launch_args: str = ""
+    # Variables de entorno extra para Blender, una ``CLAVE=VALOR`` por línea
+    # (Ajustes > Launch). Se aplican al proceso de Blender, no al gestor. Sirven
+    # para apaños del sistema como ``XMODIFIERS=@im=none``, que en Linux
+    # desactiva el método de entrada y arregla cosas que con el IME activo no
+    # funcionan. El parseo vive en ``services.launcher.parse_env``.
+    launch_env: str = ""
     # Lanzar Blender con su consola visible (salida de Python y errores de
     # scripts). ``launch_console`` es el valor por defecto (Ajustes > Launch) y
     # ``launch_console_overrides`` guarda la elección **por versión** que se
@@ -411,6 +417,7 @@ class Settings:
             language=str(data.get("language") or "auto"),
             delete_archive=bool(data.get("delete_archive", True)),
             launch_args=str(data.get("launch_args") or ""),
+            launch_env=str(data.get("launch_env") or ""),
             launch_console=bool(data.get("launch_console", False)),
             launch_console_overrides=_clean_bool_map(
                 data.get("launch_console_overrides")),

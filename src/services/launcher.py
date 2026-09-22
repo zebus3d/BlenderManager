@@ -9,6 +9,7 @@ Guardamos las referencias a los procesos lanzados solo para poder descartar
 los que ya han terminado y no acumularlas indefinidamente.
 """
 
+import re
 import shlex
 import shutil
 import subprocess
@@ -16,6 +17,33 @@ import sys
 from pathlib import Path
 
 from services.opener import clean_env
+
+# Nombre de variable de entorno válido: letras, dígitos y ``_``, sin empezar por
+# dígito. Se valida porque el texto viene de un campo de Ajustes (o de un
+# ``settings.json`` editado a mano) y no queremos colar un nombre imposible en
+# el proceso de Blender.
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def parse_env(text: str) -> dict:
+    """Convierte las líneas ``CLAVE=VALOR`` de Ajustes en un mapa de entorno.
+
+    Una variable por línea; las líneas en blanco y las que empiezan por ``#``
+    (comentarios) se ignoran, igual que las que no traen ``=`` o cuyo nombre no
+    es un identificador válido. El valor sí puede llevar espacios: es todo lo
+    que va tras el primer ``=`` (recortado de espacios en los extremos).
+    """
+    result = {}
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        name = name.strip()
+        if _ENV_NAME.match(name):
+            result[name] = value.strip()
+    return result
+
 
 # Emuladores de terminal que sabemos abrir en Linux, por orden de preferencia.
 # El segundo elemento es cómo se le pasa el comando: unos usan ``-e`` y otros
@@ -76,12 +104,17 @@ class Launcher:
     def __init__(self):
         self._processes = []
 
-    def launch(self, executable, args=None, cwd=None, console=False):
+    def launch(self, executable, args=None, cwd=None, console=False, env=None):
         """Ejecuta esa versión instalada y devuelve el proceso lanzado.
 
         ``console=True`` abre Blender con su consola visible (salida de Python y
         errores de scripts). Si no hay terminal disponible, lanza normal: es un
         extra, no algo que deba impedir abrir Blender.
+
+        ``env`` son variables de entorno extra para Blender (Ajustes > Launch,
+        p. ej. ``XMODIFIERS=@im=none``). Se aplican **encima** del entorno limpio
+        que devuelve ``clean_env``: así el apaño del usuario no reintroduce la
+        contaminación del binario empaquetado.
         """
         executable = Path(executable)
         command = [str(executable)]
@@ -90,7 +123,10 @@ class Launcher:
         # Entorno limpio: sin el LD_LIBRARY_PATH que PyInstaller mete para el
         # AppImage, o Blender cargaría las librerías del gestor en vez de las
         # suyas (mismo fallo que al abrir el navegador).
-        kwargs = {"cwd": str(cwd or executable.parent), "env": clean_env()}
+        launch_env = clean_env()
+        if env:
+            launch_env.update(env)
+        kwargs = {"cwd": str(cwd or executable.parent), "env": launch_env}
 
         if console and sys.platform.startswith("win"):
             # Consola nueva de Windows. NO se redirige la salida: si se manda a

@@ -434,6 +434,16 @@ def build_qss() -> str:
         selection-background-color: {t.ACCENT};
     }}
     QLineEdit::placeholder {{ color: {t.MUTED}; }}
+    /* Campo multilínea (variables de entorno): mismo aspecto que un QLineEdit,
+       pero con el texto alineado arriba. */
+    QPlainTextEdit {{
+        background-color: {t.FIELD};
+        border: none;
+        border-radius: 8px;
+        padding: 6px 12px;
+        color: {t.TEXT};
+        selection-background-color: {t.ACCENT};
+    }}
     /* Campo de renombrado en línea (doble clic en una instalada): compacto y
        con borde de acento, para que se note que se está editando. */
     QLineEdit#InlineEdit {{

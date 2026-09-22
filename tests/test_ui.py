@@ -4220,7 +4220,8 @@ class RecentViewTests(SettingsIsolated, unittest.TestCase):
                             return_value=True):
             self.assertTrue(window.launch_installed(entry, Path("/tmp/a.blend")))
         launch.assert_called_once_with(
-            entry.executable, args=["--debug", "/tmp/a.blend"], console=True)
+            entry.executable, args=["--debug", "/tmp/a.blend"], console=True,
+            env={})
 
     def test_los_ficheros_que_ya_no_estan_se_ven_apagados(self):
         from unittest import mock as _mock

@@ -166,6 +166,8 @@
   "Delete archive after extraction": "Borrar el archivo tras extraer",
   "Launch options": "Opciones de lanzamiento",
   "Launch arguments": "Argumentos de lanzamiento",
+  "Environment variables": "Variables de entorno",
+  "Extra environment variables Blender receives when you launch it, one KEY=VALUE per line.\nExample: XMODIFIERS=@im=none to disable input methods on Linux.": "Variables de entorno extra que recibe Blender al lanzarlo, una CLAVE=VALOR por línea.\nEjemplo: XMODIFIERS=@im=none para desactivar el método de entrada en Linux.",
   "Launch with console": "Lanzar con consola",
   "Launch with the console visible: Python output and script errors.": "Lanza con la consola visible: salida de Python y errores de scripts.",
   "No terminal found; launching without console.": "No se encontró terminal; se lanza sin consola.",

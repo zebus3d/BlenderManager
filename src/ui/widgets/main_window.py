@@ -109,6 +109,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self._move_dialog = None
         self._move_cancel = None
         self.launch_args = self.settings.launch_args
+        self.launch_env = self.settings.launch_env
         self.delete_archive = bool(self.settings.delete_archive)
         # Bandeja del sistema: dos decisiones independientes (cerrar y
         # minimizar). ``_tray`` se crea perezosamente (solo si hace falta).

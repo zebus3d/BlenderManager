@@ -353,7 +353,8 @@ class DownloadFlowMixin:
             if console and not launcher.terminal_available():
                 self._set_status(tr("No terminal found; launching without "
                                     "console."), 6)
-            self.launcher.launch(executable, args=args, console=console)
+            self.launcher.launch(executable, args=args, console=console,
+                                 env=launcher.parse_env(self.launch_env))
         except Exception as error:
             download_log(f"launch failed: {error}")
             self._set_status(tr("Could not launch Blender: {error}",
@@ -394,7 +395,8 @@ class DownloadFlowMixin:
             return
         try:
             args = shlex.split(self.launch_args or "")
-            self.launcher.launch(executable, args=args, console=True)
+            self.launcher.launch(executable, args=args, console=True,
+                                 env=launcher.parse_env(self.launch_env))
         except Exception as error:
             download_log(f"launch failed: {error}")
 

@@ -54,6 +54,39 @@ class LaunchTest(unittest.TestCase):
             launcher.Launcher().launch("/tmp/blender")
         self.assertEqual(popen.call_args[0][0], ["/tmp/blender"])
 
+    def test_las_variables_extra_se_aplican_al_entorno_del_hijo(self):
+        with mock.patch.object(launcher, "clean_env",
+                               return_value={"PATH": "/usr/bin"}), \
+                mock.patch.object(launcher.subprocess, "Popen") as popen:
+            launcher.Launcher().launch(
+                "/tmp/blender", env={"XMODIFIERS": "@im=none"})
+        env = popen.call_args[1]["env"]
+        self.assertEqual(env["XMODIFIERS"], "@im=none")
+        self.assertEqual(env["PATH"], "/usr/bin")
+
+
+class ParseEnvTest(unittest.TestCase):
+    def test_una_por_linea(self):
+        text = "XMODIFIERS=@im=none\nFOO=bar\n"
+        self.assertEqual(launcher.parse_env(text),
+                         {"XMODIFIERS": "@im=none", "FOO": "bar"})
+
+    def test_ignora_blancos_comentarios_y_lineas_sin_igual(self):
+        text = "\n# comentario\nNO_VALE\n  \nCLAVE=valor\n"
+        self.assertEqual(launcher.parse_env(text), {"CLAVE": "valor"})
+
+    def test_el_valor_puede_llevar_espacios(self):
+        self.assertEqual(launcher.parse_env("LANG=en_US.UTF-8\nMSG=hola mundo\n"),
+                         {"LANG": "en_US.UTF-8", "MSG": "hola mundo"})
+
+    def test_rechaza_nombres_que_no_son_identificadores(self):
+        text = "1MAL=x\nCON-GUION=x\nBIEN=1\n"
+        self.assertEqual(launcher.parse_env(text), {"BIEN": "1"})
+
+    def test_texto_vacio(self):
+        self.assertEqual(launcher.parse_env(""), {})
+        self.assertEqual(launcher.parse_env(None), {})
+
 
 if __name__ == "__main__":
     unittest.main()
