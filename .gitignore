@@ -10,10 +10,8 @@ build/
 # Recurso de versión generado por el CI a partir del tag.
 packaging/version_info.txt
 
-# Los binarios de dist/ no se versionan, pero sí su documentación.
-dist/*
-!dist/README.md
-!dist/.gitkeep
+# Salida de PyInstaller (la usa el CI como carpeta de trabajo; nunca se versiona).
+dist/
 
 # Datos locales (modo portable / caché / registros)
 cache/

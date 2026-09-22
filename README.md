@@ -408,7 +408,6 @@ doc/                 # architecture guide in Spanish (start at doc/README.md)
 tests/               # unit tests (unittest, UI with Qt's offscreen plugin)
 packaging/           # PyInstaller spec, AppImage script and .desktop
 run.sh               # development launcher (creates .venv if missing)
-dist/                # build output (binaries ignored by git)
 ```
 
 ## Credits
