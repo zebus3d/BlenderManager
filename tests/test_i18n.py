@@ -25,11 +25,11 @@ class I18nTests(unittest.TestCase):
     def test_broken_placeholder_does_not_raise(self):
         i18n.set_language("es")
         # Una traducción con una llave suelta no puede tumbar la interfaz.
-        i18n._TRANSLATIONS["es"]["__rota__"] = "Version {"
+        i18n._load("es")["__rota__"] = "Version {"
         try:
             self.assertEqual(i18n.tr("__rota__", version="1"), "Version {")
         finally:
-            del i18n._TRANSLATIONS["es"]["__rota__"]
+            del i18n._load("es")["__rota__"]
 
     def test_auto_falls_back(self):
         i18n.set_language("auto")
@@ -50,26 +50,29 @@ class CoberturaTests(unittest.TestCase):
     """
 
     def test_no_hay_claves_repetidas(self):
-        """Una clave repetida en el diccionario pisa a la anterior en silencio.
+        """Una clave repetida pisa a la anterior en silencio.
 
         Pasó con "Restore", que tenía dos traducciones ("Restaurar" y
-        "Recuperar") y ganaba la segunda; la primera era código muerto.
+        "Recuperar") y ganaba la segunda; la primera era código muerto. Al
+        cargar el JSON eso ya no se ve, así que se lee el fichero a mano.
         """
-        import ast
-        from pathlib import Path
+        import json
 
-        source = Path(i18n.__file__).read_text(encoding="utf-8")
-        repetidas = []
-        for node in ast.walk(ast.parse(source)):
-            if not isinstance(node, ast.Dict):
+        for language in i18n.SUPPORTED:
+            path = i18n.LOCALE_DIR / f"{language}.json"
+            if not path.exists():
                 continue
-            vistas = set()
-            for key in node.keys:
-                if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                    if key.value in vistas:
-                        repetidas.append((key.value, key.lineno))
-                    vistas.add(key.value)
-        self.assertEqual(repetidas, [])
+            vistas, repetidas = set(), []
+
+            def anota(pares):
+                for key, value in pares:
+                    if key in vistas:
+                        repetidas.append(key)
+                    vistas.add(key)
+                return dict(pares)
+
+            json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=anota)
+            self.assertEqual(repetidas, [], language)
 
     def test_no_quedan_claves_sin_usar(self):
         """Una clave que ya no usa nadie es texto que alguien traducirá en balde.
@@ -92,7 +95,7 @@ class CoberturaTests(unittest.TestCase):
             for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
                 if isinstance(node, ast.Constant) and isinstance(node.value, str):
                     en_el_codigo.add(node.value)
-        huerfanas = [key for key in i18n._TRANSLATIONS["es"]
+        huerfanas = [key for key in i18n._load("es")
                      if key not in en_el_codigo]
         self.assertEqual(huerfanas, [], "claves sin usar en src/")
 
@@ -100,7 +103,7 @@ class CoberturaTests(unittest.TestCase):
         import ast
         from pathlib import Path
 
-        spanish = i18n._TRANSLATIONS["es"]
+        spanish = i18n._load("es")
         missing = []
         root = Path(__file__).resolve().parents[1] / "src"
         for path in sorted(root.rglob("*.py")):

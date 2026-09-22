@@ -46,6 +46,9 @@ block_cipher = None
 
 datas = [
     (str(SRC / "assets"), "assets"),
+    # Las traducciones son ficheros, no código: sin esto el binario
+    # saldría siempre en inglés (``i18n`` las busca en RESOURCE_DIR).
+    (str(SRC / "locale"), "locale"),
 ]
 
 # Módulos de Qt que NO usamos. PySide6-Essentials trae muchos; excluirlos evita
