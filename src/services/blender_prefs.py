@@ -101,7 +101,26 @@ import json
 OUT = {}
 
 
-def walk(obj, prefix, depth=0):
+def is_default(prop, value):
+    """True si el valor es el de fabrica de esa propiedad RNA.
+
+    Se usa para las preferencias de addons: como un addon que solo esta
+    activado en la config del usuario no sale en el volcado de fabrica, se
+    compara contra el valor por defecto que declara el propio RNA.
+    """
+    try:
+        default = prop.default
+    except Exception:
+        return False
+    if prop.type == "ENUM":
+        try:
+            return value == prop.enum_items[default].identifier
+        except Exception:
+            return False
+    return value == default
+
+
+def walk(obj, prefix, depth=0, only_changed=False):
     if depth > 5:
         return
     for prop in obj.bl_rna.properties:
@@ -113,7 +132,7 @@ def walk(obj, prefix, depth=0):
             continue
         path = prefix + prop.identifier
         if prop.type == "POINTER":
-            walk(value, path + ".", depth + 1)
+            walk(value, path + ".", depth + 1, only_changed)
             continue
         if prop.is_readonly:
             continue
@@ -124,8 +143,12 @@ def walk(obj, prefix, depth=0):
             # tocar sale distinta en dos lecturas y el diff la da por cambiada.
             # Hoy la única así (``edit.key_insert_channels``) no es escribible y
             # el filtro la descarta, pero eso es suerte, no diseño.
+            if only_changed and is_default(prop, value):
+                continue
             OUT[path] = str(sorted(value)) if isinstance(value, set) else str(value)
         elif isinstance(value, (bool, int, float, str)):
+            if only_changed and is_default(prop, value):
+                continue
             OUT[path] = value
 
 
@@ -144,7 +167,9 @@ for addon in bpy.context.preferences.addons:
         continue
     if addon_prefs is None:
         continue
-    walk(addon_prefs, "addons." + addon.module + ".", 0)
+    # ``only_changed``: sin el volcado de fabrica con el que comparar, se
+    # descartan las claves que ya valen lo que su propio RNA dice por defecto.
+    walk(addon_prefs, "addons." + addon.module + ".", 0, True)
 
 print("BLENDERMANAGER_DUMP=" + json.dumps(OUT))
 '''
@@ -277,16 +302,24 @@ def changed(user: dict, factory: dict) -> list:
 def _changed(user: dict, factory: dict) -> list:
     """Todas las claves que el usuario cambió respecto a fábrica.
 
-    Solo se miran las que están en las dos: una que falte en fábrica no es un
-    "cambio del usuario", es una propiedad distinta (o una versión que no la
-    tiene). Se descartan los valores no escalares y los que no se pueden volver
-    a escribir por ruta RNA (ver ``is_settable``).
+    Se descartan los valores no escalares y los que no se pueden volver a
+    escribir por ruta RNA (ver ``is_settable``).
+
+    Una clave que falte en fábrica **normalmente** no es un cambio del usuario,
+    es una propiedad que esa versión no tiene, y se descarta. La excepción son
+    las de addons: el volcado de fábrica no trae las preferencias de un addon
+    que solo está activado en la config del usuario (p. ej. una extensión
+    instalada a mano), así que sus claves faltarían siempre. Ahí el addon
+    activado es justamente lo que las hace suyas, y se ofrecen.
     """
     changed = []
     for path, value in user.items():
         if not is_scalar(value) or not is_settable(path):
             continue
-        if path not in factory or factory[path] == value:
+        if path in factory:
+            if factory[path] == value:
+                continue
+        elif not path.startswith("addons."):
             continue
         changed.append(Preference(path=path, value=value))
     changed.sort(key=lambda item: item.path)

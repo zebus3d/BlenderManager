@@ -80,7 +80,6 @@ def build_qss() -> str:
     QTabBar#ChannelTabs,
     QTabWidget#MigrateTabs QTabBar,
     QTabWidget#SettingsTabs QTabBar {{ background: transparent; }}
-    QTabBar#ChannelTabs::tab,
     QTabWidget#MigrateTabs QTabBar::tab,
     QTabWidget#SettingsTabs QTabBar::tab {{
         background-color: {t.FILTER};
@@ -92,6 +91,22 @@ def build_qss() -> str:
         border-top-right-radius: 6px;
         padding: 4px 12px;
         margin-right: 4px;
+        color: {t.TEXT};
+        font-weight: bold;
+    }}
+    /* Los canales van como **pastillas**, no como pestañas pegadas al lienzo:
+       son excluyentes (filtran la lista de debajo) y así no parecen parte del
+       contenido. */
+    QTabBar#ChannelTabs::tab {{
+        background-color: {t.FILTER};
+        border: 1px solid rgba(0,0,0,0.35);
+        /* Un poco cuadradas (no píldoras perfectas) y algo más arriba, para
+           que no queden a ras del contenido de debajo. */
+        border-radius: 6px;
+        padding: 4px 14px;
+        /* Pegados arriba (a la altura del botón de Local) y con aire debajo,
+           para no quedar a ras del contenido. */
+        margin: 8px 6px 16px 0;
         color: {t.TEXT};
         font-weight: bold;
     }}
@@ -392,6 +407,11 @@ def build_qss() -> str:
         color: {t.TEXT};
         min-height: 24px;
     }}
+    /* Los combos de la fila de filtros van a la altura de los tags de canal. */
+    QComboBox#FilterCombo {{
+        padding: 3px 8px;
+        min-height: 20px;
+    }}
     QComboBox:hover {{ background-color: {t.ACCENT_DARK}; }}
     QComboBox::drop-down {{ border: none; width: 18px; }}
     QComboBox QAbstractItemView {{
@@ -451,6 +471,13 @@ def build_qss() -> str:
     QLabel#Danger {{ color: {t.DANGER_EDGE}; font-weight: bold; }}
     QLabel#Title {{ font-size: 16px; font-weight: bold; }}
     QLabel#HeaderTitle {{ font-size: 19px; font-weight: bold; }}
+    /* La sección actual: un poco más pequeña que la marca, en negrita y azul
+       claro (``INFO_TEXT``, 5,4:1 sobre el gris de la cabecera). */
+    QLabel#HeaderSection {{
+        font-size: 17px;
+        font-weight: bold;
+        color: {t.INFO_TEXT};
+    }}
     QLabel#FieldLabel {{ color: {t.MUTED}; font-size: 12px; }}
 
     /* --- Separadores (filas de ajustes) --- */

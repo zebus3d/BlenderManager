@@ -28,11 +28,10 @@ class _Carpeta:
         return self.writable and build_type in self.types
 
 
-def _build(version="5.2.1", branch="v52", risk="stable", experimental=False,
-           patch=""):
+def _build(version="5.2.1", branch="v52", risk="stable", experimental=False):
     return Build(version=version, branch=branch, risk=risk, platform="linux",
                  arch="x86_64", url="", filename="x.tar.xz",
-                 experimental=experimental, patch=patch)
+                 experimental=experimental)
 
 
 class TipoDeCompilacionTest(unittest.TestCase):
@@ -57,12 +56,6 @@ class TipoDeCompilacionTest(unittest.TestCase):
                        experimental=True)
         self.assertEqual(ch.type_of_build(build), ch.TYPE_EXPERIMENTAL)
 
-    def test_una_de_pull_request_es_patch(self):
-        """Aunque su versión sea la de una LTS: manda de dónde viene."""
-        build = _build("5.2.0", "main-PR161547", risk="stable",
-                       patch="PR161547")
-        self.assertEqual(ch.type_of_build(build), ch.TYPE_PATCH)
-
 
 class TipoDeInstalacionTest(unittest.TestCase):
     def test_el_marcador_manda(self):
@@ -74,11 +67,6 @@ class TipoDeInstalacionTest(unittest.TestCase):
     def test_rama_de_funciones_es_experimental(self):
         self.assertEqual(ch.type_from_marker("geometry-nodes", "5.2.0", "x"),
                          ch.TYPE_EXPERIMENTAL)
-
-    def test_una_instalacion_de_pr_es_patch(self):
-        self.assertEqual(
-            ch.type_from_marker("main-PR161547", "5.2.0", "blender-5.2.0"),
-            ch.TYPE_PATCH)
 
     def test_rama_main_es_diaria(self):
         self.assertEqual(ch.type_from_marker("main", "5.3.0", "blender-5.3.0"),
@@ -135,8 +123,7 @@ class DestinoTest(unittest.TestCase):
     def test_tipos_huerfanos_en_orden(self):
         carpetas = [_Carpeta("/ssd", [ch.TYPE_STABLE])]
         self.assertEqual(ch.orphan_types(carpetas),
-                         [ch.TYPE_LTS, ch.TYPE_DAILY, ch.TYPE_PATCH,
-                          ch.TYPE_EXPERIMENTAL])
+                         [ch.TYPE_LTS, ch.TYPE_DAILY, ch.TYPE_EXPERIMENTAL])
 
     def test_sin_huerfanos_cuando_una_carpeta_lo_coge_todo(self):
         """Es lo que hereda la carpeta de siempre al actualizar la app."""

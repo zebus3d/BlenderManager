@@ -73,6 +73,17 @@ class DiffTest(unittest.TestCase):
         user["view.nueva_de_esta_version"] = 3
         self.assertEqual(bp.diff(user, self.factory), [])
 
+    def test_incluye_prefs_de_addons_que_no_estan_en_fabrica(self):
+        """Un addon activado solo en la config del usuario no sale en fábrica.
+
+        Sus preferencias faltan del volcado de fábrica (el addon no está
+        activado allí) y antes se descartaban; ahora se ofrecen.
+        """
+        user = dict(self.factory)
+        user["addons.hurricane.cache_format"] = "USD"
+        self.assertIn("addons.hurricane.cache_format",
+                      [pref.path for pref in bp.diff(user, self.factory)])
+
     def test_environment_preferences_va_aparte_y_sin_marcar(self):
         user = dict(self.factory)
         user["system.gpu_backend"] = "VULKAN"

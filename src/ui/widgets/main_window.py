@@ -104,6 +104,9 @@ MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
 # tema porque Ajustes y Migración lo usan para dejar sus pestañas a la misma
 # altura que las de canal.
 FILTERS_HEIGHT = t.FILTERS_HEIGHT
+# Alto de los controles de la fila de filtros (pastillas de vista y combos):
+# el mismo que los tags de canal, para que la fila quede a ras.
+FILTER_CONTROL_HEIGHT = 28
 # Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
 ZOOM_STEP = 0.1
 
@@ -129,10 +132,20 @@ CHANNELS = (
     ("lts", "LTS"),
     ("stable", "Stable"),
     ("daily", "Daily"),
-    ("patch", "Patches"),
     ("experimental", "Experimental"),
     ("favorites", "Favorites"),
 )
+
+# Título que se enseña en la cabecera según la vista. La cabecera lleva arriba
+# "Blender Manager" y debajo esto, para saber en qué sección se está.
+SECTION_TITLES = {
+    "installed": "Local",
+    "store": "Cloud",
+    "recent": "Recent files",
+    "addons": "Add-ons",
+    "migrate": "Migration",
+    "settings": "Settings",
+}
 
 CHANNEL_TOOLTIPS = {
     "all": "Show every build: stable, LTS, daily and alpha.",
@@ -142,8 +155,6 @@ CHANNEL_TOOLTIPS = {
               "releases, supported until the next one.",
     "daily": "Daily and alpha builds with the newest changes.\nThey can fail: "
              "for testing, not for work.",
-    "patch": "Builds of open pull requests: an unreleased fix or feature to "
-             "test.\nThey are not official versions; the list changes often.",
     "experimental": "Branches with new features still in development.\nThey are "
                     "not ready for production and the list is usually empty.",
     "favorites": "Only the builds you marked with the star.",
@@ -271,7 +282,7 @@ class MainWindow(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"{tr('Blender Downloads Manager')} {updater.app_version()}")
+        self.setWindowTitle(f"{tr('Blender Manager')} {updater.app_version()}")
         self.setMinimumSize(880, 540)
 
         self.settings = settings_service.Settings.load()
@@ -482,10 +493,25 @@ class MainWindow(QWidget):
         if not pix.isNull():
             logo.setPixmap(pix.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         logo_shadow(logo, 52)
-        self.title_label = QLabel(tr("Blender Downloads Manager"))
-        self.title_label.setObjectName("HeaderTitle")
+        logo.setToolTip(tr("Blender Manager"))
         lay.addWidget(logo)
-        lay.addWidget(self.title_label)
+
+        # Dos líneas: la marca (grande) y la sección actual (un poco más
+        # pequeña), para saber siempre dónde estás. La barra de título de la
+        # ventana sigue llevando la marca + versión.
+        titles = QVBoxLayout()
+        titles.setSpacing(2)
+        self.app_label = QLabel(tr("Blender Manager"))
+        self.app_label.setObjectName("HeaderTitle")
+        # La misma sombra suave que el logo (y las tarjetas): despega el texto
+        # del gris de la cabecera.
+        logo_shadow(self.app_label, 19)
+        titles.addWidget(self.app_label)
+        self.section_label = QLabel("")
+        self.section_label.setObjectName("HeaderSection")
+        logo_shadow(self.section_label, 17)
+        titles.addWidget(self.section_label)
+        lay.addLayout(titles)
         lay.addStretch()
 
         self.header_tools = QWidget()
@@ -559,13 +585,17 @@ class MainWindow(QWidget):
         self.list_btn.setFont(icon_font(14))
         for btn, mode in ((self.grid_btn, "grid"), (self.list_btn, "list")):
             self.layout_group.addButton(btn)
+            # Misma altura que los tags de canal: la fila queda a ras.
+            btn.setFixedHeight(FILTER_CONTROL_HEIGHT)
             btn.clicked.connect(lambda _=False, m=mode: self.set_layout_mode(m))
             lay.addWidget(btn)
         (self.grid_btn if self.layout_mode == "grid" else self.list_btn).setChecked(True)
 
         self.platform_combo = QComboBox()
+        self.platform_combo.setObjectName("FilterCombo")
         self.platform_combo.addItems(list(PLATFORMS.keys()))
         self.platform_combo.setCurrentText(self.platform_label)
+        self.platform_combo.setFixedHeight(FILTER_CONTROL_HEIGHT)
         self.platform_combo.setFixedWidth(104)
         self.platform_combo.setToolTip(tr(
             "System the build is for.\n"
@@ -575,8 +605,10 @@ class MainWindow(QWidget):
         lay.addWidget(self.platform_combo)
 
         self.arch_combo = QComboBox()
+        self.arch_combo.setObjectName("FilterCombo")
         self.arch_combo.addItems(ARCH_LABELS)
         self.arch_combo.setCurrentText(self.arch_label)
+        self.arch_combo.setFixedHeight(FILTER_CONTROL_HEIGHT)
         self.arch_combo.setFixedWidth(82)
         self.arch_combo.setToolTip(tr(
             "Processor type the build is for.\n"
@@ -707,7 +739,7 @@ class MainWindow(QWidget):
         tabs.addTab(self._settings_tab(self._settings_interface_card()),
                     tr("Interface"))
         tabs.addTab(self._settings_tab(self._settings_launch_card()),
-                    tr("Launch"))
+                    tr("Launch options"))
         tabs.addTab(self._settings_tab(self._settings_system_card()),
                     tr("System"))
         tabs.addTab(self._settings_tab(self._settings_updates_card()),
@@ -715,11 +747,9 @@ class MainWindow(QWidget):
         # Avanzado va al final: son opciones que la mayoría no toca.
         tabs.addTab(self._settings_tab(self._settings_advanced_card()),
                     tr("Advanced"))
-        # ``ensurePolished`` hace que el alto salga con el QSS ya aplicado; sin
-        # él la medida es de antes de vestir y la fila queda 2 px alta.
-        tabs.tabBar().ensurePolished()
-        bar_height = tabs.tabBar().sizeHint().height()
-        outer.setContentsMargins(0, max(0, FILTERS_HEIGHT - bar_height), 0, 0)
+        # Las pestañas se alinean por **arriba** con la barra lateral y con los
+        # tags de canal (``TABS_TOP``).
+        outer.setContentsMargins(0, t.TABS_TOP, 0, 0)
         outer.addWidget(tabs, 1)
         return page
 
@@ -1232,7 +1262,7 @@ class MainWindow(QWidget):
             self.settings.launch_console,
             tooltip=tr("Launch with the console visible: Python output and "
                        "script errors."))
-        self.console_switch.toggled.connect(self.set_launch_console)
+        self.console_switch.toggled.connect(self._on_console_default_toggled)
         console_lay.addWidget(self.console_switch)
         self.console_row.setVisible(self.settings.experimental_features)
         lay.addWidget(self.console_row)
@@ -1563,6 +1593,8 @@ class MainWindow(QWidget):
             show_tools = False
         for key, btn in self.side_buttons.items():
             btn.setChecked(key == view)
+        if hasattr(self, "section_label"):
+            self.section_label.setText(tr(SECTION_TITLES.get(view, "")))
         # El buscador y el zoom del pie solo aplican a las listas; en Migración,
         # Recientes y Ajustes se ocultan (no arrastran salto: van en la cabecera
         # y el pie).
@@ -1957,8 +1989,6 @@ class MainWindow(QWidget):
             # Cada canal vacío tiene su explicación, en vez del genérico.
             if self.channel == "experimental":
                 text, hint = tr("No experimental builds right now"), ""
-            elif self.channel == "patch":
-                text, hint = tr("No patch builds right now"), ""
             elif self.channel == "favorites":
                 text = tr("No favorites yet")
                 hint = tr("Tap the star on a card to keep it here.")
@@ -2101,7 +2131,7 @@ class MainWindow(QWidget):
             marked = entry.favorite_key in self.settings.favorites
             update = self.updates_by_path.get(str(entry.path))
             # El botón de consola solo se enseña con las opciones experimentales.
-            console = (self.settings.launch_console
+            console = (self._console_state(entry)
                        if self.settings.experimental_features else None)
             if grid:
                 card = GridInstalledCard(entry, zebra, self.zoom, marked,
@@ -2116,7 +2146,7 @@ class MainWindow(QWidget):
             card.favorite_toggled.connect(self.set_favorite)
             card.update_clicked.connect(self.offer_blender_update)
             card.rename_requested.connect(self.rename_installed)
-            card.console_toggled.connect(self.set_launch_console)
+            card.console_toggled.connect(self.set_console_for)
             card.setContextMenuPolicy(Qt.CustomContextMenu)
             card.customContextMenuRequested.connect(
                 lambda pos, e=entry, c=card: self._show_installed_menu(e, c, pos))
@@ -2908,7 +2938,7 @@ class MainWindow(QWidget):
             executable = getattr(entry, "executable", None)
             if executable is None:
                 return
-            console = self.settings.launch_console
+            console = self._console_state(entry)
             if console and not launcher.terminal_available():
                 self._set_status(tr("No terminal found; launching without "
                                     "console."), 6)
@@ -2921,16 +2951,35 @@ class MainWindow(QWidget):
         self.settings.snapshot_keep = int(value)
         self.settings.save()
 
-    def set_launch_console(self, value: bool) -> None:
-        """Recuerda si se lanza con consola y repinta las tarjetas.
+    def _console_state(self, entry) -> bool:
+        """Si esa versión concreta se lanza con consola.
 
-        Es un ajuste global (el botón de una tarjeta vale para todas), así que
-        hay que reconstruir las instaladas para que todas lo reflejen.
+        El botón de cada tarjeta manda sobre esa versión; el ajuste de
+        Ajustes > Launch es el valor por defecto de las que no tienen elección.
         """
+        key = getattr(entry, "favorite_key", "") or str(
+            getattr(entry, "path", ""))
+        overrides = self.settings.launch_console_overrides
+        return bool(overrides.get(key, self.settings.launch_console))
+
+    def set_console_for(self, entry, value: bool) -> None:
+        """Recuerda la consola de **esa** versión y repinta las tarjetas.
+
+        No es un ajuste global: encenderlo en una tarjeta no toca las demás.
+        """
+        key = getattr(entry, "favorite_key", "") or str(
+            getattr(entry, "path", ""))
+        if not key:
+            return
+        self.settings.launch_console_overrides[key] = bool(value)
+        self.settings.save()
+        self._rebuild_installed()
+
+    def _on_console_default_toggled(self, value: bool) -> None:
+        """Cambió el valor por defecto (Ajustes > Launch)."""
         self.settings.launch_console = value
         self.settings.save()
-        if hasattr(self, "console_switch"):
-            self.console_switch.setChecked(value)
+        self._rebuild_installed()
         self._rebuild_installed()
 
     def _is_read_only(self, entry) -> bool:

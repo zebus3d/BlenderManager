@@ -41,10 +41,11 @@ from PySide6.QtWidgets import (
 from pathlib import Path
 
 from i18n import tr
-from model.build import version_tuple
+from model.build import minor_of, version_tuple
 from services import blender_config as bc
 from services import blender_prefs as bprefs
 from services import blender_runner
+from services import blender_style as bstyle
 from ui import icons
 from ui import theme as t
 from ui.fonts import glyph_icon, icon_font
@@ -67,10 +68,8 @@ DETAIL_SCROLL_HEIGHT = 260
 # partir de ahí se baja con la barra).
 SNAPSHOT_SCROLL_HEIGHT = 280
 
-# Estos paneles se estiran desde su esquina inferior derecha
-# (``_ResizableScroll``): el alto inicial es el de su contenido, y el usuario lo
-# sube si quiere ver más filas sin tocar la ventana. Por debajo de estos mínimos
-# no se puede encoger.
+# Alto de los paneles con lista: el del contenido, con estos topes. El usuario
+# los estira desde la esquinita de la tarjeta (``_CornerGrip``).
 DETAIL_MIN_HEIGHT = 60
 SNAPSHOT_MIN_HEIGHT = 60
 
@@ -513,25 +512,23 @@ class _CornerGrip(QWidget):
         self._last = None
 
 
-class _ResizableScroll(QScrollArea):
-    """``QScrollArea`` con una esquinita para estirarlo desde abajo a la derecha.
+def _make_scroll(object_name: str, cap: int, minimum: int) -> QScrollArea:
+    """``QScrollArea`` que se ajusta a su contenido, con tope y mínimo.
 
-    Qt no deja redimensionar un scroll arrastrando su borde y con el alto fijo
-    el usuario se queda con las filas que quepan. La esquinita va **dentro** del
-    scroll, pegada a su esquina inferior derecha, y avisa del desplazamiento;
-    quien la usa decide el alto (``setFixedHeight``).
+    ``setSizeAdjustPolicy(AdjustToContents)`` hace que el scroll pida el alto
+    de su contenido (hasta ``cap``); así no hay que medir filas a mano (que se
+    quedaba corto y las últimas se metían debajo de los botones). Si la ventana
+    es baja, el layout lo encoge hasta ``minimum`` y aparece la barra.
     """
-
-    def __init__(self, on_resize, tooltip: str = "", parent=None):
-        super().__init__(parent)
-        self._grip = _CornerGrip(on_resize, tooltip, self)
-        self._grip.raise_()
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._grip.move(self.width() - self._grip.width(),
-                        self.height() - self._grip.height())
-        self._grip.raise_()
+    scroll = QScrollArea()
+    scroll.setObjectName(object_name)
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.NoFrame)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll.setSizeAdjustPolicy(QScrollArea.AdjustToContents)
+    scroll.setMinimumHeight(minimum)
+    scroll.setMaximumHeight(cap)
+    return scroll
 
 
 class _BoardRow(QFrame):
@@ -631,6 +628,7 @@ class MigrateView(QWidget):
     source_read = Signal(object)       # {"version", "enabled", "error"}
     snapshots_analyzed = Signal(object)  # {"version", "results", "live"}
     snapshot_keep_changed = Signal(int)  # cuántas copias guardadas conservar
+    style_done = Signal(object)          # {"result", "version"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -680,6 +678,7 @@ class MigrateView(QWidget):
         self._analysis = {}
         self._analyzed_for = ""
         self._snapshots_waiting = False
+        self._style_waiting = False
         self._factory_live_count = None
         # Cuántas copias guardadas se conservan (lo fija MainWindow desde los
         # ajustes; aquí se usa al crear o restaurar una).
@@ -690,6 +689,7 @@ class MigrateView(QWidget):
         self.prefs_applied.connect(self._on_prefs_applied)
         self.source_read.connect(self._on_source_read)
         self.snapshots_analyzed.connect(self._on_snapshots_analyzed)
+        self.style_done.connect(self._on_style_done)
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -725,17 +725,13 @@ class MigrateView(QWidget):
         self.tabs = QTabWidget()
         self.tabs.setObjectName("MigrateTabs")
         self.tabs.addTab(self._build_addons_tab(), tr("Add-ons"))
-        self.tabs.addTab(self._build_preferences_tab(), tr("User prefs"))
-        self.factory_page = self._build_factory_tab()
+        self.tabs.addTab(self._build_preferences_page(), tr("User prefs"))
+        self.factory_page = self._build_factory_page()
         self.tabs.addTab(self.factory_page, tr("Factory settings"))
-        # Misma alineación que Ajustes: el QTabWidget dibuja su barra arriba del
-        # todo, así que la vista baja lo que la fila mida de menos que la de
-        # filtros y las dos terminan a la misma altura al cambiar de pantalla.
-        # ``ensurePolished`` mide con el QSS ya aplicado (sin él la fila sale
-        # un par de píxeles más alta).
-        self.tabs.tabBar().ensurePolished()
-        bar_height = self.tabs.tabBar().sizeHint().height()
-        root.setContentsMargins(0, max(0, t.FILTERS_HEIGHT - bar_height), 0, 0)
+        # Las pestañas se alinean por **arriba** con la barra lateral y con los
+        # tags de canal (``TABS_TOP``): las tres filas no miden lo mismo, así
+        # que alinear por abajo las dejaba a distinta altura.
+        root.setContentsMargins(0, t.TABS_TOP, 0, 0)
         root.addWidget(self.tabs, 1)
 
         self.tabs.currentChanged.connect(self._show_header)
@@ -999,20 +995,128 @@ class MigrateView(QWidget):
         lay.addStretch()
         return page
 
-    def _build_preferences_tab(self) -> QWidget:
-        """Pestaña de preferencias: primero el detalle fino, luego los ficheros.
+    def _build_preferences_page(self) -> QWidget:
+        """Pestaña de preferencias: detalle fino, tema/keymap y ficheros.
 
         El detalle va arriba porque es lo recomendado (ajustes sueltos, sin
         pisar todo); el fichero completo es el atajo que reemplaza el
-        ``userpref.blend`` entero, y por eso queda debajo.
+        ``userpref.blend`` entero, y por eso queda abajo del todo. El tema y el
+        keymap van en medio: son colecciones que el detalle no puede tocar y no
+        obligan a pisar todo como el fichero entero.
         """
         page, lay = self._new_page()
         lay.addWidget(self._build_detail_prefs())
-        lay.addWidget(self._build_preferences())
+        # Tema/keymap y fichero completo van **en dos columnas**: son tarjetas
+        # cortas y en vertical, con la lista de ajustes, no cabían sin comerse
+        # el alto de la ventana.
+        side = QHBoxLayout()
+        side.setSpacing(16)
+        side.addWidget(self._build_style(), 1)
+        side.addWidget(self._build_preferences_file(), 1)
+        lay.addLayout(side)
         lay.addStretch()
         return page
 
-    def _build_factory_tab(self) -> QWidget:
+    def _build_style(self) -> QFrame:
+        """Tarjeta para llevar el tema y el mapa de teclas como presets.
+
+        No copia el ``userpref`` entero: deja en el destino un preset con
+        nombre (``BlenderManager <serie>``) que el usuario puede volver a
+        elegir, sin perder lo que tuviera.
+        """
+        card, lay = _settings_card("Theme and keymap")
+        hint = QLabel(tr(
+            "Copy your theme and key map as named presets, without replacing "
+            "the whole preferences file. They arrive as \"BlenderManager\" and "
+            "you can pick them again in Blender's preferences."))
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
+
+        self.style_checks = {}
+        rows = QVBoxLayout()
+        rows.setSpacing(4)
+        for key, label, tip in (
+            ("theme", "Theme",
+             "The colours and sizes of the interface."),
+            ("keymap", "Key map", "Your keyboard shortcuts."),
+        ):
+            check = CheckPill(tr(label))
+            check.setChecked(True)
+            check.setToolTip(tr(tip))
+            rows.addWidget(check)
+            self.style_checks[key] = check
+        lay.addLayout(rows)
+
+        self.style_status = QLabel("")
+        self.style_status.setWordWrap(True)
+        lay.addWidget(self.style_status)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        self.style_btn = _accent_button(
+            tr("Apply theme and key map"),
+            tr("Export them from the source version and install them in the "
+               "destination as named presets."),
+            self.apply_style)
+        row.addWidget(self.style_btn)
+        lay.addLayout(row)
+        return card
+
+    def apply_style(self) -> None:
+        """Exporta tema/keymap del origen y los instala en el destino."""
+        source_exe, _ = _entry_info(self.source_entry)
+        target_exe, target_version = _entry_info(self.target_entry)
+        if (not source_exe or not Path(source_exe).is_file()
+                or not target_exe or not Path(target_exe).is_file()):
+            self.style_status.setText(
+                tr("Both versions need an executable to do this."))
+            return
+        theme = self.style_checks["theme"].isChecked()
+        keymap = self.style_checks["keymap"].isChecked()
+        if not theme and not keymap:
+            self.status_message.emit(tr("Nothing selected"))
+            return
+        if self._blocked_by_running():
+            return
+        _, source_version = _entry_info(self.source_entry)
+        name = f"{bstyle.STYLE_PREFIX} {minor_of(source_version)}"
+        self.style_status.setText(tr("Applying theme and key map..."))
+        self._style_waiting = True
+
+        def worker():
+            result = bstyle.copy_style(source_exe, target_exe, name,
+                                       theme=theme, keymap=keymap)
+            self.style_done.emit({"result": result, "version": target_version})
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_style_done(self, payload) -> None:
+        if not self._style_waiting:
+            return
+        self._style_waiting = False
+        result = payload.get("result") or {}
+        applied = result.get("applied") or []
+        errors = result.get("errors") or []
+        names = {"theme": tr("theme"), "keymap": tr("key map")}
+        if applied and not errors:
+            done = ", ".join(names.get(item, item) for item in applied)
+            self.style_status.setText(
+                tr("Applied {items}.", items=done))
+            self.status_message.emit(tr("Theme and key map applied."))
+            return
+        lines = []
+        if applied:
+            lines.append(tr("Applied {items}.",
+                            items=", ".join(names.get(i, i) for i in applied)))
+        if errors:
+            lines.append(tr("These parts could not be applied:"))
+            lines.extend(f"· {error}" for error in errors[:8])
+        if not lines:
+            lines.append(tr("Nothing was applied."))
+        self.style_status.setText("\n".join(lines))
+        self.status_message.emit(tr("Theme and key map could not be applied."))
+
+    def _build_factory_page(self) -> QWidget:
         """Pestaña de valores de fábrica: reset, recuperar y borrar.
 
         Va en su propia pestaña porque es una operación distinta (no migra
@@ -1020,7 +1124,7 @@ class MigrateView(QWidget):
         migración de ajustes. El reset es reversible desde aquí mismo.
         """
         page, lay = self._new_page()
-        lay.addWidget(self._build_factory())
+        lay.addWidget(self._build_factory_card())
         lay.addStretch()
         return page
 
@@ -1030,7 +1134,7 @@ class MigrateView(QWidget):
         combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         combo.setMinimumWidth(150)
         combo.setToolTip(tooltip)
-        combo.currentIndexChanged.connect(lambda _: self._reload())
+        combo.currentIndexChanged.connect(lambda _: self._reload_versions())
         return combo
 
     def _board_column(self, title: str, combo: QComboBox | None,
@@ -1080,7 +1184,7 @@ class MigrateView(QWidget):
         column.addStretch()
         return column
 
-    def _build_preferences(self) -> QFrame:
+    def _build_preferences_file(self) -> QFrame:
         """Tarjeta para migrar las preferencias (ficheros de ``config``).
 
         Va aparte del tablero porque es otra cosa: aquí no hay addons ni
@@ -1146,15 +1250,8 @@ class MigrateView(QWidget):
         # ``DETAIL_SCROLL_HEIGHT``). Los botones quedan **fuera**, como en la
         # biblioteca de carpetas: así no hay que bajar hasta el final de una
         # lista larguísima para pulsarlos.
-        self.detail_scroll = _ResizableScroll(
-            self._resize_detail,
-            tooltip=tr("Drag the bottom-right corner to make the settings list "
-                       "taller or shorter."))
-        self.detail_scroll.setObjectName("DetailPrefs")
-        self.detail_scroll.setWidgetResizable(True)
-        self.detail_scroll.setFrameShape(QFrame.NoFrame)
-        self.detail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.detail_scroll.setMaximumHeight(DETAIL_SCROLL_HEIGHT)
+        self.detail_scroll = _make_scroll("DetailPrefs", DETAIL_SCROLL_HEIGHT,
+                                          DETAIL_MIN_HEIGHT)
         # El scroll y su contenido transparentes: el fondo lo pone la tarjeta,
         # y un QScrollArea pinta el suyo por defecto (se vería un rectángulo).
         body = QWidget()
@@ -1190,6 +1287,12 @@ class MigrateView(QWidget):
             tr("Write the selected settings in the destination version."),
             self.apply_detail_prefs)
         row.addWidget(self.detail_apply_btn)
+        # Asa de la tarjeta: en su esquina inferior derecha, estira la lista.
+        self.detail_grip = _CornerGrip(
+            self._resize_detail,
+            tooltip=tr("Drag the corner to make the settings list taller or "
+                       "shorter."))
+        row.addWidget(self.detail_grip)
         lay.addLayout(row)
         self._show_detail_buttons(False)
         return card
@@ -1212,6 +1315,13 @@ class MigrateView(QWidget):
         """Alto de un panel: ni por debajo del mínimo ni más alto que la ventana."""
         maximum = max(minimum, self.height() - 220)
         return max(minimum, min(int(height), maximum))
+
+    @staticmethod
+    def _auto_height(scroll, minimum: int, cap: int) -> None:
+        """Devuelve el scroll a "alto del contenido" tras haberlo fijado el asa."""
+        scroll.setMinimumHeight(minimum)
+        scroll.setMaximumHeight(cap)
+        scroll.updateGeometry()
 
     def _resize_detail(self, delta: int) -> None:
         """Arrastró el asa de la lista de claves: fija el alto elegido."""
@@ -1382,23 +1492,14 @@ class MigrateView(QWidget):
                     lambda checked, p=pref: setattr(p, "selected", checked))
                 self.detail_rows.addWidget(check)
                 self.detail_checks.append(check)
-        # Alto al contenido, con tope: pocas claves no dejan un hueco vacío y
-        # muchas no empujan los botones fuera. Se suma el ``sizeHint`` de cada
-        # fila a mano porque el del layout (``sizeHint`` con activación) da 0
-        # mientras el scroll aún mide 0: la restricción de alto se contagia.
-        content = 0
-        for index in range(self.detail_rows.count()):
-            widget = self.detail_rows.itemAt(index).widget()
-            if widget is not None:
-                content += widget.sizeHint().height()
-        content += self.detail_rows.spacing() * max(
-            0, self.detail_rows.count() - 1)
         # Alto: el que el usuario haya elegido con el asa o, si no, el del
-        # contenido con tope. ``setFixedHeight`` porque el layout de la página
-        # tiene un ``addStretch`` que, si no, se queda el hueco y deja el scroll
-        # en su mínimo.
-        height = self._detail_height or min(content, DETAIL_SCROLL_HEIGHT)
-        self.detail_scroll.setFixedHeight(max(DETAIL_MIN_HEIGHT, height))
+        # contenido (``_make_scroll`` lo pide solo). Antes se medía fila a fila
+        # y se quedaba corto: las últimas se metían debajo de los botones.
+        if self._detail_height:
+            self.detail_scroll.setFixedHeight(self._detail_height)
+        else:
+            self._auto_height(self.detail_scroll, DETAIL_MIN_HEIGHT,
+                              DETAIL_SCROLL_HEIGHT)
         # Con una lista nueva, al principio (si no, hereda la posición anterior).
         self.detail_scroll.verticalScrollBar().setValue(0)
 
@@ -1454,7 +1555,7 @@ class MigrateView(QWidget):
                                       "{version}.", count=len(applied),
                                       version=version))
 
-    def _build_factory(self) -> QFrame:
+    def _build_factory_card(self) -> QFrame:
         """Tarjeta-gestor de los ajustes guardados de esa versión.
 
         Cada guardado es una fila con su fecha, de qué es, qué trae y qué
@@ -1491,15 +1592,9 @@ class MigrateView(QWidget):
         lay.addWidget(self.factory_status)
 
         # La lista, en scroll: puede haber muchos guardados.
-        self.snapshot_scroll = _ResizableScroll(
-            self._resize_snapshots,
-            tooltip=tr("Drag the bottom-right corner to make the saved copies "
-                       "list taller or shorter."))
-        self.snapshot_scroll.setObjectName("SnapshotList")
-        self.snapshot_scroll.setWidgetResizable(True)
-        self.snapshot_scroll.setFrameShape(QFrame.NoFrame)
-        self.snapshot_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.snapshot_scroll.setMaximumHeight(SNAPSHOT_SCROLL_HEIGHT)
+        self.snapshot_scroll = _make_scroll("SnapshotList",
+                                            SNAPSHOT_SCROLL_HEIGHT,
+                                            SNAPSHOT_MIN_HEIGHT)
         body = QWidget()
         body.setObjectName("SnapshotListBody")
         self.snapshot_rows = QVBoxLayout(body)
@@ -1546,6 +1641,12 @@ class MigrateView(QWidget):
         self.snapshot_keep_combo.currentIndexChanged.connect(
             self._on_snapshot_keep_changed)
         keep_row.addWidget(self.snapshot_keep_combo)
+        # Asa de la tarjeta, en su esquina inferior derecha.
+        self.snapshot_grip = _CornerGrip(
+            self._resize_snapshots,
+            tooltip=tr("Drag the corner to make the saved copies list taller "
+                       "or shorter."))
+        keep_row.addWidget(self.snapshot_grip)
         lay.addLayout(keep_row)
 
         self._refresh_factory()
@@ -1630,15 +1731,11 @@ class MigrateView(QWidget):
 
     def _fit_snapshot_scroll(self) -> None:
         """Alto de la lista de guardados: el elegido con el asa o el del contenido."""
-        content = 0
-        for index in range(self.snapshot_rows.count()):
-            widget = self.snapshot_rows.itemAt(index).widget()
-            if widget is not None:
-                content += widget.sizeHint().height()
-        content += self.snapshot_rows.spacing() * max(
-            0, self.snapshot_rows.count() - 1)
-        height = self._snapshot_height or min(content, SNAPSHOT_SCROLL_HEIGHT)
-        self.snapshot_scroll.setFixedHeight(max(SNAPSHOT_MIN_HEIGHT, height))
+        if self._snapshot_height:
+            self.snapshot_scroll.setFixedHeight(self._snapshot_height)
+        else:
+            self._auto_height(self.snapshot_scroll, SNAPSHOT_MIN_HEIGHT,
+                              SNAPSHOT_SCROLL_HEIGHT)
 
     def _refresh_factory(self) -> None:
         """Repinta la tarjeta de fábrica: estado, lista de guardados y análisis."""
@@ -1871,7 +1968,7 @@ class MigrateView(QWidget):
         self.undo_btn.setVisible(
             bool(bc.read_migration_marker(self.target_cfg)))
 
-    def _rebuild_preferences(self) -> None:
+    def _fill_preference_files(self) -> None:
         """Rellena las casillas de preferencias según el origen/destino."""
         _clear_layout(self.pref_rows)
         self.pref_checks = {}
@@ -1955,7 +2052,7 @@ class MigrateView(QWidget):
                 self.source_combo.setCurrentIndex(1)
             if self.target_combo.currentIndex() < 0:
                 self.target_combo.setCurrentIndex(0)
-        self._reload()
+        self._reload_versions()
 
     def _current_version(self, combo) -> str:
         index = combo.currentIndex()
@@ -1988,7 +2085,7 @@ class MigrateView(QWidget):
         return None
 
     # ------------------------------------------------------------- informe
-    def _reload(self) -> None:
+    def _reload_versions(self) -> None:
         self._clear_rows()
         self.plans = []
         self.source_cfg = None
@@ -2005,19 +2102,19 @@ class MigrateView(QWidget):
             self.summary.setText(tr("You need at least two installed Blender "
                                     "versions."))
             self._set_controls_enabled(False)
-            self._rebuild_preferences()
+            self._fill_preference_files()
             return
         if source.version == target.version:
             self.summary.setText(tr("Source and destination must be different."))
             self._set_controls_enabled(False)
-            self._rebuild_preferences()
+            self._fill_preference_files()
             return
 
         self.source_entry = source
         self.target_entry = target
         self.source_cfg = bc.config_for(source.version, self.platform)
         self.target_cfg = bc.config_for(target.version, self.platform)
-        self._rebuild_preferences()
+        self._fill_preference_files()
         self._refresh_undo()
         self._refresh_factory()
         self.source_path_label.setText(str(self.source_cfg.root))
@@ -2226,7 +2323,7 @@ class MigrateView(QWidget):
                 lines.append(f"· {Path(path).name}: {message}")
         show_info(self, tr("Migration undone"), "\n".join(lines))
         self.status_message.emit(tr("Migration undone"))
-        self._reload()
+        self._reload_versions()
 
     def _start_activation(self, executable, modules, version) -> None:
         """Habilita los addons copiados en un hilo (Blender tarda en arrancar)."""

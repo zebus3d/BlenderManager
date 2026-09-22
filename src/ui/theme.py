@@ -69,7 +69,12 @@ OVERLAY = "rgba(0,0,0,0.6)"
 # Alto de la fila de filtros (la de las pestañas de canal). Migración y Ajustes
 # lo usan para bajar su tira de pestañas y que las tres filas terminen a la
 # misma altura al cambiar de vista.
-FILTERS_HEIGHT = 44
+FILTERS_HEIGHT = 50
+# Margen superior de las tiras de pestañas (Migración y Ajustes) para que su
+# **borde de arriba** quede a la altura del primer botón de la barra lateral y
+# de los tags de canal. Se alinea por arriba, no por abajo: las pestañas y los
+# tags no miden lo mismo.
+TABS_TOP = 14
 
 # --- Tipografía ---
 FONT_SIZE = 13

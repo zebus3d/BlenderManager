@@ -740,6 +740,37 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertIn("Download and install", labels)
         self.assertIn("Release notes", labels)
 
+    def test_la_cabecera_ensena_la_seccion(self):
+        """Arriba la marca y debajo la sección, para saber dónde estás."""
+        import i18n
+
+        from ui.widgets.main_window import MainWindow
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        window = MainWindow()
+        window.refresh_installed = lambda: None
+        i18n.set_language("en")
+        window.set_view("store")
+        self.assertEqual(window.section_label.text(), "Cloud")
+        window.set_view("settings")
+        self.assertEqual(window.section_label.text(), "Settings")
+        # La marca se fija al construir (el idioma se cambia reiniciando).
+        self.assertTrue(window.app_label.text())
+
+    def test_la_consola_es_por_version(self):
+        """Encender la consola en una tarjeta no toca las demás."""
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.refresh_installed = lambda: None
+        one = _fake_installed("5.2.2")
+        other = _fake_installed("5.3.0")
+        window.set_console_for(one, True)
+        self.assertTrue(window._console_state(one))
+        self.assertFalse(window._console_state(other))
+        self.assertEqual(
+            window.settings.launch_console_overrides[one.favorite_key], True)
+
     def test_reescanea_al_recuperar_el_foco(self):
         from PySide6.QtCore import QEvent
 
@@ -3140,7 +3171,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         view.detail_prefs = [
             bprefs.Preference(f"view.clave_{i}", i) for i in range(20)]
         view._fill_detail_rows()
-        self.assertIsNotNone(view.detail_scroll._grip)
+        self.assertIsNotNone(view.detail_grip)
         before = view.detail_scroll.height()
         view._resize_detail(120)
         self.assertGreater(view.detail_scroll.height(), before)
@@ -3499,6 +3530,26 @@ class AddonsViewTests(SettingsIsolated, unittest.TestCase):
         view.type_combo.setCurrentIndex(
             view.type_combo.findData("extension"))
         self.assertEqual(view.rows.count(), 1)
+
+    def test_el_nombre_del_addon_se_ve(self):
+        """El título no puede quedarse a 0 px (``ElidedLabel`` sin estirar).
+
+        Un ``ElidedLabel`` tiene ancho mínimo 0; si va en un ``HBox`` con un
+        ``addStretch`` se queda sin sitio y el nombre desaparece.
+        """
+        from PySide6.QtWidgets import QLabel
+
+        from ui.widgets.addons import _AddonRow
+
+        row = _AddonRow(self._state(name="Hurricane"), lambda *a: None,
+                        lambda *a: None, lambda *a: None)
+        row.resize(700, 60)
+        row.show()
+        QApplication.processEvents()
+        titles = [label for label in row.findChildren(QLabel)
+                  if label.objectName() == "Title"]
+        self.assertTrue(titles)
+        self.assertGreater(titles[0].width(), 0)
 
     def test_set_installed_no_arranca_blender(self):
         from unittest import mock as _mock

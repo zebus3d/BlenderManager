@@ -158,22 +158,22 @@ def _favorite_star(marked: bool, on_toggle) -> StarButton:
     return star
 
 
-def _console_button(checked: bool, on_toggle) -> CardButton:
-    """Botón para lanzar con consola (se enciende y se recuerda).
+def _console_button(checked: bool, entry, signal) -> CardButton:
+    """Botón para lanzar con consola, **por versión**.
 
-    El estado es un ajuste global —lo que se elija en una tarjeta vale para
-    todas—, así que se refleja tal cual en cada una. Encendido va en azul.
+    Cada tarjeta recuerda lo suyo (lo elige ``MainWindow`` con la entrada), así
+    que encenderlo aquí no cambia las demás. Encendido va en azul.
     """
     button = CardButton(
         icons.TERMINAL, variant="accent" if checked else "neutral",
-        tooltip=tr("Launch with the console visible: Python output and script "
-                   "errors."))
+        tooltip=tr("Launch this version with the console visible: Python "
+                   "output and script errors."))
     button.setCheckable(True)
     button.setChecked(checked)
     _icon_only(button)
     button.setFont(_icon_font())
     button.setFixedWidth(46)
-    button.toggled.connect(on_toggle.emit)
+    button.toggled.connect(lambda on: signal.emit(entry, on))
     button.toggled.connect(
         lambda on: button.set_variant("accent" if on else "neutral"))
     return button
@@ -252,11 +252,6 @@ class BaseBuildCard(_HoverCard, QFrame):
         if build.experimental:
             self.channel_text = build.branch
             self.is_lts = False
-        elif build.patch:
-            # La insignia enseña el pull request (PR161547): es lo que
-            # distingue una compilación de parche de una versión normal.
-            self.channel_text = build.patch
-            self.is_lts = False
         else:
             if build.is_lts:
                 channel = "LTS"
@@ -268,7 +263,7 @@ class BaseBuildCard(_HoverCard, QFrame):
             self.is_lts = build.is_lts
 
         details = [build.human_size]
-        if not build.experimental and not build.patch:
+        if not build.experimental:
             details.append(build.branch)
         details.append(build.arch)
         self.meta_text = "  ·  ".join(details)
@@ -422,7 +417,7 @@ class InstalledCard(_HoverCard, QFrame):
     favorite_toggled = Signal(object, bool)   # entry, marcada
     update_clicked = Signal(object, object)   # entry, build nueva
     rename_requested = Signal(object, str)    # entry, nombre nuevo
-    console_toggled = Signal(bool)    # lanzar con consola
+    console_toggled = Signal(object, bool)   # entry, lanzar con consola
 
     def __init__(self, entry, zebra: bool, marked: bool = False, parent=None,
                  update=None, read_only: bool = False,
@@ -466,10 +461,6 @@ class InstalledCard(_HoverCard, QFrame):
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
-        info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
-        info.setFont(_icon_font())
-        info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
-        lay.addWidget(info)
         lay.addWidget(_favorite_star(
             marked, lambda on: self.favorite_toggled.emit(entry, on)))
 
@@ -484,7 +475,14 @@ class InstalledCard(_HoverCard, QFrame):
             lay.addWidget(update_btn)
 
         if console is not None:
-            lay.addWidget(_console_button(console, self.console_toggled))
+            lay.addWidget(_console_button(console, entry, self.console_toggled))
+
+        # La "i" va pegada al lanzar (entre la consola y el botón): así el
+        # grupo de acciones queda junto y el nombre tiene más sitio.
+        info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
+        info.setFont(_icon_font())
+        info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
+        lay.addWidget(info)
 
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
@@ -510,7 +508,7 @@ class GridInstalledCard(_HoverCard, QFrame):
     favorite_toggled = Signal(object, bool)   # entry, marcada
     update_clicked = Signal(object, object)   # entry, build nueva
     rename_requested = Signal(object, str)    # entry, nombre nuevo
-    console_toggled = Signal(bool)    # lanzar con consola
+    console_toggled = Signal(object, bool)   # entry, lanzar con consola
 
     def __init__(self, entry, zebra: bool, zoom: float = 1.0,
                  marked: bool = False, parent=None, update=None,
@@ -562,10 +560,6 @@ class GridInstalledCard(_HoverCard, QFrame):
 
         row = QHBoxLayout()
         row.setSpacing(int(5 * zoom))
-        info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
-        info.setFont(_icon_font())
-        info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
-        row.addWidget(info)
         row.addWidget(_favorite_star(
             marked, lambda on: self.favorite_toggled.emit(entry, on)))
         if update is not None:
@@ -583,10 +577,15 @@ class GridInstalledCard(_HoverCard, QFrame):
                 lambda: self.update_clicked.emit(entry, update))
             row.addWidget(update_btn)
         if console is not None:
-            console_btn = _console_button(console, self.console_toggled)
+            console_btn = _console_button(console, entry, self.console_toggled)
             console_btn.setFixedWidth(max(int(42 * zoom),
                                           MIN_ICON_BUTTON_WIDTH))
             row.addWidget(console_btn)
+        # La "i" va entre la consola y el lanzar, pegada al grupo de acciones.
+        info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
+        info.setFont(_icon_font())
+        info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
+        row.addWidget(info)
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())

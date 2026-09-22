@@ -19,34 +19,29 @@ from pathlib import Path
 
 from model.build import LTS_MINORS, minor_of
 
-# Los tipos que puede recibir una carpeta. Son los canales de Blender menos los
-# dos que no describen una compilación: "all" (no filtra) y "favorites" (es
-# transversal, lo marca el usuario a mano).
+# Los cuatro tipos que puede recibir una carpeta. Son los canales de Blender
+# menos los dos que no describen una compilación: "all" (no filtra) y
+# "favorites" (es transversal, lo marca el usuario a mano).
 TYPE_LTS = "lts"
 TYPE_STABLE = "stable"
 TYPE_DAILY = "daily"
-TYPE_PATCH = "patch"
 TYPE_EXPERIMENTAL = "experimental"
-BUILD_TYPES = (TYPE_LTS, TYPE_STABLE, TYPE_DAILY, TYPE_PATCH, TYPE_EXPERIMENTAL)
+BUILD_TYPES = (TYPE_LTS, TYPE_STABLE, TYPE_DAILY, TYPE_EXPERIMENTAL)
 
 # Canales de la barra de pestañas. Viven aquí para que no se dupliquen; las
 # etiquetas traducidas son cosa de la interfaz.
-CHANNELS = ("all", "lts", "stable", "daily", "patch", "experimental",
-            "favorites")
+CHANNELS = ("all", "lts", "stable", "daily", "experimental", "favorites")
 
 
 def type_of_build(build) -> str:
     """Tipo de una compilación de la tienda.
 
     El orden de las preguntas importa y es el mismo que tenía
-    ``api.filter_builds``: una compilación de un pull request (patch) es un
-    patch aunque su versión coincida con la de una release; una rama
-    experimental es experimental aunque su número de versión sea el de una LTS,
-    y una alfa de una serie LTS es una diaria, no una LTS. Es decir, manda de
-    dónde viene la compilación por encima de cómo se llama.
+    ``api.filter_builds``: una rama experimental es experimental aunque su
+    número de versión sea el de una LTS, y una alfa de una serie LTS es una
+    diaria, no una LTS. Es decir, manda de dónde viene la compilación por
+    encima de cómo se llama.
     """
-    if getattr(build, "patch", ""):
-        return TYPE_PATCH
     if getattr(build, "experimental", False):
         return TYPE_EXPERIMENTAL
     if getattr(build, "risk", "") != "stable":
@@ -74,9 +69,6 @@ def type_from_marker(branch: str, version: str, name: str = "",
     marcador y lo menos sorprendente.
     """
     branch = (branch or "").strip()
-    # Las compilaciones de pull requests se llaman ``main-PR161547``.
-    if "-pr" in branch.lower():
-        return TYPE_PATCH
     if branch and branch != "main" and not branch.startswith("v"):
         return TYPE_EXPERIMENTAL
     if risk and risk != "stable":

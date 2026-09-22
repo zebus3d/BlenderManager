@@ -278,6 +278,18 @@ def _clean_string_list(value) -> list[str]:
     return cleaned
 
 
+def _clean_bool_map(value) -> dict:
+    """Normaliza un mapa ``clave -> bool`` del JSON (solo cadenas y booleanos).
+
+    Un ``settings.json`` editado a mano no puede colar tipos raros en un mapa
+    que se consulta al pintar cada tarjeta.
+    """
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): bool(item) for key, item in value.items()
+            if isinstance(key, str) and key}
+
+
 def _clean_snapshot_keep(value) -> int:
     """Normaliza cuántas instantáneas se conservan (0 = sin límite).
 
@@ -310,8 +322,11 @@ class Settings:
     delete_archive: bool = True
     launch_args: str = ""
     # Lanzar Blender con su consola visible (salida de Python y errores de
-    # scripts). Se puede alternar por lanzamiento desde la tarjeta.
+    # scripts). ``launch_console`` es el valor por defecto (Ajustes > Launch) y
+    # ``launch_console_overrides`` guarda la elección **por versión** que se
+    # hace con el botón de cada tarjeta.
     launch_console: bool = False
+    launch_console_overrides: dict = field(default_factory=dict)
     layout_mode: str = "grid"
     zoom: float = DEFAULT_ZOOM
     # Valor al que vuelve la rejilla con Ctrl+0 o Ctrl+clic en el slider. Es
@@ -401,6 +416,8 @@ class Settings:
             delete_archive=bool(data.get("delete_archive", True)),
             launch_args=str(data.get("launch_args") or ""),
             launch_console=bool(data.get("launch_console", False)),
+            launch_console_overrides=_clean_bool_map(
+                data.get("launch_console_overrides")),
             layout_mode=str(data.get("layout_mode") or "grid"),
             zoom=float(data.get("zoom") or DEFAULT_ZOOM),
             reset_zoom=float(data.get("reset_zoom") or DEFAULT_ZOOM),

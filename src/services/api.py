@@ -29,10 +29,6 @@ API_URL = "https://builder.blender.org/download/daily/?format=json&v=2"
 # la mayor parte del tiempo está vacío (y entonces la app lo explica en la
 # tienda).
 EXPERIMENTAL_URL = "https://builder.blender.org/download/experimental/?format=json&v=2"
-# Compilaciones de pull requests abiertos (sección "Patch" del builder): la
-# misma forma que las diarias, con un campo ``patch`` ("PR161547") y la rama
-# ``main-PR161547``. Sirven para probar un arreglo antes de que se fusione.
-PATCH_URL = "https://builder.blender.org/download/patch/?format=json&v=2"
 CACHE_MAX_AGE = 3600  # una hora de validez para el caché en disco
 
 # Extensiones descargables que nos interesan (descartamos .sha256, .msi, etc.).
@@ -102,7 +98,6 @@ def _to_build(entry: dict, experimental: bool = False) -> Build:
         mtime=int(entry.get("file_mtime") or 0),
         build_hash=str(entry.get("hash") or ""),
         experimental=experimental,
-        patch=str(entry.get("patch") or ""),
     )
 
 
@@ -126,13 +121,13 @@ def _fetch_builds_from(url: str, timeout: int, experimental: bool,
 
 def fetch_builds(timeout: int = 20, etags: dict | None = None,
                  cached=None):
-    """Descarga el listado completo: diarias + patches + experimentales.
+    """Descarga el listado completo: diarias + ramas experimentales.
 
     ``etags``/``cached`` son de la última vez: si un listado responde 304, se
-    reutilizan las builds de la caché en vez de volver a bajarlo. Los listados
-    de patches y experimental van en su propio try: casi siempre están vacíos
-    (o cambian mucho) y eso no debe impedir que se vean las compilaciones
-    normales. Devuelve ``(builds, etags)``.
+    reutilizan las builds de la caché en vez de volver a bajarlo. El listado
+    experimental va en su propio try: casi siempre está vacío y eso no debe
+    impedir que se vean las compilaciones normales. Devuelve
+    ``(builds, etags)``.
     """
     etags = etags or {}
     cached = list(cached or [])
@@ -141,23 +136,10 @@ def fetch_builds(timeout: int = 20, etags: dict | None = None,
     daily, daily_etag = _fetch_builds_from(API_URL, timeout, experimental=False,
                                            etag=etags.get(API_URL))
     if daily is None:
-        daily = [build for build in cached
-                 if not build.experimental and not build.patch]
+        daily = [build for build in cached if not build.experimental]
     if daily_etag:
         new_etags[API_URL] = daily_etag
     builds = list(daily)
-
-    try:
-        patches, patch_etag = _fetch_builds_from(
-            PATCH_URL, timeout, experimental=False,
-            etag=etags.get(PATCH_URL))
-        if patches is None:
-            patches = [build for build in cached if build.patch]
-        if patch_etag:
-            new_etags[PATCH_URL] = patch_etag
-        builds += patches
-    except Exception as error:
-        log(f"patch builds unavailable: {error}")
 
     try:
         experimental, exp_etag = _fetch_builds_from(
@@ -279,12 +261,8 @@ def filter_builds(builds, channel: str, search: str = "", favorites=()):
         selected = [build for build in builds if build.favorite_key in marked]
     elif channel == "experimental":
         selected = [build for build in builds if build.experimental]
-    elif channel == "patch":
-        selected = [build for build in builds if build.patch]
     else:
-        # Ni experimentales ni patches: cada uno tiene su propio canal.
-        selected = [build for build in builds
-                    if not build.experimental and not build.patch]
+        selected = [build for build in builds if not build.experimental]
         # La clasificación vive en ``services.channels`` porque de ella depende
         # también a qué carpeta se descarga cada compilación: si aquí dijera
         # una cosa y allí otra, una build podría salir en la pestaña "Diarias"

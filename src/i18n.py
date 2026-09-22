@@ -171,14 +171,6 @@ _TRANSLATIONS = {
             "desarrollo.\nTraen lo más nuevo y pueden fallar; además se "
             "acumulan rápido, así que\nmucha gente las guarda en un disco "
             "grande.\nSolo una carpeta puede quedárselas.",
-        "Patches: builds of open pull requests, to test a fix or feature\n"
-        "before it is merged. They are not official versions.\n"
-        "Tick this and every patch you download lands in this folder.\n"
-        "Only one folder can take them.":
-            "Parches: compilaciones de pull requests abiertos, para probar un "
-            "arreglo o una\nfunción antes de que se fusione. No son versiones "
-            "oficiales.\nMarca esto y cada parche que descargues irá a esta "
-            "carpeta.\nSolo una carpeta puede quedárselos.",
         "Experimental: branches with features that are not in any release yet.\n"
         "Blender rarely publishes them, so this is usually empty.\n"
         "Only one folder can take them.":
@@ -229,14 +221,15 @@ _TRANSLATIONS = {
             "ajustes actuales se guardan aparte y se pueden recuperar.",
         "Version": "Versión",
         "User prefs": "Prefs de usuario",
-        "Drag the bottom-right corner to make the settings list taller or "
-        "shorter.":
-            "Arrastra la esquina inferior derecha para alargar o acortar la "
-            "lista de ajustes.",
-        "Drag the bottom-right corner to make the saved copies list taller or "
-        "shorter.":
-            "Arrastra la esquina inferior derecha para alargar o acortar la "
-            "lista de copias guardadas.",
+        "Drag the corner to make the settings list taller or shorter.":
+            "Arrastra la esquina para alargar o acortar la lista de ajustes.",
+        "Drag the corner to make the saved copies list taller or shorter.":
+            "Arrastra la esquina para alargar o acortar la lista de copias "
+            "guardadas.",
+        "Launch this version with the console visible: Python output and "
+        "script errors.":
+            "Lanza esta versión con la consola visible: salida de Python y "
+            "errores de scripts.",
         "Pick the version whose settings you want to reset or put back.":
             "Elige la versión cuyos ajustes quieres restablecer o recuperar.",
         "The version whose settings are reset or restored.":
@@ -296,6 +289,36 @@ _TRANSLATIONS = {
             "¿Devolver a Blender {version} los ajustes guardados el {date}?\n\n"
             "Lo que tiene ahora se guarda aparte, así que esto se puede "
             "deshacer.",
+        "Theme and keymap": "Tema y mapa de teclas",
+        "Theme": "Tema",
+        "Key map": "Mapa de teclas",
+        "The colours and sizes of the interface.":
+            "Los colores y tamaños de la interfaz.",
+        "Your keyboard shortcuts.": "Tus atajos de teclado.",
+        "Copy your theme and key map as named presets, without replacing the "
+        "whole preferences file. They arrive as \"BlenderManager\" and you can "
+        "pick them again in Blender's preferences.":
+            "Copia tu tema y tu mapa de teclas como presets con nombre, sin "
+            "reemplazar el fichero de preferencias entero. Llegan como "
+            "«BlenderManager» y puedes volver a elegirlos en las preferencias "
+            "de Blender.",
+        "Apply theme and key map": "Aplicar tema y mapa de teclas",
+        "Export them from the source version and install them in the "
+        "destination as named presets.":
+            "Los exporta de la versión de origen y los instala en el destino "
+            "como presets con nombre.",
+        "Applying theme and key map...": "Aplicando tema y mapa de teclas...",
+        "theme": "tema",
+        "key map": "mapa de teclas",
+        "Applied {items}.": "Aplicado: {items}.",
+        "Theme and key map applied.": "Tema y mapa de teclas aplicados.",
+        "Theme and key map could not be applied.":
+            "No se pudieron aplicar el tema y el mapa de teclas.",
+        "Both versions need an executable to do this.":
+            "Las dos versiones necesitan un ejecutable para hacer esto.",
+        "These parts could not be applied:":
+            "Estas partes no se pudieron aplicar:",
+        "Nothing was applied.": "No se aplicó nada.",
         "Keep at most": "Conservar como mucho",
         "How many saved copies to keep per version. The oldest are deleted "
         "when a new one is saved.":
@@ -380,7 +403,6 @@ _TRANSLATIONS = {
             "las pestañas para copiar addons, ajustes sueltos o el fichero de "
             "preferencias entero.",
         "Interface": "Interfaz",
-        "Launch": "Lanzamiento",
         "System": "Sistema",
         "Updates": "Actualizaciones",
         "Advanced": "Avanzado",
@@ -467,6 +489,14 @@ _TRANSLATIONS = {
         "Local versions": "Versiones locales",
         "Local build": "Local",
         "Recent files": "Recientes",
+        "Settings": "Ajustes",
+        "Migration": "Migración",
+        "Folder with the settings and add-ons of this version.":
+            "Carpeta con los ajustes y addons de esta versión.",
+        "Filter the list by name or id.":
+            "Filtra la lista por nombre o id.",
+        "Show everything, only extensions, or only legacy add-ons.":
+            "Muestra todo, solo extensiones o solo addons legacy.",
         "Show the .blend files you opened recently, by Blender version.":
             "Muestra los ficheros .blend que abriste hace poco, por versión de "
             "Blender.",
@@ -519,14 +549,6 @@ _TRANSLATIONS = {
         "Experimental": "Experimentales",
         "Filter: experimental branches": "Filtro: solo ramas experimentales (funciones en desarrollo)",
         "No experimental builds right now": "Ahora mismo no hay ramas experimentales disponibles",
-        "Patches": "Parches",
-        "Builds of open pull requests: an unreleased fix or feature to test.\n"
-        "They are not official versions; the list changes often.":
-            "Compilaciones de pull requests abiertos: un arreglo o una función "
-            "sin publicar, para probar. No son versiones oficiales y la lista "
-            "cambia a menudo.",
-        "No patch builds right now":
-            "Ahora mismo no hay compilaciones de parches disponibles",
         "Favorites": "Favoritos",
         "Filter: favorites": "Filtro: solo las versiones marcadas como favoritas",
         "Mark as favorite": "Marcar como favorita",

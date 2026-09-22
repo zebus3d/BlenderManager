@@ -32,7 +32,6 @@ from model.build import minor_of, version_tuple
 from services import addons as addons_service
 from services import blender_runner, opener
 from ui import icons
-from ui import theme as t
 from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, IconFlatButton, SwitchPill
 from ui.widgets.dialogs import confirm, show_error, show_info
@@ -81,16 +80,13 @@ class _AddonRow(QFrame):
         title_row.setSpacing(6)
         title = ElidedLabel(state.name, Qt.ElideRight)
         title.setObjectName("Title")
-        title.setToolTip(state.addon.path.name)
-        title_row.addWidget(title)
-        if state.linked:
-            link = QLabel(icons.FOLDER)
-            link.setObjectName("Muted")
-            link.setFont(icon_font(13))
-            link.setToolTip(tr("Linked to a development folder: {path}",
-                               path=state.addon.path.resolve()))
-            title_row.addWidget(link)
-        title_row.addStretch()
+        # El tooltip lleva el id técnico (el módulo con el que Blender lo
+        # habilita): es lo que permite reconocerlo sin ambigüedad.
+        title.setToolTip(f"{state.name}\n{state.module}")
+        # OJO: el título va con factor de estirado. Un ``ElidedLabel`` tiene
+        # ancho mínimo 0 y política ``Ignored``: si se añade sin estirar y luego
+        # un ``addStretch``, se queda en 0 px y el nombre no se ve.
+        title_row.addWidget(title, 1)
         info.addLayout(title_row)
         meta = ElidedLabel(self._meta_text(state), Qt.ElideRight)
         meta.setObjectName("Muted")
@@ -157,7 +153,6 @@ class AddonsView(QWidget):
         self.entry = None
         self.addons = []
         self._rows = []
-        self._reading = False
         self._acting = False
         self._build_ui()
         self.addons_loaded.connect(self._on_addons_loaded)
@@ -185,6 +180,8 @@ class AddonsView(QWidget):
         self.path_label = QLabel("")
         self.path_label.setObjectName("Muted")
         self.path_label.setWordWrap(True)
+        self.path_label.setToolTip(tr(
+            "Folder with the settings and add-ons of this version."))
         header_lay.addWidget(self.path_label)
         root.addWidget(header)
 
@@ -192,11 +189,14 @@ class AddonsView(QWidget):
         toolbar = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText(tr("Search add-ons..."))
+        self.search.setToolTip(tr("Filter the list by name or id."))
         self.search.textChanged.connect(lambda _: self._fill_rows())
         toolbar.addWidget(self.search, 1)
         self.type_combo = QComboBox()
         for key, label in _TYPE_FILTERS:
             self.type_combo.addItem(tr(label), key)
+        self.type_combo.setToolTip(tr(
+            "Show everything, only extensions, or only legacy add-ons."))
         self.type_combo.currentIndexChanged.connect(lambda _: self._fill_rows())
         toolbar.addWidget(self.type_combo)
         lay.addLayout(toolbar)
@@ -280,8 +280,11 @@ class AddonsView(QWidget):
         self._choices = choices
         self.version_combo.blockSignals(True)
         self.version_combo.clear()
+        # Solo la versión: la etiqueta de arriba ya dice "Versión" y el nombre
+        # de la carpeta repetía el número (misma regla que en el selector de
+        # fábrica).
         for entry in choices:
-            self.version_combo.addItem(f"Blender {entry.version}  ·  {entry.name}")
+            self.version_combo.addItem(entry.version)
         index = next((i for i, entry in enumerate(choices)
                       if entry.version == keep), 0 if choices else -1)
         self.version_combo.setCurrentIndex(index)
@@ -310,7 +313,6 @@ class AddonsView(QWidget):
         self.path_label.setText(str(getattr(entry, "path", "")))
         self._set_enabled_controls(False)
         self.status.setText(tr("Reading add-ons..."))
-        self._reading = True
 
         platform = self.platform
 
@@ -327,7 +329,6 @@ class AddonsView(QWidget):
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_addons_loaded(self, payload) -> None:
-        self._reading = False
         if self.entry is None or payload.get("version") != self.entry.version:
             return
         self._set_enabled_controls(True)

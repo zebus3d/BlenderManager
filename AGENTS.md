@@ -57,6 +57,14 @@ excluye para no confundir. En `fetch_builds` va en su propio `try` (un fallo ah�
 no debe tumbar el listado normal). `Build.experimental` se cachea con `asdict` y
 los cachés viejos caen a su valor por defecto.
 
+**NO añadir un canal "Patch"** (las builds de pull requests abiertos de
+`builder.blender.org/download/patch/`, con su `patch: "PR161547"`). Se probó
+(commit `6a9933e`) y **se quitó a propósito**: el 99% de los usuarios no lo va a
+usar, no son versiones oficiales, cambian a diario y meten cientos de filas de
+ruido en la tienda. Es de nicho para quien verifica un PR concreto, y no merece
+el coste en la interfaz. Si alguna vez se replantea, que sea como algo oculto
+tras las opciones experimentales, nunca como pestaña normal.
+
 ### Favoritos
 
 No son un canal de Blender: son un filtro **transversal** que el usuario marca
@@ -250,6 +258,10 @@ minor** (`v1.3.0`).
   meta con la ruta la llevaba a 974 px en una ventana de 900. `ElidedLabel`
   recorta con `…` al pintar, deja el texto entero en `text()` y en el tooltip
   (solo cuando no cabe) y no pide ancho. Para nombres de fichero, `ElideMiddle`.
+  **Cuidado con meterlo en un `QHBoxLayout` con un `addStretch`**: como no pide
+  ancho, se queda a 0 px y el texto no se ve (pasó con el nombre de los addons).
+  Hay que añadirlo con factor de estirado (`addWidget(label, 1)`) o en un
+  `QVBoxLayout`, que sí le da el ancho.
 - **Tienda e instaladas comparten medidas de tarjeta.** `GridBuildCard` y
   `GridInstalledCard` usan el mismo `_grid_height(zoom)` y el mismo logo
   (`60·zoom`); `BuildCard` e `InstalledCard`, 68 px de alto y logo de 44. Si una
