@@ -3212,10 +3212,16 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
     def test_preferencias_en_detalle_carga_y_aplica(self):
         from unittest import mock as _mock
 
-        user = {"view.ui_scale": 1.25, "view.show_developer_ui": True,
-                "inputs.navigation_mode": "FLY"}
-        factory = {"view.ui_scale": 1.0, "view.show_developer_ui": False,
-                   "inputs.navigation_mode": "WALK"}
+        from services import blender_prefs as bprefs
+
+        user = bprefs.PreferenceDump(
+            values={"view.ui_scale": 1.25, "view.show_developer_ui": True,
+                    "inputs.navigation_mode": "FLY"},
+            meta={"view.ui_scale": {"name": "Resolution Scale",
+                                    "description": "Size of the UI"}})
+        factory = bprefs.PreferenceDump(
+            values={"view.ui_scale": 1.0, "view.show_developer_ui": False,
+                    "inputs.navigation_mode": "WALK"})
         with tempfile.TemporaryDirectory() as tmp:
             source = self._config(tmp, "4.5.0")
             target = self._config(tmp, "5.3.0")
@@ -3232,7 +3238,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                                 side_effect=[user, factory]), \
                     _mock.patch("ui.widgets.migrate.blender_runner.enabled_addons",
                                 return_value=["matplus"]), \
-                    _mock.patch("ui.widgets.migrate.bprefs.apply_preferences",
+                    _mock.patch("ui.widgets.migrate.bprefs.write_preferences",
                                 return_value={"applied": ["view.ui_scale"],
                                               "errors": []}) as apply:
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
@@ -3246,6 +3252,14 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 view._prefs_waiting = True
                 view._on_prefs_loaded({"user": user, "factory": factory})
                 self.assertEqual(len(view.detail_prefs), 3)
+                # La fila enseña el nombre de Blender y explica la clave.
+                fila = next(row for row in view.detail_checks
+                            if row.pref.path == "view.ui_scale")
+                self.assertEqual(fila.check.text(), "Resolution Scale")
+                self.assertIn("Size of the UI", fila.toolTip())
+                self.assertIn("view.ui_scale", fila.toolTip())
+                # Sin ajustes de addons, la casilla de activarlos no se ve.
+                self.assertTrue(view.enable_addons_check.isHidden())
                 view.detail_prefs[0].selected = True
                 view.apply_detail_prefs()
                 view._prefs_waiting = True
@@ -3268,11 +3282,57 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         view._fill_detail_rows()
         self.assertFalse(view.detail_scroll.isHidden())
         view._prefs_waiting = True
-        view._on_prefs_loaded({"user": {"view.ui_scale": 1.0},
-                               "factory": {"view.ui_scale": 1.0}})
+        view._on_prefs_loaded({
+            "user": bprefs.PreferenceDump(values={"view.ui_scale": 1.0}),
+            "factory": bprefs.PreferenceDump(values={"view.ui_scale": 1.0})})
         self.assertEqual(view.detail_prefs, [])
         self.assertEqual(view.detail_checks, [])
         self.assertTrue(view.detail_scroll.isHidden())
+
+    def test_si_no_se_pudo_leer_se_dice_el_motivo(self):
+        """"No se pudieron leer" a secas no ayuda: el motivo va en el tooltip."""
+        from services import blender_prefs as bprefs
+
+        view = self._view()
+        view._prefs_waiting = True
+        view._on_prefs_loaded({
+            "user": bprefs.PreferenceDump(error="timeout after 180s"),
+            "factory": bprefs.PreferenceDump(values={})})
+        self.assertIn("Could not read", view.detail_status.text())
+        self.assertIn("timeout", view.detail_status.toolTip())
+
+    def test_los_ajustes_de_addons_ofrecen_activarlos_y_explican_el_fallo(self):
+        """Con claves ``addons.*`` aparece la casilla, y el error se agrupa.
+
+        "Ya no existe en esta versión" era mentira para un addon que solo
+        está desactivado: ahora se dice qué hacer (copiarlo desde Add-ons).
+        """
+        from unittest import mock as _mock
+
+        from services import blender_prefs as bprefs
+
+        view = self._view()
+        view._prefs_waiting = True
+        view._on_prefs_loaded({
+            "user": bprefs.PreferenceDump(
+                values={"addons.hurricane.cache_format": "USD"}),
+            "factory": bprefs.PreferenceDump(values={})})
+        self.assertFalse(view.enable_addons_check.isHidden())
+        with _mock.patch("ui.widgets.migrate.show_info") as info:
+            view._prefs_waiting = True
+            view._on_prefs_applied({"result": {
+                "applied": [],
+                "errors": [{"path": "addons.hurricane.cache_format",
+                            "error": bprefs.ADDON_NOT_ENABLED},
+                           {"path": "view.gone", "error": "unknown property"}],
+                "addons_enabled": [{"module": "cycles", "enabled": True}]},
+                "version": "5.3.0"})
+        texto = info.call_args[0][2]
+        self.assertIn("Add-ons tab", texto)
+        self.assertIn("addons.hurricane.cache_format", texto)
+        self.assertIn("no longer exist", texto)
+        self.assertIn("view.gone", texto)
+        self.assertIn("cycles", texto)
 
     def test_las_claves_cambiadas_van_en_un_scroll_con_tope(self):
         """Con cientos de ajustes la tarjeta no puede crecer sin límite.

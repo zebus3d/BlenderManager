@@ -349,14 +349,72 @@ def _size_text(size: int) -> str:
 
 def _section_names(paths) -> list:
     """Nombres legibles de las secciones a las que pertenecen esas rutas RNA."""
-    labels = dict(bprefs.SECTIONS)
     order = {key: index for index, (key, _) in enumerate(bprefs.SECTIONS)}
     positions = {}
     for path in paths:
         key = (path or "").split(".", 1)[0]
         positions.setdefault(key, order.get(key, 99))
     ordered = sorted(positions, key=lambda key: (positions[key], key))
-    return [tr(labels.get(key, key)) for key in ordered]
+    return [tr(bprefs.section_label(key)) for key in ordered]
+
+
+class _PrefRow(QWidget):
+    """Fila de una preferencia: nombre, valor y la descripción de Blender.
+
+    El nombre es el que Blender enseña en Preferencias (``Preference.name``)
+    y la descripción, su tooltip: así cada fila explica qué es ese ajuste sin
+    mantener textos a mano. La ruta RNA completa va en el tooltip, que es lo
+    que permite comprobarlo en Blender sin adivinar.
+
+    Con ``checkable`` la fila lleva casilla (lista para migrar); sin ella es
+    solo lectura (el detalle de un guardado). Las etiquetas largas van en
+    ``ElidedLabel`` **con factor de estirado**: sin él, en un ``QHBoxLayout``
+    se quedan a 0 px (ver AGENTS.md).
+    """
+
+    def __init__(self, pref, checkable: bool = True, environment: bool = False,
+                 parent=None):
+        super().__init__(parent)
+        self.pref = pref
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(10)
+        if checkable:
+            self.check = CheckPill(pref.label)
+            self.check.setChecked(pref.selected)
+            self.check.toggled.connect(
+                lambda checked: setattr(pref, "selected", checked))
+            lay.addWidget(self.check)
+        else:
+            self.check = None
+            name = ElidedLabel(pref.label, Qt.ElideRight)
+            lay.addWidget(name, 2)
+        value = ElidedLabel(pref.display_value, Qt.ElideRight)
+        value.setObjectName("Info")
+        lay.addWidget(value, 1)
+        # Apagada y estirada más que el valor: es texto de apoyo, no el dato.
+        description = ElidedLabel(pref.description, Qt.ElideRight)
+        description.setObjectName("Muted")
+        description.setVisible(bool(pref.description))
+        lay.addWidget(description, 3)
+
+        lines = []
+        if pref.description:
+            lines.append(pref.description)
+        lines.append(tr("Blender path: {path}", path=pref.path))
+        if environment:
+            lines.append(tr(
+                "This depends on your computer, not on your settings. Leave "
+                "it off unless it is the same machine."))
+        tooltip = "\n\n".join(lines)
+        self.setToolTip(tooltip)
+        if self.check is not None:
+            self.check.setToolTip(tooltip)
+
+    def set_checked(self, checked: bool) -> None:
+        """Marca o desmarca la casilla (si la fila la tiene)."""
+        if self.check is not None:
+            self.check.setChecked(checked)
 
 
 def _snapshot_origin(snapshot) -> str:
@@ -513,15 +571,11 @@ def _show_snapshot_details(parent, snapshot, preferences) -> None:
         body_lay.addWidget(empty)
     else:
         for section, items in bprefs.group_by_section(preferences):
-            head = QLabel(tr(dict(bprefs.SECTIONS).get(section, section)))
+            head = QLabel(tr(bprefs.section_label(section)))
             head.setObjectName("Muted")
             body_lay.addWidget(head)
             for pref in items:
-                # La ruta RNA completa con su valor: es lo que permite
-                # comprobarlo en Blender sin adivinar.
-                line = QLabel(f"{pref.path}  =  {pref.value}")
-                line.setWordWrap(True)
-                body_lay.addWidget(line)
+                body_lay.addWidget(_PrefRow(pref, checkable=False))
     body_lay.addStretch()
     scroll.setWidget(body)
     layout = dialog.layout()
@@ -1383,6 +1437,19 @@ class MigrateView(QWidget):
             tooltip=tr("Read the settings from the source version again."))
         self.detail_load_btn.clicked.connect(lambda: self.read_source(force=True))
         row.addWidget(self.detail_load_btn)
+        # Las preferencias de un addon solo existen si el addon está activado
+        # en el destino: con esto se activa en el mismo arranque en que se
+        # escriben. Solo se ve cuando hay ajustes de addons en la lista.
+        self.enable_addons_check = CheckPill(
+            tr("Enable the add-ons these settings need"))
+        self.enable_addons_check.setChecked(True)
+        self.enable_addons_check.setToolTip(tr(
+            "An add-on's settings can only be written if the add-on is enabled "
+            "in the destination. Tick this to enable them there first; the "
+            "add-on must already be installed in the destination (copy it from "
+            "the Add-ons tab if it is not)."))
+        self.enable_addons_check.setVisible(False)
+        row.addWidget(self.enable_addons_check)
         row.addStretch()
         self.detail_select_all = CardButton(
             tr("Select all"),
@@ -1531,6 +1598,8 @@ class MigrateView(QWidget):
                 self.prefs_loaded.emit({"error": str(error)})
                 return
             self.source_read.emit({"version": version, "enabled": enabled})
+            # ``user`` y ``factory`` son ``PreferenceDump``: valores, nombres y
+            # descripciones, y el motivo si alguno no se pudo leer.
             self.prefs_loaded.emit({"user": user, "factory": factory})
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1557,14 +1626,19 @@ class MigrateView(QWidget):
         self._fill_board()
 
     def _refresh_plan_status(self) -> None:
-        """Resume en una línea cuántos addons quedan por copiar."""
-        if not self.plans:
-            return
+        """Resume en una línea qué se ha leído del origen: ajustes y addons."""
         active = sum(1 for plan in self.plans if plan.was_enabled)
-        self.detail_status.setText(tr(
+        text = tr(
             "{changed} settings changed from Blender's defaults · {active} "
             "add-ons enabled in the source.",
-            changed=len(self.detail_prefs), active=active))
+            changed=len(self.detail_prefs), active=active)
+        skipped = getattr(self, "_detail_skipped", 0)
+        if skipped:
+            # Propiedades que el volcado no pudo leer: el detalle está en el
+            # tooltip del estado (lo pone ``_on_prefs_loaded``).
+            text += " " + tr("{count} could not be read (hover for details).",
+                             count=skipped)
+        self.detail_status.setText(text)
 
     def _on_prefs_loaded(self, payload) -> None:
         if not self._prefs_waiting:
@@ -1572,14 +1646,28 @@ class MigrateView(QWidget):
         self._prefs_waiting = False
         self._prefs_loading = False
         self.detail_load_btn.setEnabled(True)
-        if payload.get("error") or not payload.get("user"):
+        user, factory = payload.get("user"), payload.get("factory")
+        error = payload.get("error")
+        if not error and (user is None or not user.ok):
+            error = user.error if user is not None else "no dump"
+        if not error and not factory.ok:
+            error = factory.error
+        if error:
             self.detail_prefs = []
             self._clear_detail_rows()
+            # El motivo real va en el tooltip: "no se pudo leer" a secas no
+            # dice si es que Blender no arranca, tardó demasiado o qué.
             self.detail_status.setText(tr("Could not read the settings."))
+            self.detail_status.setToolTip(str(error))
             self._show_detail_buttons(False)
             return
-        changed = bprefs.diff(payload["user"], payload["factory"])
-        env = bprefs.environment_preferences(payload["user"], payload["factory"])
+        self.detail_status.setToolTip(
+            "\n".join(f"{item.get('path')}: {item.get('reason')}"
+                      for item in user.skipped[:40]))
+        self._detail_skipped = len(user.skipped)
+        changed = bprefs.diff(user.values, factory.values, meta=user.meta)
+        env = bprefs.environment_preferences(user.values, factory.values,
+                                             meta=user.meta)
         self.detail_prefs = changed + env
         if not self.detail_prefs:
             # Decir solo "no has cambiado nada" despista cuando el motivo es
@@ -1622,25 +1710,17 @@ class MigrateView(QWidget):
         self.detail_checks = []
         self.detail_scroll.setVisible(True)
         for section, items in bprefs.group_by_section(self.detail_prefs):
-            label = tr(dict(bprefs.SECTIONS).get(section, section))
-            header = QLabel(label)
+            header = QLabel(tr(bprefs.section_label(section)))
             header.setObjectName("Muted")
             self.detail_rows.addWidget(header)
             for pref in items:
-                check = CheckPill(f"{pref.label}  =  {pref.value}")
-                check.setChecked(pref.selected)
-                # El nombre a secas no dice de dónde sale: la ruta RNA completa
-                # en el tooltip es lo que permite comprobarlo en Blender.
-                tip = pref.path
-                if not pref.selected and bprefs.is_environment(pref.path):
-                    tip += "\n\n" + tr(
-                        "This depends on your computer, not on your settings. "
-                        "Leave it off unless it is the same machine.")
-                check.setToolTip(tip)
-                check.toggled.connect(
-                    lambda checked, p=pref: setattr(p, "selected", checked))
-                self.detail_rows.addWidget(check)
-                self.detail_checks.append(check)
+                row = _PrefRow(pref, environment=bprefs.is_environment(pref.path))
+                self.detail_rows.addWidget(row)
+                self.detail_checks.append(row)
+        # La casilla de activar addons solo tiene sentido si hay ajustes de
+        # addons en la lista.
+        self.enable_addons_check.setVisible(
+            any(pref.section == "addons" for pref in self.detail_prefs))
         # Alto: el que el usuario haya elegido con el asa o, si no, el del
         # contenido; nunca por debajo de las filas enteras que exige el suelo.
         self._fit_scroll(self.detail_scroll, self._min_rows_height(),
@@ -1685,8 +1765,8 @@ class MigrateView(QWidget):
     def _select_detail(self, checked: bool) -> None:
         for pref in self.detail_prefs:
             pref.selected = checked
-        for check in getattr(self, "detail_checks", []):
-            check.setChecked(checked)
+        for row in getattr(self, "detail_checks", []):
+            row.set_checked(checked)
 
     def apply_detail_prefs(self) -> None:
         """Aplica las claves marcadas en el Blender destino."""
@@ -1704,8 +1784,12 @@ class MigrateView(QWidget):
         self.detail_status.setText(tr("Applying settings..."))
         self._prefs_waiting = True
 
+        enable_addons = (self.enable_addons_check.isVisible()
+                         and self.enable_addons_check.isChecked())
+
         def worker():
-            result = bprefs.apply_preferences(executable, selected)
+            result = bprefs.write_preferences(executable, selected,
+                                              enable_addons=enable_addons)
             self.prefs_applied.emit({"result": result, "version": version})
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1718,14 +1802,29 @@ class MigrateView(QWidget):
         version = payload.get("version") or ""
         applied = result.get("applied") or []
         errors = result.get("errors") or []
+        enabled = [item["module"] for item in result.get("addons_enabled") or []
+                   if item.get("enabled")]
         lines = [tr("Applied {count} settings to Blender {version}.",
                     count=len(applied), version=version)]
         if not applied:
             lines = [tr("No settings were applied.")]
-        if errors:
+        if enabled:
+            lines.append(tr("Enabled add-ons: {names}", names=", ".join(enabled)))
+        # Dos motivos distintos, dos listas: "el addon no está activado" tiene
+        # arreglo (copiarlo desde Add-ons); "ya no existe" no.
+        not_enabled = [item for item in errors
+                       if item.get("error") == bprefs.ADDON_NOT_ENABLED]
+        missing = [item for item in errors if item not in not_enabled]
+        if not_enabled:
+            lines.append("")
+            lines.append(tr(
+                "These need their add-on enabled in Blender {version} first "
+                "(copy it from the Add-ons tab):", version=version))
+            lines.extend(f"· {item.get('path')}" for item in not_enabled[:12])
+        if missing:
             lines.append("")
             lines.append(tr("These settings no longer exist in this version:"))
-            for item in errors[:12]:
+            for item in missing[:12]:
                 path = item.get("path") or "Blender"
                 lines.append(f"· {path}")
         show_info(self, tr("Settings applied"), "\n".join(lines))
@@ -1981,12 +2080,19 @@ class MigrateView(QWidget):
                 factory = bprefs.read_preferences(executable, factory=True,
                                                   timeout=120)
                 live = bprefs.read_preferences(executable, timeout=120)
-                payload["live"] = len(bprefs.changed(live, factory))
-                for snapshot in snapshots:
-                    user = bprefs.snapshot_preferences(executable, snapshot,
-                                                       timeout=120)
-                    payload["results"][str(snapshot)] = bprefs.changed(
-                        user, factory)
+                if not factory.ok or not live.ok:
+                    payload["failed"] = True
+                else:
+                    payload["live"] = len(bprefs.changed(live.values,
+                                                         factory.values))
+                    for snapshot in snapshots:
+                        user = bprefs.snapshot_preferences(
+                            executable, snapshot, timeout=120)
+                        # Un guardado ilegible marca solo su fila.
+                        payload["results"][str(snapshot)] = (
+                            bprefs.changed(user.values, factory.values,
+                                           meta=user.meta)
+                            if user.ok else None)
             except Exception:  # noqa: BLE001 - un fallo no puede tumbar la vista
                 payload["failed"] = True
             self.snapshots_analyzed.emit(payload)
@@ -2004,7 +2110,10 @@ class MigrateView(QWidget):
         for snapshot, row in self._snapshot_widgets.items():
             preferences = results.get(str(snapshot))
             if preferences is None:
-                if payload.get("failed"):
+                # Sin resultado: o falló todo, o ese guardado no se pudo leer
+                # (``None`` explícito). Solo se queda "analizando" si aún no
+                # le ha tocado.
+                if payload.get("failed") or str(snapshot) in results:
                     row.set_unreadable()
                 else:
                     row.set_analysis(None)

@@ -8,177 +8,249 @@ Así:
 * volcar las preferencias del usuario y las de fábrica (``--factory-startup``),
 * **diferenciarlas** para quedarse solo con lo que el usuario cambió de verdad
   (y no con las 280 claves, la mayoría por defecto),
-* y aplicar solo las claves marcadas en la versión destino, avisando de las que
-  ya no existen allí (Blender renombra/mueve cosas entre versiones).
+* y escribir solo las claves marcadas en la versión destino, avisando de las
+  que ya no existen allí (Blender renombra/mueve cosas entre versiones).
+
+Cada clave viene con su **nombre y descripción** tal y como los declara el RNA
+de Blender (la etiqueta y el tooltip que se ven en Preferencias): así la
+interfaz explica qué es cada ajuste sin mantener textos a mano.
 
 La ruta de cada clave es una ruta RNA (``seccion.propiedad.subpropiedad``). No
-es API estable entre versiones: esa es justo la razón de que aplicar vaya
+es API estable entre versiones: esa es justo la razón de que escribir vaya
 **clave a clave** y se reporten las que fallan, en vez de copiar de golpe.
 
 Es un módulo de ``services/``: no importa Qt. La parte que habla con Blender
 está en ``blender_runner``; aquí solo vive el guion, el filtrado y los tipos.
 """
 
+import json
 import shutil
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from services import blender_runner
 
-# Valores que no son una preferencia "del usuario" sino del entorno: el diff
+# Valores que no son una preferencia "del usuario" sino del equipo: el diff
 # contra fábrica los detectaría como cambio, pero migrarlos no tiene sentido
 # (o es directamente peligroso: mover `gpu_backend` de un equipo a otro puede
-# dejar a la otra build sin arrancar).
+# dejar a la otra build sin arrancar). Se ofrecen aparte y desmarcados.
 ENVIRONMENT_KEYS = (
     "system.gpu_backend",
     "system.gpu_backend_os",
     "system.audio_device",
     "system.audio_channels",
     "system.audio_sample_rate",
-    "system.audio_sample_rate_hz",
-    "system.opengl_extension_enabled",
-    "system.maximum_resolution_x",
-    "system.maximum_resolution_y",
-    "system.maximum_resolution_scale",
     "system.memory_cache_limit",
-    "system.use_preferences_save",
-    "filepaths.use_scripts_auto_execute",
-    "filepaths.script_directory",
     "filepaths.font_directory",
     "filepaths.texture_directory",
     "filepaths.render_output_directory",
     "filepaths.render_cache_directory",
     "filepaths.temp_directory",
     "filepaths.asset_libraries",
-    "extensions",
-    "experimental",
-    "apps",
-    "active_section",   # la pestaña de preferencias que estaba abierta
+)
+
+# Claves que ni siquiera se ofrecen: no son ajustes del usuario ni del equipo,
+# son estado interno de Blender (la pestaña de preferencias que estaba abierta,
+# si hay cambios sin guardar, la versión que escribió el fichero).
+IGNORED_KEYS = (
+    "system.use_preferences_save",
+    "active_section",
     "is_dirty",
     "version",
 )
 
-# Propiedades que, aunque lleguen del volcado como un texto (los ``set`` de
-# Blender se imprimen así: ``{'A', 'B'}``), no se pueden volver a escribir por
-# esta vía: ``key_insert_channels`` espera un ``set`` y le llega una cadena.
-# Se listan explícitamente para no ofrecer algo que va a fallar siempre.
-_UNSETTABLE = (
-    "edit.key_insert_channels",
-)
-
-
-def is_settable(path: str) -> bool:
-    """True si esa clave se puede escribir de vuelta por ruta RNA."""
-    return not any(path == blocked or path.startswith(blocked + ".")
-                   for blocked in _UNSETTABLE)
-
-# Secciones que se pueden ofrecer al usuario. La vista agrupa por prefijo; el
-# orden es el de las pestañas de preferencias de Blender.
+# Secciones que se pueden ofrecer al usuario, en el orden de las pestañas de
+# Preferencias de Blender. Temas, estilos de texto y atajos completos viven en
+# colecciones que este volcado no recorre: van por presets (``blender_style``);
+# de ``keymap`` solo llega cuál es el preset activo, y la etiqueta lo dice.
 SECTIONS = (
     ("view", "Interface"),
     ("edit", "Editing"),
     ("inputs", "Input"),
-    ("filepaths", "File Paths"),
-    ("keymap", "Keymap"),
+    ("keymap", "Keymap (active preset)"),
     ("system", "System"),
+    ("filepaths", "File Paths"),
+    ("extensions", "Get Extensions"),
+    ("experimental", "Experimental"),
+    ("apps", "App templates"),
     # Preferencias de los addons activos (p. ej. el dispositivo de Cycles).
     ("addons", "Add-ons"),
 )
 
+# Error estable con el que el guion de escritura señala una preferencia de un
+# addon que no está activado en el destino: la interfaz lo agrupa y explica.
+ADDON_NOT_ENABLED = "add-on not enabled in the destination"
+
+# Versión del formato del volcado. Un volcado sin ``format`` es del esquema
+# viejo (solo el diccionario de valores) y se admite igual.
+DUMP_FORMAT = 2
+
 # --- Guion que corre dentro de Blender ------------------------------------
 #
-# Recorre el árbol de preferencias por las propiedades RNA y vuelca las hojas.
-# Se salta colecciones (addons, temas, asset libraries) porque no son escalares
-# y se migran de otra forma (los addons tienen su propia vista), y las
-# Read-only de hoja. Los POINTER se recorren aunque sean de solo lectura: por
-# ahí se baja (``view``, ``edit``...), no se copian como valor.
+# Recorre el árbol de preferencias por las propiedades RNA y vuelca las hojas
+# con su nombre y descripción. Se salta colecciones (addons, temas, asset
+# libraries) porque no son escalares y se migran de otra forma (los addons
+# tienen su propia vista), y las de solo lectura de hoja. Los POINTER se
+# recorren aunque sean de solo lectura: por ahí se baja (``view``, ``edit``...),
+# no se copian como valor.
+#
+# Cada propiedad va en su propio ``try``: una que falle se anota en ``skipped``
+# y las demás siguen. Antes un solo POINTER a ``None`` tumbaba el volcado
+# entero y la interfaz decía "no se pudieron leer los ajustes" sin motivo.
+# Y el marcador se imprime SIEMPRE, aunque falle todo, con el error dentro.
 
 _DUMP_SCRIPT = r'''
 import bpy
 import json
 
-OUT = {}
+VALUES = {}
+META = {}
+SKIPPED = []
+ADDONS = []
+SKIP = object()
+
+
+def scalar(kind, value):
+    """Valor JSON del tipo RNA ``kind``.
+
+    Los float se redondean: Blender devuelve 0.10000000149 para un 0.1, y sin
+    redondear dos lecturas de una preferencia sin tocar podian salir distintas.
+    """
+    if kind == "FLOAT":
+        return round(float(value), 6)
+    if kind == "INT":
+        return int(value)
+    if kind == "BOOLEAN":
+        return bool(value)
+    return str(value)
+
+
+def is_array(prop):
+    return bool(getattr(prop, "is_array", False))
+
+
+def is_flag(prop):
+    return prop.type == "ENUM" and bool(getattr(prop, "is_enum_flag", False))
+
+
+def serialise(prop, value):
+    """Valor JSON de esa propiedad, o SKIP si no es de un tipo que sepamos."""
+    if is_flag(prop):
+        # Un enum de varios valores llega como ``set``, y ``str()`` sobre un
+        # set NO tiene orden estable entre procesos (Python aleatoriza el hash
+        # de las cadenas): se ordena para que el diff no lo de por cambiado.
+        return sorted(str(item) for item in value)
+    if prop.type == "ENUM":
+        return str(value)
+    if is_array(prop):
+        # Colores, pares de floats...: antes se descartaban sin dejar rastro.
+        return [scalar(prop.type, item) for item in value]
+    if prop.type in ("BOOLEAN", "INT", "FLOAT", "STRING"):
+        return scalar(prop.type, value)
+    return SKIP
+
+
+def default_of(prop):
+    """Valor de fabrica de la propiedad, en la misma forma que ``serialise``."""
+    if is_flag(prop):
+        return sorted(str(item) for item in prop.default_flag)
+    if prop.type == "ENUM":
+        return str(prop.default)
+    if is_array(prop):
+        return [scalar(prop.type, item) for item in prop.default_array]
+    return scalar(prop.type, prop.default)
 
 
 def is_default(prop, value):
-    """True si el valor es el de fabrica de esa propiedad RNA.
+    """True si ``value`` (ya serializado) es el de fabrica de esa propiedad.
 
     Se usa para las preferencias de addons: como un addon que solo esta
     activado en la config del usuario no sale en el volcado de fabrica, se
     compara contra el valor por defecto que declara el propio RNA.
     """
     try:
-        default = prop.default
+        return default_of(prop) == value
     except Exception:
         return False
-    if prop.type == "ENUM":
-        try:
-            return value == prop.enum_items[default].identifier
-        except Exception:
-            return False
-    return value == default
+
+
+def describe(prop):
+    """Nombre, descripcion y tipo: lo que la interfaz ensena por cada clave."""
+    meta = {
+        "name": prop.name or "",
+        "description": prop.description or "",
+        "type": prop.type,
+        "subtype": getattr(prop, "subtype", "NONE") or "NONE",
+    }
+    if is_array(prop):
+        meta["is_array"] = True
+    if is_flag(prop):
+        meta["enum_flag"] = True
+    return meta
 
 
 def walk(obj, prefix, depth=0, only_changed=False):
-    if depth > 5:
+    if obj is None or depth > 5:
         return
     for prop in obj.bl_rna.properties:
-        if prop.identifier in ("rna_type", "bl_idname") or prop.type == "COLLECTION":
-            continue
+        path = prefix + prop.identifier
         try:
+            if prop.identifier in ("rna_type", "bl_idname") or prop.type == "COLLECTION":
+                continue
             value = getattr(obj, prop.identifier)
+            if prop.type == "POINTER":
+                walk(value, path + ".", depth + 1, only_changed)
+                continue
+            if prop.is_readonly:
+                continue
+            out = serialise(prop, value)
+            if out is SKIP:
+                SKIPPED.append({"path": path, "reason": "unsupported type " + prop.type})
+                continue
+            if only_changed and is_default(prop, out):
+                continue
+            VALUES[path] = out
+            META[path] = describe(prop)
+        except Exception as exc:
+            SKIPPED.append({"path": path, "reason": str(exc)})
+
+
+payload = {"format": 2, "values": VALUES, "meta": META, "skipped": SKIPPED,
+           "addons": ADDONS}
+try:
+    walk(bpy.context.preferences, "")
+    # Preferencias de los addons ACTIVOS. No son atributos de ``preferences``
+    # (viven en la coleccion ``addons``), asi que el recorrido de arriba no
+    # las ve: de ahi salian sin detectar el dispositivo de Cycles (OPTIX/CUDA/
+    # HIP) o las opciones de glTF. Los modulos de extension llevan puntos en
+    # el nombre (``bl_ext.<repo>.<id>``); quien las escribe resuelve el modulo
+    # por el prefijo mas largo de ``addons``.
+    for addon in bpy.context.preferences.addons:
+        ADDONS.append(addon.module)
+        try:
+            addon_prefs = addon.preferences
         except Exception:
             continue
-        path = prefix + prop.identifier
-        if prop.type == "POINTER":
-            walk(value, path + ".", depth + 1, only_changed)
-            continue
-        if prop.is_readonly:
-            continue
-        if prop.type == "ENUM":
-            # Un enum de varios valores llega como ``set``, y ``str()`` sobre un
-            # set NO tiene orden estable entre procesos (Python aleatoriza el
-            # hash de las cadenas). Sin ordenarlo, la misma preferencia sin
-            # tocar sale distinta en dos lecturas y el diff la da por cambiada.
-            # Hoy la única así (``edit.key_insert_channels``) no es escribible y
-            # el filtro la descarta, pero eso es suerte, no diseño.
-            if only_changed and is_default(prop, value):
-                continue
-            OUT[path] = str(sorted(value)) if isinstance(value, set) else str(value)
-        elif isinstance(value, (bool, int, float, str)):
-            if only_changed and is_default(prop, value):
-                continue
-            OUT[path] = value
+        # ``only_changed``: sin el volcado de fabrica con el que comparar, se
+        # descartan las claves que ya valen lo que su propio RNA dice.
+        walk(addon_prefs, "addons." + addon.module + ".", 0, True)
+except Exception as exc:
+    payload["error"] = str(exc)
 
-
-walk(bpy.context.preferences, "")
-
-# Preferencias de los addons ACTIVOS. No son atributos de ``preferences`` (viven
-# en la coleccion ``addons``), asi que el recorrido de arriba no las ve: de ahi
-# salian sin detectar el dispositivo de Cycles (OPTIX/CUDA/HIP) o las opciones
-# de glTF. Los modulos de extension llevan puntos en el nombre
-# (``bl_ext.<repo>.<id>``); quien las aplica resuelve el modulo por el prefijo
-# mas largo de ``addons``.
-for addon in bpy.context.preferences.addons:
-    try:
-        addon_prefs = addon.preferences
-    except Exception:
-        continue
-    if addon_prefs is None:
-        continue
-    # ``only_changed``: sin el volcado de fabrica con el que comparar, se
-    # descartan las claves que ya valen lo que su propio RNA dice por defecto.
-    walk(addon_prefs, "addons." + addon.module + ".", 0, True)
-
-print("BLENDERMANAGER_DUMP=" + json.dumps(OUT))
+print("BLENDERMANAGER_DUMP=" + json.dumps(payload))
 '''
 
-# --- Guion que aplica las claves elegidas ---------------------------------
+# --- Guion que escribe las claves elegidas ---------------------------------
 #
-# Recibe pares ``[ruta, valor]`` por variable de entorno. Aplica cada uno por
+# Recibe pares ``[ruta, valor]`` por variable de entorno. Escribe cada uno por
 # su cuenta: si una clave ya no existe en esta versión (o cambió de tipo), se
-# anota el error y se sigue con las demás. Solo guarda si algo se aplicó.
+# anota el error y se sigue con las demás. Solo guarda si algo se escribió.
+#
+# Las preferencias de un addon solo existen si el addon está activado. Con
+# ``BLENDERMANAGER_ENABLE_ADDONS=1`` se intenta activar antes (en este mismo
+# arranque, un solo ``save_userpref``); si no se puede, la clave falla con
+# ``ADDON_NOT_ENABLED`` y la interfaz explica que hay que copiar el addon.
 
 _APPLY_SCRIPT = r'''
 import bpy
@@ -186,9 +258,12 @@ import json
 import os
 
 pairs = json.loads(os.environ.get("BLENDERMANAGER_PREFS", "[]"))
+enable_addons = os.environ.get("BLENDERMANAGER_ENABLE_ADDONS") == "1"
 applied = []
 errors = []
+addons_enabled = []
 prefs = bpy.context.preferences
+ADDON_NOT_ENABLED = "add-on not enabled in the destination"
 
 # Igual que al habilitar addons: `save_userpref` no crea la carpeta de config,
 # y sin ella el guardado falla en silencio en `--background`.
@@ -200,8 +275,40 @@ try:
 except Exception:
     pass
 
+
+def longest_prefix(rest, names):
+    """El nombre de modulo mas largo que sea prefijo de ``rest``."""
+    matches = [name for name in names if rest.startswith(name + ".")]
+    return max(matches, key=len) if matches else None
+
+
+def ensure_addon(rest):
+    """Modulo del addon de ``rest`` si esta activado (o se acaba de activar)."""
+    module = longest_prefix(rest, list(prefs.addons.keys()))
+    if module is not None:
+        return module
+    if not enable_addons:
+        return None
+    import addon_utils
+    module = longest_prefix(rest, [m.__name__ for m in addon_utils.modules()])
+    if module is None:
+        return None
+    try:
+        addon_utils.enable(module, default_set=True)
+    except Exception as exc:
+        addons_enabled.append({"module": module, "enabled": False,
+                               "error": str(exc)})
+        return None
+    if module not in prefs.addons.keys():
+        addons_enabled.append({"module": module, "enabled": False,
+                               "error": "enable failed"})
+        return None
+    addons_enabled.append({"module": module, "enabled": True})
+    return module
+
+
 def resolve(path):
-    """Objeto RNA al que apunta la ruta, o None si no existe.
+    """``(objeto RNA, error)`` de la ruta: el objeto que tiene la hoja.
 
     ``addons.<modulo>.<clave>`` no es una cadena de atributos (``addons`` es una
     coleccion), asi que se entra por ella. El modulo puede llevar puntos
@@ -209,36 +316,38 @@ def resolve(path):
     """
     if path.startswith("addons."):
         rest = path[len("addons."):]
-        modules = [m for m in prefs.addons.keys() if rest.startswith(m + ".")]
-        if not modules:
-            return None
-        module = max(modules, key=len)
+        module = ensure_addon(rest)
+        if module is None:
+            return None, ADDON_NOT_ENABLED
         addon = prefs.addons.get(module)
         obj = addon.preferences if addon is not None else None
         if obj is None:
-            return None
+            return None, ADDON_NOT_ENABLED
         head = rest[len(module) + 1:].rpartition(".")[0]
     else:
         obj = prefs
         head = path.rpartition(".")[0]
     for part in head.split(".") if head else []:
         obj = getattr(obj, part)
-    return obj
+    return obj, ""
 
 
 for path, value in pairs:
     try:
         leaf = path.rpartition(".")[2]
-        obj = resolve(path)
+        obj, error = resolve(path)
         if obj is None:
-            errors.append({"path": path, "error": "unknown add-on or property"})
+            errors.append({"path": path, "error": error or "unknown property"})
             continue
         prop = obj.bl_rna.properties.get(leaf)
         if prop is None:
             errors.append({"path": path, "error": "unknown property"})
             continue
         if prop.type == "ENUM":
-            setattr(obj, leaf, str(value))
+            setattr(obj, leaf, set(value) if isinstance(value, list) else str(value))
+        elif getattr(prop, "is_array", False):
+            cast = {"BOOLEAN": bool, "INT": int, "FLOAT": float}.get(prop.type)
+            setattr(obj, leaf, tuple(cast(item) if cast else item for item in value))
         elif prop.type == "BOOLEAN":
             setattr(obj, leaf, bool(value))
         elif prop.type in ("INT", "FLOAT"):
@@ -255,17 +364,27 @@ if applied:
     except Exception as exc:
         errors.append({"path": "", "error": "save_userpref: " + str(exc)})
 
-print("BLENDERMANAGER_RESULT=" + json.dumps({"applied": applied, "errors": errors}))
+print("BLENDERMANAGER_RESULT=" + json.dumps(
+    {"applied": applied, "errors": errors, "addons_enabled": addons_enabled}))
 '''
 
 
 @dataclass
 class Preference:
-    """Una preferencia escalar, ya filtrada (el usuario la cambió)."""
+    """Una preferencia, ya filtrada (el usuario la cambió).
+
+    ``name`` y ``description`` son los del RNA de Blender (la etiqueta y el
+    tooltip de Preferencias); pueden faltar en volcados viejos, y entonces la
+    interfaz enseña el identificador.
+    """
 
     path: str
     value: object
     selected: bool = True
+    name: str = ""
+    description: str = ""
+    type: str = ""
+    subtype: str = ""
 
     @property
     def section(self) -> str:
@@ -273,9 +392,50 @@ class Preference:
         return (self.path or "").split(".", 1)[0]
 
     @property
-    def label(self) -> str:
-        """Nombre legible de la clave (la última parte de la ruta)."""
+    def identifier(self) -> str:
+        """Último tramo de la ruta (``ui_scale``): el nombre en el RNA."""
         return self.path.rsplit(".", 1)[-1]
+
+    @property
+    def label(self) -> str:
+        """Nombre legible: el de Blender si lo hay, si no el identificador."""
+        return self.name or self.identifier
+
+    @property
+    def display_value(self) -> str:
+        """El valor como texto corto para una fila (listas y floats legibles)."""
+        return format_value(self.value)
+
+
+@dataclass
+class PreferenceDump:
+    """Lo que devuelve un volcado: valores, sus metadatos y cómo fue la cosa.
+
+    ``ok`` distingue "Blender contestó" de "no se pudo leer" (sin ejecutable,
+    tiempo agotado, salida sin marcador): antes un volcado vacío y uno fallido
+    eran el mismo ``{}`` y la interfaz no sabía qué decir.
+    """
+
+    values: dict = field(default_factory=dict)
+    meta: dict = field(default_factory=dict)
+    skipped: list = field(default_factory=list)
+    addons: list = field(default_factory=list)
+    error: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return not self.error
+
+
+def format_value(value) -> str:
+    """Texto corto de un valor: listas separadas por comas, floats sin ruido."""
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, float):
+        return f"{value:g}"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(format_value(item) for item in value)
+    return str(value)
 
 
 def is_environment(key: str) -> bool:
@@ -284,26 +444,26 @@ def is_environment(key: str) -> bool:
                for blocked in ENVIRONMENT_KEYS)
 
 
-def is_scalar(value) -> bool:
-    """True si el valor se puede escribir como un número, texto o booleano."""
-    return isinstance(value, (bool, int, float, str))
+def is_ignored(key: str) -> bool:
+    """True si la clave es estado interno de Blender y no se ofrece nunca."""
+    return any(key == blocked or key.startswith(blocked + ".")
+               for blocked in IGNORED_KEYS)
 
 
-def changed(user: dict, factory: dict) -> list:
+def is_serialisable(value) -> bool:
+    """True si el valor se puede escribir de vuelta: escalar o lista de escalares."""
+    if isinstance(value, (bool, int, float, str)):
+        return True
+    return (isinstance(value, list)
+            and all(isinstance(item, (bool, int, float, str)) for item in value))
+
+
+def changed(user: dict, factory: dict, meta=None) -> list:
     """Todas las claves que el usuario cambió respecto a fábrica.
 
-    ``diff`` aparta las que dependen del equipo; aquí se devuelven **todas**,
-    porque para resumir "cuánto tiene este guardado" cuenta todo lo que el
-    usuario tocó, esté donde esté. Es la misma base que usa ``diff``.
-    """
-    return _changed(user, factory)
-
-
-def _changed(user: dict, factory: dict) -> list:
-    """Todas las claves que el usuario cambió respecto a fábrica.
-
-    Se descartan los valores no escalares y los que no se pueden volver a
-    escribir por ruta RNA (ver ``is_settable``).
+    Es la base de ``diff`` y de ``environment_preferences``; aquí se devuelven
+    **todas** (equipo incluido) porque para resumir "cuánto tiene este
+    guardado" cuenta todo lo que el usuario tocó, esté donde esté.
 
     Una clave que falte en fábrica **normalmente** no es un cambio del usuario,
     es una propiedad que esa versión no tiene, y se descarta. La excepción son
@@ -311,45 +471,52 @@ def _changed(user: dict, factory: dict) -> list:
     que solo está activado en la config del usuario (p. ej. una extensión
     instalada a mano), así que sus claves faltarían siempre. Ahí el addon
     activado es justamente lo que las hace suyas, y se ofrecen.
+
+    ``meta`` (el del volcado del usuario) rellena nombre y descripción.
     """
-    changed = []
+    meta = meta or {}
+    result = []
     for path, value in user.items():
-        if not is_scalar(value) or not is_settable(path):
+        if not is_serialisable(value) or is_ignored(path):
             continue
         if path in factory:
             if factory[path] == value:
                 continue
         elif not path.startswith("addons."):
             continue
-        changed.append(Preference(path=path, value=value))
-    changed.sort(key=lambda item: item.path)
-    return changed
+        info = meta.get(path) or {}
+        result.append(Preference(
+            path=path, value=value,
+            name=info.get("name", ""), description=info.get("description", ""),
+            type=info.get("type", ""), subtype=info.get("subtype", "")))
+    result.sort(key=lambda item: item.path)
+    return result
 
 
-def diff(user: dict, factory: dict) -> list:
+def diff(user: dict, factory: dict, meta=None) -> list:
     """Claves que el usuario cambió y que son suyas (no del equipo).
 
     Es lo que se ofrece migrar de verdad: los cambios que dependen del hardware
     o de rutas van aparte, en ``environment_preferences``.
     """
-    return [item for item in _changed(user, factory)
+    return [item for item in changed(user, factory, meta)
             if not is_environment(item.path)]
 
 
-def environment_preferences(user: dict, factory: dict) -> list:
+def environment_preferences(user: dict, factory: dict, meta=None) -> list:
     """Cambios que son del equipo (GPU, audio, rutas): se enseñan aparte.
 
     No se seleccionan por defecto, pero se listan para que el usuario sepa que
     existen y decida (sobre todo para migrar a la **misma** máquina).
     """
-    items = [item for item in _changed(user, factory)
+    items = [item for item in changed(user, factory, meta)
              if is_environment(item.path)]
     for item in items:
         item.selected = False
     return items
 
 
-def group_by_section(preferences) -> dict:
+def group_by_section(preferences) -> list:
     """Agrupa las preferencias por sección, conservando el orden de ``SECTIONS``."""
     order = {key: index for index, (key, _) in enumerate(SECTIONS)}
     groups = {}
@@ -361,17 +528,38 @@ def group_by_section(preferences) -> dict:
     return grouped
 
 
+def section_label(section: str) -> str:
+    """Etiqueta (clave i18n) de una sección; la propia clave si no la conocemos."""
+    return dict(SECTIONS).get(section, section)
+
+
+def _dump_from_payload(payload) -> PreferenceDump:
+    """``PreferenceDump`` a partir del JSON del marcador (formato 2 o viejo)."""
+    if not isinstance(payload, dict):
+        return PreferenceDump(error="no dump in Blender's output")
+    if "format" not in payload:
+        # Esquema viejo: el diccionario entero eran los valores.
+        return PreferenceDump(values=dict(payload))
+    return PreferenceDump(
+        values=dict(payload.get("values") or {}),
+        meta=dict(payload.get("meta") or {}),
+        skipped=list(payload.get("skipped") or []),
+        addons=list(payload.get("addons") or []),
+        error=str(payload.get("error") or ""),
+    )
+
+
 def read_preferences(executable, factory: bool = False, timeout: int = 180,
-                     config_dir=None) -> dict:
+                     config_dir=None) -> PreferenceDump:
     """Pide a Blender su volcado de preferencias (de fábrica o del usuario).
 
     ``config_dir`` apunta a una carpeta de configuración concreta
     (``BLENDER_USER_CONFIG``): es lo que permite leer un guardado sin tocar la
-    config viva. Devuelve ``{}`` si no se pudo (sin ejecutable, timeout, salida
-    rara). El fallo no es fatal: la interfaz lo enseña como "no se pudo leer".
+    config viva. Nunca lanza: si no se pudo (sin ejecutable, timeout, salida
+    rara), el motivo viaja en ``PreferenceDump.error`` y la interfaz lo enseña.
     """
     if not executable:
-        return {}
+        return PreferenceDump(error="no Blender to run")
     args = ["--background"]
     if factory:
         args.append("--factory-startup")
@@ -379,15 +567,20 @@ def read_preferences(executable, factory: bool = False, timeout: int = 180,
     extra_env = None
     if config_dir:
         extra_env = {"BLENDER_USER_CONFIG": str(config_dir)}
-    code, out, _ = blender_runner._run(executable, args, extra_env=extra_env,
-                                       timeout=timeout)
+    code, out, err = blender_runner._run(executable, args, extra_env=extra_env,
+                                         timeout=timeout)
     if code is None:
-        return {}
+        return PreferenceDump(error=err or "could not run Blender")
     payload = blender_runner._parse_marker(out, "BLENDERMANAGER_DUMP=")
-    return payload if isinstance(payload, dict) else {}
+    if payload is None:
+        tail = (err or "").strip()[-400:]
+        if code != 0:
+            return PreferenceDump(error=f"Blender exited with {code}: {tail}")
+        return PreferenceDump(error="no dump in Blender's output")
+    return _dump_from_payload(payload)
 
 
-def snapshot_preferences(executable, snapshot, timeout: int = 180) -> dict:
+def snapshot_preferences(executable, snapshot, timeout: int = 180) -> PreferenceDump:
     """Preferencias guardadas en una instantánea, sin tocarla.
 
     Se copia a un temporal y se arranca Blender con esa config: un guardado se
@@ -395,23 +588,28 @@ def snapshot_preferences(executable, snapshot, timeout: int = 180) -> dict:
     arrancar y no queremos que un guardado cambie por leerlo).
     """
     snapshot = Path(snapshot)
-    if not executable or not snapshot.is_dir():
-        return {}
+    if not executable:
+        return PreferenceDump(error="no Blender to run")
+    if not snapshot.is_dir():
+        return PreferenceDump(error="snapshot folder not found")
     with tempfile.TemporaryDirectory(
             prefix="blendermanager-snapshot-") as tmp:
         config = Path(tmp) / "config"
         try:
             shutil.copytree(snapshot, config)
-        except OSError:
-            return {}
+        except OSError as error:
+            return PreferenceDump(error=str(error))
         return read_preferences(executable, config_dir=config, timeout=timeout)
 
 
-def apply_preferences(executable, preferences, timeout: int = 180) -> dict:
-    """Aplica esas claves (``Preference`` o pares ``(ruta, valor)``).
+def write_preferences(executable, preferences, timeout: int = 180,
+                      enable_addons: bool = False) -> dict:
+    """Escribe esas claves (``Preference`` o pares ``(ruta, valor)``) en Blender.
 
-    Devuelve ``{"applied", "errors", "log"}``. Nunca lanza: si Blender no está
-    o se cuelga, el motivo viaja en ``errors``.
+    Devuelve ``{"applied", "errors", "addons_enabled", "log"}``. Nunca lanza:
+    si Blender no está o se cuelga, el motivo viaja en ``errors``. Con
+    ``enable_addons`` intenta activar antes los addons cuyas preferencias se
+    escriben (ver el guion).
     """
     pairs = []
     for item in preferences or []:
@@ -419,16 +617,15 @@ def apply_preferences(executable, preferences, timeout: int = 180) -> dict:
             pairs.append([item.path, item.value])
         else:
             pairs.append([item[0], item[1]])
-    result = {"applied": [], "errors": [], "log": ""}
+    result = {"applied": [], "errors": [], "addons_enabled": [], "log": ""}
     if not pairs or not executable:
         result["errors"].append({"path": "", "error": "no Blender to run"})
         return result
-    import json
-
     code, out, err = blender_runner._run(
         executable,
         ["--background", "--python-expr", _APPLY_SCRIPT],
-        extra_env={"BLENDERMANAGER_PREFS": json.dumps(pairs)},
+        extra_env={"BLENDERMANAGER_PREFS": json.dumps(pairs),
+                   "BLENDERMANAGER_ENABLE_ADDONS": "1" if enable_addons else "0"},
         timeout=timeout,
     )
     result["log"] = (err or "")[-4000:]
@@ -442,4 +639,5 @@ def apply_preferences(executable, preferences, timeout: int = 180) -> dict:
         return result
     result["applied"] = list(payload.get("applied") or [])
     result["errors"] = list(payload.get("errors") or [])
+    result["addons_enabled"] = list(payload.get("addons_enabled") or [])
     return result

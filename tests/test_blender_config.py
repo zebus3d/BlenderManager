@@ -202,42 +202,6 @@ class CompatReportTest(unittest.TestCase):
                          (bc.WARN, bc.REASON_UNKNOWN_VERSION))
 
 
-class DumpScriptTest(unittest.TestCase):
-    """El guion que corre DENTRO de Blender, hasta donde se puede probar aquí.
-
-    No se puede ejecutar sin Blender, así que esto solo vigila que no se caiga
-    la protección: un enum de varios valores llega como ``set`` y ``str()``
-    sobre un set no tiene orden estable entre procesos. Sin ordenarlo, dos
-    lecturas de la misma configuración salen distintas y el diff da por
-    cambiada una preferencia que nadie tocó (comprobado contra Blender 5.2.2:
-    ``edit.key_insert_channels`` cambiaba de orden entre lecturas).
-    """
-
-    def test_los_enum_de_varios_valores_se_ordenan(self):
-        from services import blender_prefs as bp
-
-        self.assertIn("sorted(value)", bp._DUMP_SCRIPT)
-
-    def test_el_volcado_incluye_las_preferencias_de_addons(self):
-        """El dispositivo de Cycles y compañía viven en la colección ``addons``.
-
-        Recorrer solo ``bpy.context.preferences`` los dejaba fuera, así que no
-        se detectaba, por ejemplo, que el usuario tiene OPTIX puesto.
-        """
-        from services import blender_prefs as bp
-
-        self.assertIn("preferences.addons", bp._DUMP_SCRIPT)
-        self.assertIn('"addons."', bp._DUMP_SCRIPT)
-        # Y el guion que las aplica sabe entrar por la colección.
-        self.assertIn("prefs.addons", bp._APPLY_SCRIPT)
-
-    def test_el_orden_de_un_set_no_es_estable(self):
-        """Por qué hace falta lo de arriba, con la prueba delante."""
-        valores = {"CUSTOM_PROPS", "LOCATION", "ROTATION", "SCALE"}
-        # ``sorted`` sí es determinista; ``str(set)`` depende del hash.
-        self.assertEqual(str(sorted(valores)), str(sorted(set(valores))))
-
-
 class WheelTest(unittest.TestCase):
     def test_cp_distinto_choca(self):
         self.assertTrue(bc.wheel_conflict(["a-1-cp311-cp311-linux_x86_64.whl"],

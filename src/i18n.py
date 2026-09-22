@@ -1027,6 +1027,31 @@ _TRANSLATIONS = {
         "Write the selected settings in the destination version.":
             "Escribe los ajustes marcados en la versión de destino.",
         "Reading settings...": "Leyendo ajustes...",
+        # Secciones de Preferencias (etiquetas de ``blender_prefs.SECTIONS``).
+        "Editing": "Edición",
+        "Input": "Entrada",
+        "Keymap (active preset)": "Mapa de teclas (preset activo)",
+        "File Paths": "Rutas de archivos",
+        "Get Extensions": "Extensiones",
+        "App templates": "Plantillas de aplicación",
+        "Blender path: {path}": "Ruta en Blender: {path}",
+        "{count} could not be read (hover for details).":
+            "{count} no se pudieron leer (pasa el ratón para ver cuáles).",
+        "Enable the add-ons these settings need":
+            "Activar los addons que necesitan estos ajustes",
+        "An add-on's settings can only be written if the add-on is enabled "
+        "in the destination. Tick this to enable them there first; the "
+        "add-on must already be installed in the destination (copy it from "
+        "the Add-ons tab if it is not).":
+            "Los ajustes de un addon solo se pueden escribir si el addon está "
+            "activado en el destino. Marca esto para activarlos allí antes; el "
+            "addon tiene que estar ya instalado en el destino (cópialo desde "
+            "la pestaña Add-ons si no lo está).",
+        "Enabled add-ons: {names}": "Addons activados: {names}",
+        "These need their add-on enabled in Blender {version} first "
+        "(copy it from the Add-ons tab):":
+            "Estos necesitan su addon activado en Blender {version} (cópialo "
+            "desde la pestaña Add-ons):",
         "Could not read the settings.": "No se pudieron leer los ajustes.",
         "You have no settings changed from Blender's defaults.":
             "No tienes ajustes cambiados respecto a los valores por defecto de "
