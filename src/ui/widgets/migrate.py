@@ -51,7 +51,8 @@ from ui import theme as t
 from ui.fonts import glyph_icon, icon_font
 from ui.widgets.buttons import CardButton, CheckPill
 from ui.widgets.cards import settings_card
-from ui.widgets.layouts import clear_layout, list_scroll, muted_note
+from ui.widgets.layouts import (FittedList, clear_layout, list_scroll,
+                                muted_note)
 from ui.widgets.dialogs import AppDialog, confirm, show_info
 from ui.widgets.labels import ElidedLabel
 
@@ -78,7 +79,7 @@ SNAPSHOT_MIN_HEIGHT = 60
 # (más el título de sección). Es un suelo flojo a propósito: lo que hacía que
 # los botones pareciesen metidos dentro del listado no era el tamaño, sino que
 # el layout encogía la lista por debajo de su mínimo cuando la ventana se
-# quedaba corta (lo arregla ``_fit_scroll``). Se deja el suelo solo para que
+# quedaba corta (lo arregla ``FittedList``). Se deja el suelo solo para que
 # encoger del todo siga enseñando una lista y no una rendija.
 DETAIL_MIN_ROWS = 2
 
@@ -223,6 +224,22 @@ def _version_label(entry) -> str:
     return getattr(entry, "version", "") or getattr(entry, "name", "")
 
 
+def _failure_block(title: str, lines, limit: int = 10) -> list:
+    """Bloque "título + viñetas" de un diálogo de resultado, recortado.
+
+    Como mucho ``limit`` líneas: un fallo masivo no puede convertir el diálogo
+    en un muro de texto. Todos los resúmenes de Migración recortan igual.
+    """
+    lines = list(lines)
+    if not lines:
+        return []
+    block = ["", title]
+    block.extend(f"· {line}" for line in lines[:limit])
+    if len(lines) > limit:
+        block.append(tr("… and {count} more.", count=len(lines) - limit))
+    return block
+
+
 def _report_lines(summary: str, backed_up: bool, failed, failure_title: str,
                   failure_label) -> list:
     """Monta las líneas del diálogo de resultado de una copia.
@@ -236,11 +253,9 @@ def _report_lines(summary: str, backed_up: bool, failed, failure_title: str,
     lines = [summary]
     if backed_up:
         lines.append(tr("What was replaced was kept next to it as a backup."))
-    if failed:
-        lines.append("")
-        lines.append(failure_title)
-        for item, message in failed[:10]:
-            lines.append(f"· {failure_label(item)}: {message}")
+    lines.extend(_failure_block(
+        failure_title, (f"{failure_label(item)}: {message}"
+                        for item, message in failed)))
     return lines
 
 
@@ -572,7 +587,7 @@ class _CornerGrip(QWidget):
 def _make_scroll(object_name: str, cap: int, minimum: int) -> QScrollArea:
     """Área de lista, con su alto de partida entre ``minimum`` y ``cap``.
 
-    El alto definitivo lo fija ``MigrateView._fit_scroll`` cuando hay filas:
+    El alto definitivo lo fija ``FittedList.fit`` cuando hay filas:
     se pone **fijo** a propósito (ver allí el porqué), así que estos dos valores
     solo valen mientras el área está vacía.
     """
@@ -748,13 +763,10 @@ class MigrateView(QWidget):
         self.detail_prefs = []
         self.detail_checks = []
         # Alto elegido a mano con el asa (None = el del contenido, con tope).
-        self._detail_height = None
-        self._snapshot_height = None
         # Gestor de guardados: filas por instantánea, análisis cacheado y
         # bandera de "ya se está analizando" (un arranque de Blender por fila).
         self._snapshot_widgets = {}
-        self._analysis = {}
-        self._analyzed_for = ""
+        self._forget_analysis()
         self._snapshots_waiting = False
         self._style_waiting = False
         self._factory_live_count = None
@@ -889,8 +901,7 @@ class MigrateView(QWidget):
         Se tira el análisis y el resumen porque son de otra versión: los
         guardados que se enseñan ahora son otros.
         """
-        self._analysis = {}
-        self._analyzed_for = ""
+        self._forget_analysis()
         self._factory_live_count = None
         self._refresh_factory()
         self._check_running(self._factory_entry(), self.factory_warning)
@@ -1202,9 +1213,8 @@ class MigrateView(QWidget):
         if applied:
             lines.append(tr("Applied {items}.",
                             items=", ".join(names.get(i, i) for i in applied)))
-        if errors:
-            lines.append(tr("These parts could not be applied:"))
-            lines.extend(f"· {error}" for error in errors[:8])
+        lines.extend(_failure_block(tr("These parts could not be applied:"),
+                                    errors)[1:])
         if not lines:
             lines.append(tr("Nothing was applied."))
         self.style_status.setText("\n".join(lines))
@@ -1342,6 +1352,10 @@ class MigrateView(QWidget):
         self.detail_rows.setContentsMargins(0, 0, 0, 0)
         self.detail_rows.setSpacing(4)
         self.detail_scroll.setWidget(body)
+        # +1: la primera fila siempre es un título de sección.
+        self.detail_list = FittedList(
+            self.detail_scroll, self.detail_rows, DETAIL_SCROLL_HEIGHT,
+            DETAIL_MIN_ROWS + 1, DETAIL_MIN_HEIGHT, self.height)
         self.detail_scroll.setVisible(False)
         lay.addWidget(self.detail_scroll)
 
@@ -1407,63 +1421,13 @@ class MigrateView(QWidget):
         if hasattr(self, "detail_scroll"):
             self.detail_scroll.setVisible(False)
 
-    @staticmethod
-    def _content_height(scroll) -> int:
-        """Alto que pediría el contenido del área, sin topes.
-
-        Se suman las filas una a una en vez de preguntar al cuerpo: su
-        ``sizeHint`` es 0 hasta que el layout se asienta (y eso pasa un ciclo de
-        eventos después de llenar la lista), así que medirlo ahí daba siempre
-        el suelo y el panel abría aplastado. Las filas, en cambio, ya saben lo
-        que miden en cuanto existen.
-        """
-        body = scroll.widget()
-        layout = body.layout() if body is not None else None
-        if layout is None:
-            return 0
-        margins = layout.contentsMargins()
-        total = margins.top() + margins.bottom()
-        for index in range(layout.count()):
-            item = layout.itemAt(index)
-            widget = item.widget()
-            total += (widget.sizeHint().height() if widget is not None
-                      else item.sizeHint().height())
-        return total + layout.spacing() * max(0, layout.count() - 1)
-
-    def _fit_scroll(self, scroll, minimum: int, cap: int, chosen) -> None:
-        """Fija el alto del área: el que eligió el usuario o el del contenido.
-
-        Va **fijo** a propósito. Dejándoselo negociar al layout, cuando la
-        ventana se queda corta Qt reparte a la baja y encoge la lista hasta su
-        mínimo (y con ella la tarjeta): quedaba media fila cortada justo encima
-        de los botones, que es lo que parecía que se metían dentro del listado.
-        Con el alto fijo la tarjeta mide lo que tiene que medir y lo que no cabe
-        lo resuelve el scroll de la página.
-        """
-        height = chosen or min(self._content_height(scroll), cap)
-        scroll.setFixedHeight(max(minimum, int(height)))
-
-    def _clamp_scroll(self, height: int, minimum: int) -> int:
-        """Alto de una lista estirada con el asa: ni bajo el suelo ni fuera de la ventana."""
-        maximum = max(minimum, self.height() - 200)
-        return max(minimum, min(int(height), maximum))
-
     def _resize_detail(self, delta: int) -> None:
-        """Arrastró el asa: estira la lista y, con ella, la tarjeta.
-
-        La tarjeta no tiene alto propio, así que crece exactamente lo que crece
-        la lista: mover la esquina mueve el panel gris entero.
-        """
-        minimum = self._min_rows_height()
-        self._detail_height = self._clamp_scroll(
-            self.detail_scroll.height() + delta, minimum)
-        self.detail_scroll.setFixedHeight(self._detail_height)
+        """Arrastró el asa de la lista de claves (ver ``FittedList``)."""
+        self.detail_list.resize(delta)
 
     def _resize_snapshots(self, delta: int) -> None:
-        """Lo mismo para la lista de guardados."""
-        self._snapshot_height = self._clamp_scroll(
-            self.snapshot_scroll.height() + delta, self._min_snapshot_height())
-        self.snapshot_scroll.setFixedHeight(self._snapshot_height)
+        """Arrastró el asa de la lista de guardados."""
+        self.snapshot_list.resize(delta)
 
     def _source_usable(self) -> bool:
         """True si el origen tiene un ejecutable real con el que preguntarle."""
@@ -1638,44 +1602,9 @@ class MigrateView(QWidget):
             any(pref.section == "addons" for pref in self.detail_prefs))
         # Alto: el que el usuario haya elegido con el asa o, si no, el del
         # contenido; nunca por debajo de las filas enteras que exige el suelo.
-        self._fit_scroll(self.detail_scroll, self._min_rows_height(),
-                         DETAIL_SCROLL_HEIGHT, self._detail_height)
+        self.detail_list.fit()
         # Con una lista nueva, al principio (si no, hereda la posición anterior).
         self.detail_scroll.verticalScrollBar().setValue(0)
-
-    @staticmethod
-    def _rows_floor(layout, rows: int, fallback: int) -> int:
-        """Suelo de una lista: ``rows`` filas enteras, medidas sobre una real.
-
-        Se mide una fila de verdad en vez de usar una constante para que el
-        suelo siga valiendo si cambia la fuente o el contenido de las filas.
-        Sin filas todavía no hay nada que medir, y vale ``fallback``.
-        """
-        for index in range(layout.count()):
-            widget = layout.itemAt(index).widget()
-            if widget is None:      # el hueco final (``addStretch``)
-                continue
-            widget.ensurePolished()
-            row = widget.sizeHint().height() + layout.spacing()
-            return max(fallback, rows * row)
-        return fallback
-
-    def _min_rows_height(self) -> int:
-        """Suelo de la lista de claves: sus filas más el título de sección.
-
-        La fila de más es el título ("Interfaz", "Input"...), que siempre
-        encabeza la lista: sin contarlo, el suelo dejaba la última fila cortada
-        justo encima de los botones.
-        """
-        if not getattr(self, "detail_checks", []):
-            return DETAIL_MIN_HEIGHT
-        return self._rows_floor(self.detail_rows, DETAIL_MIN_ROWS + 1,
-                                DETAIL_MIN_HEIGHT)
-
-    def _min_snapshot_height(self) -> int:
-        """Suelo de la lista de guardados: una tarjeta entera."""
-        return self._rows_floor(self.snapshot_rows, SNAPSHOT_MIN_ROWS,
-                                SNAPSHOT_MIN_HEIGHT)
 
     def _select_detail(self, checked: bool) -> None:
         for pref in self.detail_prefs:
@@ -1730,18 +1659,13 @@ class MigrateView(QWidget):
         not_enabled = [item for item in errors
                        if item.get("error") == bprefs.ADDON_NOT_ENABLED]
         missing = [item for item in errors if item not in not_enabled]
-        if not_enabled:
-            lines.append("")
-            lines.append(tr(
-                "These need their add-on enabled in Blender {version} first "
-                "(copy it from the Add-ons tab):", version=version))
-            lines.extend(f"· {item.get('path')}" for item in not_enabled[:12])
-        if missing:
-            lines.append("")
-            lines.append(tr("These settings no longer exist in this version:"))
-            for item in missing[:12]:
-                path = item.get("path") or "Blender"
-                lines.append(f"· {path}")
+        lines.extend(_failure_block(
+            tr("These need their add-on enabled in Blender {version} first "
+               "(copy it from the Add-ons tab):", version=version),
+            (item.get("path") for item in not_enabled)))
+        lines.extend(_failure_block(
+            tr("These settings no longer exist in this version:"),
+            (item.get("path") or "Blender" for item in missing)))
         show_info(self, tr("Settings applied"), "\n".join(lines))
         self.status_message.emit(tr("Settings applied"))
         self.detail_status.setText(tr("Applied {count} settings to Blender "
@@ -1795,6 +1719,9 @@ class MigrateView(QWidget):
         self.snapshot_rows.setSpacing(6)
         self.snapshot_rows.addStretch()
         self.snapshot_scroll.setWidget(body)
+        self.snapshot_list = FittedList(
+            self.snapshot_scroll, self.snapshot_rows, SNAPSHOT_SCROLL_HEIGHT,
+            SNAPSHOT_MIN_ROWS, SNAPSHOT_MIN_HEIGHT, self.height)
         self.snapshot_scroll.setVisible(False)
         lay.addWidget(self.snapshot_scroll)
 
@@ -1868,6 +1795,15 @@ class MigrateView(QWidget):
             bc.prune_snapshots(config, self.snapshot_keep)
         self._refresh_factory()
 
+    def _forget_analysis(self) -> None:
+        """Tira el análisis de los guardados (es de otra versión o ya no vale).
+
+        ``_analyzed_for`` vacío es lo que hace que ``_maybe_analyze_snapshots``
+        vuelva a arrancar Blender la próxima vez que se abra la pestaña.
+        """
+        self._analysis = {}
+        self._analyzed_for = ""
+
     def _factory_entry(self):
         """Instalada elegida en la pestaña de fábrica (su propio selector)."""
         return self._selected(self.factory_combo)
@@ -1916,11 +1852,6 @@ class MigrateView(QWidget):
             "Right now this Blender is at its defaults; restoring a copy "
             "brings your settings back.")
 
-    def _fit_snapshot_scroll(self) -> None:
-        """Alto de la lista de guardados: el elegido con el asa o el del contenido."""
-        self._fit_scroll(self.snapshot_scroll, self._min_snapshot_height(),
-                         SNAPSHOT_SCROLL_HEIGHT, self._snapshot_height)
-
     def _refresh_factory(self) -> None:
         """Repinta la tarjeta de fábrica: estado, lista de guardados y análisis."""
         if not hasattr(self, "factory_status"):
@@ -1947,14 +1878,13 @@ class MigrateView(QWidget):
             self.factory_status.setText("")
             self.factory_empty.setVisible(True)
             self.snapshot_scroll.setVisible(False)
-            self._analysis = {}
-            self._analyzed_for = ""
+            self._forget_analysis()
             self._factory_live_count = None
             return
         self.factory_empty.setVisible(False)
         self._build_snapshot_rows(snapshots)
         self.snapshot_scroll.setVisible(True)
-        self._fit_snapshot_scroll()
+        self.snapshot_list.fit()
         self.factory_status.setText(self._factory_status_text(len(snapshots)))
         self._maybe_analyze_snapshots()
 
@@ -2081,8 +2011,7 @@ class MigrateView(QWidget):
             return
         for snapshot in snapshots:
             bc.delete_snapshot(snapshot)
-        self._analysis = {}
-        self._analyzed_for = ""
+        self._forget_analysis()
         self.status_message.emit(tr("Saved settings deleted."))
         self._refresh_factory()
 
@@ -2108,8 +2037,7 @@ class MigrateView(QWidget):
             self.factory_status.setText(tr(
                 "This version has no settings yet."))
             return
-        self._analysis = {}
-        self._analyzed_for = ""
+        self._forget_analysis()
         self.status_message.emit(tr("Settings saved aside and reset."))
         show_info(self, tr("Reset to factory settings"),
                   tr("Your settings were saved. Blender {version} will start "
@@ -2140,8 +2068,7 @@ class MigrateView(QWidget):
                 accept_text=tr("Restore")):
             return
         bc.restore_snapshot(config, target, keep=self.snapshot_keep)
-        self._analysis = {}
-        self._analyzed_for = ""
+        self._forget_analysis()
         self.status_message.emit(tr("Settings restored."))
         self._refresh_factory()
 
@@ -2432,18 +2359,10 @@ class MigrateView(QWidget):
             self.status_message.emit(tr("Nothing selected"))
             return
         result = bc.apply_migration(self.plans, self.target_cfg)
-
-        summary = (tr("Copied {count} add-ons.", count=len(result.copied))
-                   if result.copied else "")
-        lines = _report_lines(
-            summary, bool(result.backed_up), result.failed,
+        self._finish_copy(
+            result, tr("Copied {count} add-ons.", count=len(result.copied)),
             tr("Some add-ons could not be copied:"),
             lambda plan: plan.addon.name)
-        show_info(self, tr("Migration complete"), "\n".join(lines))
-        self.status_message.emit(
-            tr("Copied {count} add-ons.", count=len(result.copied)))
-        # Se acaba de escribir el marcador de migración en destino.
-        self._refresh_undo()
 
         # Solo se activan los que estaban activos en origen.
         executable, version = _entry_info(self.target_entry)
@@ -2468,16 +2387,25 @@ class MigrateView(QWidget):
             self.status_message.emit(tr("Nothing selected"))
             return
         result = bc.apply_preferences(self.pref_items, self.target_cfg)
-        summary = (tr("Copied {count} preference files.",
-                      count=len(result.copied)) if result.copied else "")
-        lines = _report_lines(
-            summary, bool(result.backed_up), result.failed,
+        self._finish_copy(
+            result, tr("Copied {count} preference files.",
+                       count=len(result.copied)),
             tr("Some files could not be copied:"),
             lambda item: item.filename)
+
+    def _finish_copy(self, result, summary: str, failure_title: str,
+                     failure_label) -> None:
+        """Cierre común de una copia (addons o ficheros): diálogo, estado, deshacer.
+
+        ``summary`` es la frase "Copiados N…"; si no se copió nada, el diálogo
+        lo dice en su lugar. Se acaba de escribir en destino, así que el botón
+        de deshacer se refresca aquí.
+        """
+        lines = _report_lines(summary if result.copied else "",
+                              bool(result.backed_up), result.failed,
+                              failure_title, failure_label)
         show_info(self, tr("Migration complete"), "\n".join(lines))
-        self.status_message.emit(
-            tr("Copied {count} preference files.", count=len(result.copied)))
-        # Acabamos de escribir en destino: ya hay algo que deshacer.
+        self.status_message.emit(summary)
         self._refresh_undo()
 
     def undo(self) -> None:
@@ -2503,11 +2431,9 @@ class MigrateView(QWidget):
                             count=len(result.removed)))
         if not lines:
             lines = [tr("There was nothing to undo.")]
-        if result.failed:
-            lines.append("")
-            lines.append(tr("Some items could not be restored:"))
-            for path, message in result.failed[:10]:
-                lines.append(f"· {Path(path).name}: {message}")
+        lines.extend(_failure_block(
+            tr("Some items could not be restored:"),
+            (f"{Path(path).name}: {message}" for path, message in result.failed)))
         show_info(self, tr("Migration undone"), "\n".join(lines))
         self.status_message.emit(tr("Migration undone"))
         self._reload_versions()
@@ -2537,12 +2463,9 @@ class MigrateView(QWidget):
         else:
             lines.append(tr("The add-ons were copied but not enabled. You can "
                             "enable them in Blender's preferences."))
-        errors = result.get("errors") or []
-        if errors:
-            lines.append("")
-            lines.append(tr("Could not enable some add-ons:"))
-            for item in errors[:10]:
-                module = item.get("module") or "Blender"
-                lines.append(f"· {module}: {item.get('error', '')}")
+        lines.extend(_failure_block(
+            tr("Could not enable some add-ons:"),
+            (f"{item.get('module') or 'Blender'}: {item.get('error', '')}"
+             for item in result.get("errors") or [])))
         show_info(self, tr("Migration complete"), "\n".join(lines))
         self.status_message.emit(tr("Migration complete"))

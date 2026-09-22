@@ -941,6 +941,7 @@ _TRANSLATIONS = {
             "Copia los addons marcados a la versión de destino.",
         "Nothing selected": "No has seleccionado nada",
         "Copied {count} add-ons.": "Se copiaron {count} addons.",
+        "… and {count} more.": "… y {count} más.",
         "Nothing was copied.": "No se copió nada.",
         "Migration complete": "Migración completada",
         "Some add-ons could not be copied:":
