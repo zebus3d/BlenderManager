@@ -49,9 +49,16 @@ class FilterTest(unittest.TestCase):
         self.assertIn("extensions", dict(bp.SECTIONS))
 
     def test_el_estado_interno_no_se_ofrece(self):
+        """Las rutas son las que devuelve Blender, no las que uno supone.
+
+        ``use_preferences_save`` cuelga de ``preferences`` y no de
+        ``preferences.system``: escrita con sección no ignoraba nada, y el
+        ajuste de "guardar preferencias automáticamente" se ofrecía como si
+        fuera del usuario (comprobado contra Blender 5.2.2).
+        """
         self.assertTrue(bp.is_ignored("active_section"))
         self.assertTrue(bp.is_ignored("is_dirty"))
-        self.assertTrue(bp.is_ignored("system.use_preferences_save"))
+        self.assertTrue(bp.is_ignored("use_preferences_save"))
         self.assertFalse(bp.is_ignored("view.ui_scale"))
 
     def test_seccion_de_una_clave_de_addon(self):

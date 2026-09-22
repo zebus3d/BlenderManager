@@ -54,7 +54,12 @@ ENVIRONMENT_KEYS = (
 # son estado interno de Blender (la pestaña de preferencias que estaba abierta,
 # si hay cambios sin guardar, la versión que escribió el fichero).
 IGNORED_KEYS = (
-    "system.use_preferences_save",
+    # Ojo con la ruta: ``use_preferences_save`` cuelga de ``preferences``, no
+    # de ``preferences.system``, así que la clave NO lleva sección. Estuvo
+    # escrita como ``system.use_preferences_save`` y por tanto no ignoraba
+    # nada: comprobado contra Blender 5.2.2, donde la clave real del volcado
+    # es ``use_preferences_save``.
+    "use_preferences_save",
     "active_section",
     "is_dirty",
     "version",
