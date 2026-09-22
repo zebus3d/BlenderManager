@@ -4051,6 +4051,53 @@ class AddonsViewTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(titles)
         self.assertGreater(titles[0].width(), 0)
 
+    def test_los_tres_puntos_abren_el_menu_en_su_sitio(self):
+        """El botón de los tres puntos no puede pasarle un bool al menú.
+
+        ``clicked`` emite su estado ``checked``. Conectado a un método que
+        acepta la posición, ese bool llegaba como ``position`` y acababa en
+        ``menu.exec(False)`` -> ``TypeError``: el menú salía con el clic
+        derecho (que pasa un QPoint de verdad) y fallaba con el botón.
+        """
+        from unittest import mock as _mock
+
+        from PySide6.QtCore import QPoint
+
+        from ui.widgets import addons as addons_ui
+
+        row = addons_ui._AddonRow(self._state(name="Hurricane"), lambda *a: None,
+                                  lambda *a: None, lambda *a: None)
+        row.resize(700, 60)
+        row.show()
+        QApplication.processEvents()
+
+        class MenuFalso:
+            """Un menú que apunta con qué se le llama en vez de abrirse.
+
+            Abrir un ``QMenu`` de verdad bloquea la suite: ``exec`` es modal.
+            """
+
+            def __init__(self):
+                self.position = "(sin llamar)"
+
+            def addAction(self, *args):
+                return _mock.MagicMock()
+
+            def exec(self, position=None):
+                self.position = position
+
+        # Por el botón.
+        menu = MenuFalso()
+        with _mock.patch.object(addons_ui, "card_menu", return_value=menu):
+            row._menu_btn.click()
+        self.assertIsInstance(menu.position, QPoint)
+
+        # Y por el clic derecho, que ya funcionaba: los dos caminos valen.
+        otro = MenuFalso()
+        with _mock.patch.object(addons_ui, "card_menu", return_value=otro):
+            row._show_menu(QPoint(10, 20))
+        self.assertEqual(otro.position, QPoint(10, 20))
+
     def test_set_installed_no_arranca_blender(self):
         from unittest import mock as _mock
 

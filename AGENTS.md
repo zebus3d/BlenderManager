@@ -295,6 +295,17 @@ minor** (`v1.3.0`).
   tarjeta mide lo que tiene que medir y lo que no cabe lo resuelve el scroll de
   la página (por eso las páginas de Migración van dentro de un `QScrollArea`).
   El suelo son filas **enteras**, medidas sobre una fila de verdad.
+- **El Python de local NO es el del CI** (aquí 3.14, el CI 3.12), y eso esconde
+  una clase entera de fallos: desde 3.14 las anotaciones son **diferidas**
+  (PEP 649), así que un `-> QMenu` sin importar no se evalúa nunca en local y
+  en 3.12 revienta el import del módulo al definir la función. Pasó al repartir
+  `main_window.py`: `build_lists.py` se quedó usando `QMenu`, `QApplication` y
+  `opener` sin importarlos, la suite pasaba en verde aquí y el CI se caía
+  entero (test + smoke de Linux + bundle de macOS). Lo vigila ahora
+  `tests/test_layout.py::test_ningun_modulo_usa_un_nombre_que_no_importa`, que
+  usa `symtable` (análisis de ámbitos de verdad) y por eso no depende de qué
+  Python lo ejecute. **Al mover código entre módulos, los imports no se
+  deducen leyendo: se comprueban.**
 - **Toda clave de i18n tiene que usarse.** Lo comprueba
   `tests/test_i18n.py::test_no_quedan_claves_sin_usar`, que recoge con `ast`
   todas las cadenas literales de `src/` (así valen las de `tr("...")` y las que
