@@ -15,8 +15,8 @@ need to install anything.
 
 ## Features
 
-- **Build store** with cards and icons, channel filters (LTS, Stable, Daily,
-  Experimental) and search by version or branch.
+- **Version store** with cards and icons, channel tabs (All, LTS, Stable,
+  Daily, Experimental and Favorites) and search by version or branch.
 - **Grid or list view**, with a **zoom slider** to choose the icon size
   (Dolphin-style). `Ctrl +` / `Ctrl -` change it from the keyboard and `Ctrl 0`
   (or `Ctrl` + click on the slider) goes back to the default size.
@@ -40,10 +40,13 @@ need to install anything.
   place (Enter saves, Escape cancels). The **real folder on disk** is renamed, so
   the file manager and the app always agree — the build is still recognised
   through its marker file.
-- **LTS builds in their own folder** (optional): keep the Long Term Support
-  versions on another drive or folder (for example a fast SSD) while everything
-  else goes to the default destination. LTS builds already stored there keep
-  showing up even if you later turn the option off.
+- **A library of folders**: you can keep your Blender versions in more than one
+  place and tick what each folder receives (LTS on a fast SSD, dailies on a big
+  drive, and so on). Each kind has a single owner, so a download is never
+  ambiguous. A folder can also be **locked**: the app reads it but never writes
+  there, which is how you point it at Blender versions you installed by other
+  means. If you change the split, it offers to **move** what is already there,
+  copying first and deleting only once the copy is complete.
 - **Protected folders without drama** (Windows): if the destination is something
   like `C:\Program Files`, the app offers to ask Windows for permission (a single
   UAC prompt gives your user write access to that folder) or to pick another one,
@@ -68,13 +71,33 @@ need to install anything.
   your default scene), it warns if the destination Blender is running, and it
   keeps a backup of what it replaces.
 - **Pick preferences one by one**: the app compares your settings against
-  Blender's factory defaults and lists only what you actually changed (GPU,
-  audio and temp paths are shown separately and left off). They are read
-  automatically from the source version, applied key by key, and any that no
-  longer exist in the destination version are reported instead of failing.
+  Blender's factory defaults and lists only what you actually changed — each one
+  with **the name and the description Blender itself gives it**, so you can tell
+  what a setting does without looking it up. Things that depend on the machine
+  (GPU, audio, temp paths) are listed separately and left off. They are read
+  automatically from the source version, written key by key, and any that no
+  longer exist in the destination are reported instead of failing. Settings that
+  belong to an add-on can only be written if that add-on is enabled there, so
+  the app offers to enable it for you and says so when it cannot.
 - **Factory settings, reversibly**: put any version back to a clean state and
   your settings are saved aside so you can **restore them later** — or delete
   them for good. It is the folder-moving trick you would do by hand, made safe.
+- **Recent files**: the `.blend` files you opened lately, grouped by Blender
+  version (read from Blender's own list). One click opens a file with the newest
+  version of its series, or you can pick another one; files that are no longer
+  where Blender left them are shown greyed out instead of quietly disappearing.
+- **Add-on manager**: list, enable, disable, install, link or delete the add-ons
+  and extensions of an installed version without opening Blender. (Still behind
+  the experimental toggle in Settings > Advanced.)
+- **Theme and key map as presets**: instead of overwriting the whole preferences
+  file, your theme and key map are installed in the destination as named presets
+  you can pick from Blender's own preferences.
+- **Launch with the console visible**, per version: a terminal button on each
+  installed card, so you can see Python output and script errors for that one
+  Blender without changing the others.
+- **Tray icon and autostart**: optionally minimize or close to the system tray,
+  and start with your session (hidden, if you want) so the app is there when you
+  need it.
 - **Blender runs detached**: closing the manager does **not** close the Blender
   instances you launched from it.
 - **Release notes one click away**: every build card has a small blue **i** that
@@ -105,7 +128,8 @@ Beyond being a useful tool, this project is meant to be **read and learned
 from**. It is written as if it were a final degree project: every layer has a
 reason to exist, the public API has docstrings, and the comments (in Spanish)
 explain *why* a decision was made, not *what* the line does. It is a complete
-desktop application in about 4,000 lines of Python, split into clear layers:
+desktop application in about 16,000 lines of Python, split into clear layers
+(and no single file over a thousand lines — there is a test that checks it):
 
 - **`model/`** — plain data classes (`Build`, `InstalledBuild`).
 - **`services/`** — the real work (API, downloads, extraction, settings...).
@@ -115,7 +139,7 @@ desktop application in about 4,000 lines of Python, split into clear layers:
   whole look; `ui/widgets/` holds the behaviour. A widget's colour or spacing
   never lives in Python, so the two can be read separately.
 
-The same idea applies to the tests (`tests/`, 100+ of them, no window needed)
+The same idea applies to the tests (`tests/`, 540+ of them, no window needed)
 and to the build: `packaging/` is commented well enough to follow what each step
 does and why (the Ubuntu 22.04 choice, the Qt `xcb` plugin, the AppImage icon).
 
@@ -382,27 +406,52 @@ src/
   main.py            # entry point and arguments
   paths.py           # paths (source vs. packaged)
   version.py         # __version__ (the CI rewrites it from the tag)
-  i18n.py            # English/Spanish translations
+  i18n.py            # translation machinery (the texts are in locale/)
+  locale/es.json     # Spanish translations (English is the key)
   model/build.py     # data model (Build, InstalledBuild)
   services/          # UI-independent (imports no Qt):
     api.py           # queries and caches Blender's JSON API
     detector.py      # operating system and architecture
-    settings.py      # persistent settings and portable mode
+    settings.py      # persistent settings, folder library and portable mode
+    channels.py      # the single definition of "what kind of build is this"
     downloader.py    # threaded download with progress and SHA-256
     extractor.py     # safe tar/zip extraction
+    macos_dmg.py     # mounts a .dmg and copies the .app (macOS)
     installed.py     # scans installed versions + detects newer builds
+    organizer.py     # moves installations between folders without losing them
     launcher.py      # launches Blender (detached process)
+    recent.py        # the .blend files Blender opened lately
+    addons.py        # add-on manager (list, enable, install, link, delete)
+    blender_config.py    # where Blender keeps each version's configuration
+    blender_addons.py    # migrating add-ons and preference files
+    blender_snapshots.py # the "factory settings" saved copies
+    blender_prefs.py     # preferences key by key (asking Blender itself)
+    blender_runner.py    # runs Blender headless to read or write its state
+    blender_style.py     # theme and key map as named presets
     opener.py        # opens URLs/folders with a clean environment (AppImage)
     sources.py       # picks the fastest download source (CDN vs. official release)
     tls.py           # TLS context with a CA store that actually exists
     elevate.py       # Windows UAC helper (write access to protected folders)
+    autostart.py     # start with the session, per platform
     updater.py       # checks and applies updates (binary or git pull)
   ui/
     qss.py           # the whole look: one Qt stylesheet
     theme.py         # colour tokens (measured WCAG contrast)
     icons.py         # Font Awesome glyphs
     fonts.py         # icon font loading / glyph_icon()
-    widgets/         # buttons, cards, dialogs and the main window
+    widgets/
+      main_window.py   # the window shell, navigation and life cycle
+      build_lists.py   # the Cloud and Local lists, filters and zoom
+      settings_view.py # the Settings screen
+      folder_library.py# the folder library (where each version lives)
+      downloads.py     # downloading, installing, launching and deleting
+      updates.py       # updating BlenderManager itself
+      shell.py         # tables and widgets the window and its parts share
+      migrate/         # the migration screen, one module per tab
+      addons.py        # the add-on manager view
+      recent.py        # the recent files view
+      cards.py, buttons.py, dialogs.py, labels.py, layouts.py, menus.py,
+      folders.py, tray.py   # reusable widgets
   assets/            # Blender logo, app icon and icon font
 doc/                 # architecture guide in Spanish (start at doc/README.md)
 tests/               # unit tests (unittest, UI with Qt's offscreen plugin)

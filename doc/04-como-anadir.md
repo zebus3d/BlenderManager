@@ -164,9 +164,12 @@ segundo ejemplo.
 
 | Capa | Archivo | Qué hace |
 | --- | --- | --- |
-| Servicio (puro) | `services/blender_config.py` | Localiza la carpeta de cada versión, lee `bl_info`/`blender_manifest.toml`, decide compatibilidad y copia. **Sin Qt.** |
+| Servicio (puro) | `services/blender_config.py` | Localiza la carpeta de configuración de cada versión. **Sin Qt.** |
+| Servicio (puro) | `services/blender_addons.py` | Lee `bl_info`/`blender_manifest.toml`, decide compatibilidad y copia (con respaldo y deshacer). **Sin Qt.** |
+| Servicio (puro) | `services/blender_snapshots.py` | Los guardados de "valores de fábrica". **Sin Qt.** |
 | Servicio (proceso) | `services/blender_runner.py` | Arranca el Blender destino en `--background` para habilitar los addons copiados. **Sin Qt.** |
-| Vista | `ui/widgets/migrate.py` | Tablero origen → destino, casillas, resumen y botones. |
+| Servicio (proceso) | `services/blender_prefs.py` | Le pregunta a Blender sus preferencias clave a clave y se las escribe. **Sin Qt.** |
+| Vista | `ui/widgets/migrate/` | Un módulo por pestaña (`addons_tab`, `prefs_tab`, `factory_tab`) sobre una cáscara común (`view.py`). |
 | Controlador | `ui/widgets/main_window.py` | Botón de la barra lateral, `set_view`, y refresco con las instaladas. |
 | Aspecto | `ui/qss.py` | `#AddonRow`, `#SettingsCard`, `#MigrateTabs` y `#Danger` (la casilla la pinta `CheckPill`, ver abajo). |
 | Textos | `i18n.py` | Claves en inglés, dentro del bloque "Migración". |
@@ -177,7 +180,7 @@ segundo ejemplo.
 1. **No se interpreta `userpref.blend`.** Es un `.blend` binario y su estructura
    no es API estable entre versiones. Lo que sea "estado habilitado" o
    "preferencias" se le pregunta al propio Blender, no se escribe a mano.
-   Por eso la migración de **preferencias** no está en esta función (todavía):
+   Por eso la migración de **preferencias** no está en esta función:
    la parte de addons se puede hacer sin arrancar Blender (leyendo ficheros) y
    solo el *activar* necesita ejecutarlo.
 
@@ -227,8 +230,10 @@ Para que no sea "todo a cholón", la vista tiene una jerarquía fija:
      explicación. Van dentro de la pestaña, no en la tarjeta de versiones: al
      compartir tarjeta, ocultarlos al cambiar de pestaña movía toda la interfaz
      (el salto que se veía).
-   - **Preferences**: primero el detalle fino (ajustes uno a uno, que es lo
-     recomendado) y debajo los ficheros completos (el atajo que lo pisa todo).
+   - **Preferences**: primero el detalle fino (ajustes uno a uno, cada uno con
+     el nombre y la descripción que les da Blender, que es lo recomendado),
+     debajo el tema y el mapa de teclas como presets, y al final los ficheros
+     completos (el atajo que lo pisa todo).
    - **Factory settings**: pestaña propia porque no migra nada, hace otra cosa
      (deja la versión destino limpia).
 

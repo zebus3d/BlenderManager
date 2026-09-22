@@ -43,7 +43,10 @@ La regla de oro del proyecto: **el QSS describe el aspecto, el controlador
 (`ui/widgets/main_window.py`) decide qué hacer, y los servicios hacen el trabajo
 pesado**. Si mantienes esa separación, todo seguirá siendo fácil de entender.
 
-> Nota: este proyecto nació con Kivy y se portó a Qt Widgets (PySide6) porque
-> Kivy necesita OpenGL y eso hacía depender el binario del Mesa de cada distro.
+> Nota histórica: este proyecto nació con **Kivy** y se portó a Qt Widgets
+> (PySide6) porque Kivy necesita OpenGL y eso hacía depender el binario del
+> Mesa de cada distro (ver `AGENTS.md`). Kivy solo vive ya en el historial de
+> git; cuando el resto de la guía lo menciona es para contar por qué algo se
+> hace de una manera y no de otra, no porque quede código suyo.
 > De aquella época quedan los `ui/widgets/` (misma idea, widgets de Qt) y nada
 > más: los `.kv` se sustituyeron por `ui/qss.py`.

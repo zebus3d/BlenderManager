@@ -49,7 +49,8 @@ src/
   main.py            # punto de entrada (empieza a leer por aquí)
   version.py         # número de versión (el CI lo reescribe en los releases)
   paths.py           # rutas: en código fuente vs. empaquetado
-  i18n.py            # traducciones (inglés/español)
+  i18n.py            # el mecanismo de traducción (los textos, en locale/)
+  locale/es.json     # las traducciones al español (la clave es el inglés)
 
   model/
     build.py         # los "objetos" de datos: Build y InstalledBuild
@@ -57,15 +58,28 @@ src/
   services/          # la lógica de verdad (no saben nada de Qt)
     api.py           # consulta el listado de Blender, lo filtra y lo cachea
     detector.py      # detecta el sistema operativo y la arquitectura
-    settings.py      # ajustes persistentes y modo portable
+    settings.py      # ajustes, biblioteca de carpetas y modo portable
+    channels.py      # la única definición de "de qué tipo es esta versión"
     downloader.py    # descarga en segundo plano con progreso y SHA-256
     extractor.py     # extrae .tar.xz / .zip de forma segura
+    macos_dmg.py     # monta un .dmg y copia el .app (macOS)
     installed.py     # escanea las versiones ya descargadas
+    organizer.py     # mueve instalaciones entre carpetas sin poder perderlas
     launcher.py      # lanza Blender como proceso aparte
+    recent.py        # los .blend que Blender abrió últimamente
+    addons.py        # gestor de addons (listar, activar, instalar, borrar)
+    blender_config.py    # dónde guarda Blender la config de cada versión
+    blender_addons.py    # migrar addons y ficheros de preferencias
+    blender_snapshots.py # los guardados de "valores de fábrica"
+    blender_prefs.py     # preferencias por clave (preguntándoselo a Blender)
+    blender_runner.py    # arranca Blender en --background para leer/escribir
+    blender_style.py     # tema y mapa de teclas como presets
+    opener.py        # abre URLs y carpetas con un entorno limpio (AppImage)
+    sources.py       # elige la fuente de descarga más rápida
+    tls.py           # contexto TLS con un almacén de CAs que exista de verdad
+    elevate.py       # permiso de escritura en Windows (UAC)
+    autostart.py     # arrancar con la sesión, en cada plataforma
     updater.py       # comprueba e instala actualizaciones
-    blender_config.py # addons y carpetas de config de cada versión (+ migrar)
-    blender_runner.py # arranca Blender en --background (habilitar addons)
-    blender_prefs.py  # preferencias por clave: diff contra fábrica y aplicar
 
   ui/                # la interfaz (lo único que conoce Qt)
     qss.py           # el aspecto de TODA la app (una hoja de estilos)
@@ -73,12 +87,24 @@ src/
     icons.py         # los glifos de la fuente de iconos
     fonts.py         # carga de la fuente de iconos
     widgets/
-      buttons.py     # botones, pastillas, interruptores e iconos
-      labels.py      # etiquetas que recortan el texto (no ensanchan columnas)
-      cards.py       # tarjetas de compilaciones (tienda e instaladas)
-      dialogs.py     # diálogos con el aspecto de la app
-      migrate.py     # tablero de migración de addons entre versiones
-      main_window.py # MainWindow: el controlador de la pantalla principal
+      main_window.py   # la cáscara de la ventana, navegación y ciclo de vida
+      build_lists.py   # las listas de Nube y Local, filtros y zoom
+      settings_view.py # la pantalla de Ajustes
+      folder_library.py# la biblioteca de carpetas
+      downloads.py     # descargar, instalar, lanzar y borrar versiones
+      updates.py       # actualizar BlenderManager
+      shell.py         # lo que comparten la ventana y sus partes
+      migrate/         # la pantalla de migración, un módulo por pestaña
+      addons.py        # el gestor de addons
+      recent.py        # los ficheros recientes
+      buttons.py       # botones, pastillas, interruptores e iconos
+      labels.py        # etiquetas que recortan el texto
+      cards.py         # tarjetas de versiones (tienda e instaladas)
+      dialogs.py       # diálogos con el aspecto de la app
+      layouts.py       # vaciar layouts, listas con scroll, notas apagadas
+      menus.py         # menús contextuales con el aspecto de la app
+      folders.py       # la fila de una carpeta de la biblioteca
+      tray.py          # el icono de la bandeja
 
   assets/            # logo de Blender, icono de la app y fuente de iconos
 

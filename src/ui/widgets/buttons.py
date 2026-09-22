@@ -1,8 +1,9 @@
 """Widgets básicos reutilizables (versión PySide6).
 
-Sustituyen a ``ui/widgets/basic.py`` + ``ui/widgets/spinners.py`` de la era
-Kivy. El aspecto vive en ``ui/qss.py``; aquí está solo el comportamiento y los
-puntos de enganche (``objectName`` y propiedades dinámicas) que el QSS usa.
+El aspecto vive en ``ui/qss.py``; aquí está solo el comportamiento y los
+puntos de enganche (``objectName`` y propiedades dinámicas) que el QSS usa. Un
+botón nuevo se estiliza dándole un ``objectName`` y añadiendo su regla al QSS,
+nunca con ``setStyleSheet`` en el código.
 """
 
 from PySide6.QtCore import QRectF, Qt

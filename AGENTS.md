@@ -1,8 +1,9 @@
 # AGENTS.md
 
-Guía para trabajar en **BlenderManager** (app Kivy de descarga/gestión de
-versiones de Blender). El código y los comentarios están en español; las claves
-de i18n son cadenas en inglés (ver `src/i18n.py`).
+Guía para trabajar en **BlenderManager** (app PySide6 de descarga/gestión de
+versiones de Blender; nació en Kivy y se portó a Qt, ver más abajo). El código
+y los comentarios están en español; las claves de i18n son cadenas en inglés y
+los textos viven en `src/locale/<idioma>.json`.
 
 ## Estructura
 
@@ -11,25 +12,60 @@ src/
   main.py            # entrada, QApplication, --smoke / --screenshot / --apply-update
   version.py         # __version__ (el CI la reescribe desde el tag)
   paths.py           # APP_DIR / RESOURCE_DIR
-  i18n.py            # traducciones es/en
+  i18n.py            # el mecanismo (detectar idioma, cargar, tr())
+  locale/es.json     # los textos en español (la clave es el inglés)
   model/build.py     # modelo de compilación
-  services/          # api, downloader, extractor, installed, launcher,
-                     # detector, settings, updater
+  services/          # api, channels, downloader, extractor, installed,
+                     # organizer, launcher, recent, addons, detector,
+                     # settings, autostart, elevate, opener, sources, tls,
+                     # macos_dmg, updater y la familia blender_*:
+                     #   blender_config    dónde vive la config de cada versión
+                     #   blender_addons    migrar addons y ficheros de prefs
+                     #   blender_snapshots guardados de "valores de fábrica"
+                     #   blender_prefs     preferencias clave a clave
+                     #   blender_runner    arrancar Blender en --background
+                     #   blender_style     tema y keymap como presets
   ui/
     theme.py         # tokens de color (+ contraste WCAG medido)
     qss.py           # stylesheet global (el "look" de toda la app)
     icons.py         # glifos de Font Awesome
     fonts.py         # carga de la fuente de iconos / glyph_icon()
     widgets/
-      buttons.py     # Pill, SideButton, CardButton, IconLinkButton, SwitchPill...
-      cards.py       # tarjetas de la tienda e instaladas (lista y rejilla)
-      dialogs.py     # AppDialog, confirm(), show_error(), update_available()
-      main_window.py # MainWindow: controlador de la pantalla principal
+      main_window.py   # la cáscara: cabecera, lateral, pie, navegación, bandeja
+      build_lists.py   # Nube y Local: filtros, rejilla, zoom y refiltrado
+      settings_view.py # la pantalla de Ajustes
+      folder_library.py# la biblioteca de carpetas
+      downloads.py     # descargar, instalar, lanzar y borrar versiones
+      updates.py       # actualizar BlenderManager
+      shell.py         # tablas y widgets que comparten la ventana y sus partes
+      migrate/         # la migración: view + addons_tab/prefs_tab/factory_tab
+      addons.py        # gestor de addons
+      recent.py        # ficheros recientes
+      buttons.py       # Pill, SideButton, CardButton, IconLinkButton, SwitchPill...
+      cards.py         # tarjetas (lista y rejilla) y settings_card / GripCard
+      dialogs.py       # AppDialog, confirm(), show_error(), update_available()
+      labels.py        # ElidedLabel y compañía
+      layouts.py       # clear_layout, list_scroll, muted_note, FittedList
+      menus.py         # card_menu (menús con el aspecto de la app)
+      folders.py       # la fila de una carpeta de la biblioteca
+      tray.py          # el icono de la bandeja
 doc/                 # guía de arquitectura en español (para principiantes)
 packaging/           # spec de PyInstaller, scripts de build, inject_version.py
 tests/               # unittest (la UI corre con QT_QPA_PLATFORM=offscreen)
 run.sh               # lanzador de desarrollo (crea el venv si falta)
 ```
+
+**Ningún módulo de `src/` pasa de 1000 líneas**, y lo vigila
+`tests/test_layout.py` con una lista de excepciones vacía. `main_window.py`
+llegó a tener 3314 y `migrate.py` 2492: a partir de ahí nadie lee el fichero
+entero, y lo que no se lee es donde se esconde el código repetido. Cuando uno
+se acerca al tope se parte **por responsabilidad**, no por número de líneas.
+Las partes de la ventana y de la migración son **mixins** de su clase, no
+objetos independientes: todos trabajan sobre el estado del mismo widget y
+meterlos en otro objeto solo movería el acoplo de sitio; lo que de verdad no
+depende de la interfaz ya está en `services/`. `shell.py` existe solo para
+romper la circularidad (la ventana importa sus partes y las partes necesitan
+sus tablas).
 
 La UI es **PySide6 (Qt Widgets)**. El aspecto vive en `ui/qss.py`; los widgets
 llevan un `objectName` (o una propiedad dinámica) que el QSS usa como selector.
@@ -130,7 +166,7 @@ Reglas que no hay que romper:
 
 ## Idiomas: cuáles valdría la pena añadir
 
-Hoy hay **es/en** (375 claves en `src/i18n.py`). Si algún día se amplía, esta es
+Hoy hay **es/en** (522 claves en `src/locale/es.json`). Si algún día se amplía, esta es
 la lista razonada, para no elegir por intuición.
 
 El mejor dato **no** es el número de usuarios sino el esfuerzo demostrado: la
@@ -157,9 +193,10 @@ Y solo si hay alguien que se comprometa a mantenerlo: cada cadena nueva hay que
 traducirla a *todos* los idiomas activos, y un idioma a medias (frases sueltas
 en inglés) se ve peor que no tenerlo.
 
-**Antes del tercer idioma**, sacar las traducciones a `.json` por idioma: con
-dos aún se lee, pero un `i18n.py` de 774 líneas con cinco idiomas es
-ingobernable y además obliga a tocar Python para mandar una traducción.
+Las traducciones ya están en `.json` por idioma (`src/locale/`), así que
+añadir uno es copiar el fichero y traducirlo: no hace falta tocar Python.
+Ojo: el `.spec` tiene que copiar `src/locale` al binario o el empaquetado sale
+siempre en inglés.
 
 ## Comandos
 
@@ -250,6 +287,23 @@ minor** (`v1.3.0`).
 
 ### Reglas que no hay que romper
 
+- **El alto de una lista con asa va FIJO, no negociado con el layout**
+  (`ui/widgets/layouts.py: FittedList`). Dejándoselo negociar, cuando la
+  ventana se queda corta Qt reparte a la baja y encoge la lista hasta su
+  mínimo, arrastrando a su tarjeta: quedaba media fila cortada justo encima de
+  los botones y parecía que se metían dentro del listado. Con el alto fijo la
+  tarjeta mide lo que tiene que medir y lo que no cabe lo resuelve el scroll de
+  la página (por eso las páginas de Migración van dentro de un `QScrollArea`).
+  El suelo son filas **enteras**, medidas sobre una fila de verdad.
+- **Toda clave de i18n tiene que usarse.** Lo comprueba
+  `tests/test_i18n.py::test_no_quedan_claves_sin_usar`, que recoge con `ast`
+  todas las cadenas literales de `src/` (así valen las de `tr("...")` y las que
+  viven en una tabla y se traducen por variable). Había 74 claves muertas y 5
+  repetidas —y una repetida pisa a la anterior en silencio— cuando se añadió.
+- **Los textos visibles hablan de "versiones de Blender", no de
+  "compilaciones"**: el código interno sigue con `Build`/`InstalledBuild`, que
+  ahí sí es lo que son. "Compilación" se reserva para lo que de verdad lo es
+  (la build de un wheel para una versión de Python).
 - **Una etiqueta con texto que puede ser largo se hace con `ElidedLabel`**
   (`ui/widgets/labels.py`), nunca con un `QLabel` pelado. Un `QLabel` pide como
   ancho mínimo el texto **completo**, así que deforma el layout: el nombre de una
@@ -277,7 +331,7 @@ minor** (`v1.3.0`).
   `#Card[installed="true"]` y `#Card:hover` empatan, y gana la última; por eso
   los `:hover` van al final del bloque.
 - **La fila de filtros vive con las listas, no es global.** Tienda (Nube) e
-  Instaladas (Local) comparten un contenedor (`_build_lists_view`) con la fila de
+  Instaladas (Local) comparten un contenedor (`build_lists.py: _build_lists_view`) con la fila de
   44 px encima y un sub-stack debajo; Migración y Ajustes son páginas del stack
   principal y no llevan filtros. Antes la fila era global y se reservaba ocultando
   su contenido para que la interfaz no diera un salto de 44 px al cambiar de
@@ -606,9 +660,9 @@ El AppImage resultante pesa ~70 MB.
 
 ## Auto-update
 
-- Lógica en `src/services/updater.py`; UI en `src/ui/widgets/main_window.py`
+- Lógica en `src/services/updater.py`; UI en `src/ui/widgets/updates.py`
   (`check_updates`, `_show_update_available`, `_show_source_update`) y controles
-  en el panel de ajustes (dentro de `_build_settings_view`).
+  en `ui/widgets/settings_view.py` (`_settings_updates_card`).
 - Preferencia `auto_update` en `src/services/settings.py` (por defecto activada).
 - **Reintento de conexión** (`services/downloader.py`): el handshake TLS de
   `release-assets.githubusercontent.com` es **intermitente** (el log de un
