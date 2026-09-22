@@ -204,11 +204,11 @@ class CompatReportTest(unittest.TestCase):
 
 class WheelTest(unittest.TestCase):
     def test_cp_distinto_choca(self):
-        self.assertTrue(bc.wheel_conflict(["a-1-cp311-cp311-linux_x86_64.whl"],
+        self.assertTrue(bc.wheel_problem(["a-1-cp311-cp311-linux_x86_64.whl"],
                                           "3.13"))
 
     def test_cp_igual_no_choca(self):
-        self.assertFalse(bc.wheel_conflict(["a-1-cp313-cp313-linux_x86_64.whl"],
+        self.assertFalse(bc.wheel_problem(["a-1-cp313-cp313-linux_x86_64.whl"],
                                            "3.13"))
 
     def test_un_paquete_con_wheels_para_varios_python_no_choca(self):
@@ -245,12 +245,12 @@ class WheelTest(unittest.TestCase):
         self.assertEqual(bc.wheel_problem(wheels, "3.13"), "")
 
     def test_python_puro_y_abi_estable_no_chocan(self):
-        self.assertFalse(bc.wheel_conflict(["a-1-py3-none-any.whl"], "3.13"))
-        self.assertFalse(bc.wheel_conflict(["a-1-cp39-abi3-linux_x86_64.whl"],
+        self.assertFalse(bc.wheel_problem(["a-1-py3-none-any.whl"], "3.13"))
+        self.assertFalse(bc.wheel_problem(["a-1-cp39-abi3-linux_x86_64.whl"],
                                            "3.13"))
 
     def test_sin_python_destino_no_avisa(self):
-        self.assertFalse(bc.wheel_conflict(["a-1-cp39-cp39-linux_x86_64.whl"],
+        self.assertFalse(bc.wheel_problem(["a-1-cp39-cp39-linux_x86_64.whl"],
                                            ""))
 
     def test_el_plan_dice_que_paquete_falla(self):
@@ -397,6 +397,35 @@ class ApplyMigrationTest(unittest.TestCase):
             self.assertEqual(len(result.restored), 1)
             self.assertEqual((destination / "a.py").read_text(), "viejo")
 
+    def test_deshacer_tras_addons_y_preferencias_revierte_las_dos(self):
+        """El marcador acumula: migrar addons y luego ficheros no pierde nada.
+
+        Antes cada migración sobrescribía el marcador entero, así que deshacer
+        solo revertía la última y el respaldo de la primera quedaba huérfano.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            destination = target.addons_dir / "addon"
+            destination.mkdir(parents=True)
+            (destination / "a.py").write_text("viejo", encoding="utf-8")
+            bc.apply_migration([self._plan(self._addon(source), destination)],
+                               target)
+            # Y después, el fichero de preferencias.
+            origin = _config(Path(tmp) / "origin")
+            origin.config_dir.mkdir(parents=True)
+            target.config_dir.mkdir(parents=True)
+            (origin.config_dir / "userpref.blend").write_bytes(b"NUEVO")
+            (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
+            bc.copy_preference_files(bc.preference_plan(origin, target), target)
+            result = bc.undo_migration(target)
+            self.assertEqual(len(result.restored), 2)
+            self.assertEqual((destination / "a.py").read_text(), "viejo")
+            self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
+                             b"VIEJO")
+
     def test_undo_borra_lo_que_no_tenia_backup(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "addon"
@@ -490,7 +519,7 @@ class PreferenceTest(unittest.TestCase):
             (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
             (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
             items = bc.preference_plan(source, target)
-            result = bc.apply_preferences(items, target)
+            result = bc.copy_preference_files(items, target)
             self.assertEqual(len(result.copied), 1)
             self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
                              b"NUEVO")
@@ -504,7 +533,7 @@ class PreferenceTest(unittest.TestCase):
             source.config_dir.mkdir(parents=True)
             (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
             items = bc.preference_plan(source, target)
-            result = bc.apply_preferences(items, target, dry_run=True)
+            result = bc.copy_preference_files(items, target, dry_run=True)
             self.assertEqual(len(result.copied), 1)
             self.assertFalse((target.config_dir / "userpref.blend").exists())
 
@@ -524,7 +553,7 @@ class FactoryResetTest(unittest.TestCase):
     def test_snapshot_aparta_la_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.snapshot_config(config, label="v5.3")
+            snapshot = bc.set_config_aside(config, label="v5.3")
             self.assertIsNotNone(snapshot)
             self.assertFalse(config.config_dir.exists())
             self.assertEqual((snapshot / "userpref.blend").read_bytes(), b"MIO")
@@ -532,12 +561,12 @@ class FactoryResetTest(unittest.TestCase):
     def test_snapshot_sin_config_no_hace_nada(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp, "5.3")
-            self.assertIsNone(bc.snapshot_config(config))
+            self.assertIsNone(bc.set_config_aside(config))
 
     def test_restaurar_devuelve_la_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.snapshot_config(config, label="v5.3")
+            snapshot = bc.set_config_aside(config, label="v5.3")
             # Blender recrea una config "limpia"
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"FABRICA")
@@ -552,13 +581,31 @@ class FactoryResetTest(unittest.TestCase):
             # unos ajustes (se perdieron unos así).
             self.assertTrue(snapshot.is_dir())
             self.assertEqual((snapshot / "userpref.blend").read_bytes(), b"MIO")
-            self.assertIn(snapshot, bc.snapshots_for(config))
+            self.assertIn(snapshot, bc.snapshots_with_settings(config))
+
+    def test_restaurar_reemplaza_en_vez_de_fundir(self):
+        """Lo que hubiera en ``config`` y no esté en el guardado, desaparece.
+
+        Con ``copytree(dirs_exist_ok=True)`` se fundían: un fichero que solo
+        existía en la config viva sobrevivía a la restauración y el resultado
+        no era el guardado, era una mezcla.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            snapshot = bc.set_config_aside(config, label="v5.3")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"FABRICA")
+            (config.config_dir / "solo_en_la_viva.txt").write_text("x")
+            bc.restore_snapshot(config, snapshot)
+            self.assertEqual((config.config_dir / "userpref.blend").read_bytes(),
+                             b"MIO")
+            self.assertFalse((config.config_dir / "solo_en_la_viva.txt").exists())
 
     def test_restaurar_sobre_config_vacia_no_aparca_nada(self):
         """Sin ajustes que apartar, el ``aside`` es ``None`` (no añade ruido)."""
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.snapshot_config(config, label="v5.3")
+            snapshot = bc.set_config_aside(config, label="v5.3")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "platform_support.txt").write_bytes(b"x")
             self.assertIsNone(bc.restore_snapshot(config, snapshot))
@@ -578,16 +625,16 @@ class FactoryResetTest(unittest.TestCase):
                 with mock.patch.object(bc, "datetime") as clock:
                     clock.now.return_value = _datetime(2026, 9, 21, 10, 0,
                                                        second)
-                    snaps.append(bc.snapshot_config(config))
+                    snaps.append(bc.set_config_aside(config))
             removed = bc.prune_snapshots(config, 2)
             self.assertEqual(len(removed), 2)
             # Las que quedan son las dos más nuevas, de nueva a vieja.
-            self.assertEqual(bc.snapshots_for(config), [snaps[3], snaps[2]])
+            self.assertEqual(bc.snapshots_with_settings(config), [snaps[3], snaps[2]])
 
     def test_poda_sin_limite_no_borra(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.snapshot_config(config)
+            snapshot = bc.set_config_aside(config)
             self.assertEqual(bc.prune_snapshots(config, 0), [])
             self.assertTrue(snapshot.is_dir())
 
@@ -603,23 +650,23 @@ class FactoryResetTest(unittest.TestCase):
                 with mock.patch.object(bc, "datetime") as clock:
                     clock.now.return_value = _datetime(2026, 9, 21, 10, 0,
                                                        second)
-                    snapshot = bc.snapshot_config(config)
+                    snapshot = bc.set_config_aside(config)
                 if second == 0:
                     first = snapshot
             # La más vieja (que se acaba de restaurar) no se borra aunque el
             # límite sea 1.
             bc.prune_snapshots(config, 1, protect=first)
             self.assertTrue(first.is_dir())
-            self.assertEqual(len(bc.snapshots_for(config)), 2)
+            self.assertEqual(len(bc.snapshots_with_settings(config)), 2)
 
     def test_snapshot_label(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            reset = bc.snapshot_config(config, label="v5.3.0")
+            reset = bc.set_config_aside(config, label="v5.3.0")
             self.assertEqual(bc.snapshot_label(reset), "v5.3.0")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"x")
-            factory = bc.snapshot_config(config, label="factory")
+            factory = bc.set_config_aside(config, label="factory")
             self.assertEqual(bc.snapshot_label(factory), "factory")
             self.assertEqual(bc.snapshot_label(Path(tmp) / "otra"), "")
 
@@ -638,11 +685,11 @@ class FactoryResetTest(unittest.TestCase):
     def test_varias_snapshots_y_orden(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            first = bc.snapshot_config(config, label="a")
+            first = bc.set_config_aside(config, label="a")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"DOS")
-            second = bc.snapshot_config(config, label="b")
-            shots = bc.snapshots_for(config)
+            second = bc.set_config_aside(config, label="b")
+            shots = bc.snapshots_with_settings(config)
             self.assertEqual(len(shots), 2)
             # La más nueva va primero.
             self.assertEqual(shots[0], second)
@@ -651,14 +698,14 @@ class FactoryResetTest(unittest.TestCase):
     def test_borrar_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            snapshot = bc.snapshot_config(config, label="a")
+            snapshot = bc.set_config_aside(config, label="a")
             self.assertTrue(bc.delete_snapshot(snapshot))
-            self.assertEqual(bc.snapshots_for(config), [])
+            self.assertEqual(bc.snapshots_with_settings(config), [])
 
     def test_sin_snapshots(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp, "5.3")
-            self.assertEqual(bc.snapshots_for(config), [])
+            self.assertEqual(bc.snapshots_with_settings(config), [])
 
     def test_las_snapshots_vacias_no_cuentan_como_ajustes(self):
         """Restaurar tiene que apuntar a la instantánea con ajustes, no a una vacía.
@@ -669,13 +716,13 @@ class FactoryResetTest(unittest.TestCase):
         """
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
-            real = bc.snapshot_config(config, label="v5.3")
+            real = bc.set_config_aside(config, label="v5.3")
             config.config_dir.mkdir(parents=True)
-            vacia = bc.snapshot_config(config, label="factory")
+            vacia = bc.set_config_aside(config, label="factory")
             self.assertIsNotNone(vacia)
             # La cruda las ve las dos; la que se ofrece restaurar, solo la real.
-            self.assertEqual(len(bc.snapshot_dirs(config)), 2)
-            self.assertEqual(bc.snapshots_for(config), [real])
+            self.assertEqual(len(bc.all_snapshots(config)), 2)
+            self.assertEqual(bc.snapshots_with_settings(config), [real])
 
     def test_snapshot_date(self):
         from datetime import datetime as _datetime
@@ -684,7 +731,7 @@ class FactoryResetTest(unittest.TestCase):
             config = self._config_with_prefs(tmp, "5.3")
             with mock.patch.object(bc, "datetime") as reloj:
                 reloj.now.return_value = _datetime(2026, 9, 18, 14, 21, 31)
-                snapshot = bc.snapshot_config(config, label="v5.3")
+                snapshot = bc.set_config_aside(config, label="v5.3")
             self.assertEqual(bc.snapshot_date(snapshot), "2026-09-18 14:21")
             self.assertEqual(bc.snapshot_date(Path(tmp) / "otra"), "")
 

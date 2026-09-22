@@ -91,14 +91,6 @@ FONT_FAMILY = "sans-serif"
 ICON_FONT_FILE = "fa-solid-900.ttf"
 
 
-def qcolor(token: str, alpha: float = 1.0) -> QColor:
-    """Convierte un token ``#RRGGBB`` en ``QColor`` (opcionalmente con alfa)."""
-    color = QColor(token)
-    if alpha < 1.0:
-        color.setAlphaF(alpha)
-    return color
-
-
 def luminance(token: str) -> float:
     """Luminancia relativa WCAG de un ``#RRGGBB``."""
     token = token.lstrip("#")

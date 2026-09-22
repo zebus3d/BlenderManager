@@ -205,8 +205,3 @@ def copy_style(source_executable, target_executable, name: str,
         result["errors"] += list(installed.get("errors") or [])
     return result
 
-
-def source_usable(entry) -> bool:
-    """True si esa instalada tiene un ejecutable real."""
-    executable = getattr(entry, "executable", None)
-    return bool(executable) and Path(executable).is_file()

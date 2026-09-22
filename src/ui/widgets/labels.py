@@ -38,7 +38,7 @@ class ElidedLabel(QLabel):
         self._mode = mode
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self._actualizar_tooltip()
+        self._update_tooltip()
 
     def minimumSizeHint(self) -> QSize:
         """Alto el de siempre, ancho 0: el texto no manda sobre el layout."""
@@ -58,13 +58,13 @@ class ElidedLabel(QLabel):
         super().resizeEvent(event)
         # Cambia el ancho (o el zoom, que rehace la tarjeta): el tooltip deja de
         # tener sentido en cuanto el nombre se ve entero.
-        self._actualizar_tooltip()
+        self._update_tooltip()
 
     def setText(self, text: str) -> None:  # noqa: N802 (API de Qt)
         super().setText(text)
-        self._actualizar_tooltip()
+        self._update_tooltip()
 
-    def _actualizar_tooltip(self) -> None:
+    def _update_tooltip(self) -> None:
         self.setToolTip(self.text() if self.is_elided() else "")
 
     def paintEvent(self, event):
@@ -110,7 +110,7 @@ class EditableLabel(ElidedLabel):
         super().__init__(text, mode, parent)
         self._editor = None
 
-    def _actualizar_tooltip(self) -> None:
+    def _update_tooltip(self) -> None:
         """Texto completo (si se recorta) + la pista de que se puede renombrar."""
         hint = tr("Double-click to rename")
         self.setToolTip(f"{self.text()}\n{hint}" if self.is_elided() else hint)

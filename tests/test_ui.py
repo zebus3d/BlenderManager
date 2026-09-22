@@ -3220,7 +3220,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                     _mock.patch("ui.widgets.migrate.show_info"):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
-                view.apply_preferences()
+                view.copy_preference_files()
             self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
                              b"NUEVO")
             backups = [p for p in target.config_dir.iterdir()
@@ -3242,7 +3242,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                     _mock.patch("ui.widgets.migrate.show_info"):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
-                view.apply_preferences()
+                view.copy_preference_files()
             self.assertFalse((target.config_dir / "startup.blend").exists())
             self.assertTrue((target.config_dir / "userpref.blend").exists())
 
@@ -3260,7 +3260,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                     _mock.patch("ui.widgets.migrate.show_info") as info:
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
-                view.apply_preferences()
+                view.copy_preference_files()
             # No debe copiar y debe avisar.
             self.assertTrue(info.called)
             self.assertFalse((target.config_dir / "userpref.blend").exists())
@@ -3283,7 +3283,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                                 return_value=True):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
-                view.apply_preferences()
+                view.copy_preference_files()
                 # La vista no se ha mostrado (offscreen), así que ``isVisible``
                 # siempre es False: se comprueba el flag propio del widget.
                 self.assertFalse(view.undo_btn.isHidden())
@@ -3309,7 +3309,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             source = self._config(tmp, "4.5.0")
             target = self._config(tmp, "5.3.0")
             source.config_dir.mkdir(parents=True)
-            # El ejecutable tiene que existir para que apply_detail_prefs no
+            # El ejecutable tiene que existir para que write_detail_prefs no
             # corte antes de llamar al servicio (que va mockeado).
             exe = Path(tmp) / "blender"
             exe.write_text("", encoding="utf-8")
@@ -3344,7 +3344,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 # Sin ajustes de addons, la casilla de activarlos no se ve.
                 self.assertTrue(view.enable_addons_check.isHidden())
                 view.detail_prefs[0].selected = True
-                view.apply_detail_prefs()
+                view.write_detail_prefs()
                 view._prefs_waiting = True
                 view._on_prefs_applied(
                     {"result": {"applied": ["view.ui_scale"], "errors": []},
@@ -3511,7 +3511,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             for i in range(4):
                 config.config_dir.mkdir(parents=True, exist_ok=True)
                 (config.config_dir / "userpref.blend").write_bytes(b"X" * (i + 1))
-                bc.snapshot_config(config, label=f"v5.2.{i}")
+                bc.set_config_aside(config, label=f"v5.2.{i}")
             view = self._view()
             with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
                              return_value=False),                     _mock.patch.object(view, "_factory_config",
@@ -3521,7 +3521,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 for alto in (760, 600, 500):
                     view.resize(950, alto)
                     view.show()
-                    view._refresh_factory()
+                    view._fill_factory()
                     self._settle(view)
                     alturas.append(view.snapshot_scroll.height())
                 # El mismo alto en las tres: lo que sobra lo scrollea la página.
@@ -3632,7 +3632,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                     view.reset_to_factory()
                     snapshots = __import__(
                         "services.blender_config", fromlist=["x"]
-                    ).snapshots_for(target)
+                    ).snapshots_with_settings(target)
                     self.assertEqual(len(snapshots), 1)
                     self.assertFalse(target.config_dir.exists())
                     view.restore_factory_snapshot()
@@ -3653,7 +3653,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             source = self._config(tmp, "5.2.2")
             source.config_dir.mkdir(parents=True)
             (source.config_dir / "userpref.blend").write_bytes(b"MIO")
-            bc.snapshot_config(source, label="v5.2.2")
+            bc.set_config_aside(source, label="v5.2.2")
             view = self._view()
             view.source_cfg = source
             view.source_entry = _fake_installed("5.2.2")
@@ -3677,7 +3677,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             config = self._config(tmp, "5.2.2")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"MIO")
-            bc.snapshot_config(config, label="v5.2.2")
+            bc.set_config_aside(config, label="v5.2.2")
             view = self._view()
             with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
                              return_value=False), \
@@ -3731,11 +3731,11 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             config = self._config(tmp, "5.2.2")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"MIO")
-            first = bc.snapshot_config(config, label="v5.2.2")
+            first = bc.set_config_aside(config, label="v5.2.2")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"OTRA")
-            second = bc.snapshot_config(config, label="v5.2.2")
-            newest = bc.snapshots_for(config)[0]
+            second = bc.set_config_aside(config, label="v5.2.2")
+            newest = bc.snapshots_with_settings(config)[0]
             view = self._view()
             with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
                              return_value=False), \
@@ -3785,7 +3785,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             config = self._config(tmp, "5.2.2")
             config.config_dir.mkdir(parents=True)
             (config.config_dir / "userpref.blend").write_bytes(b"MIO")
-            snap = bc.snapshot_config(config, label="v5.2.2")
+            snap = bc.set_config_aside(config, label="v5.2.2")
             view = self._view()
             with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
                              return_value=False), \

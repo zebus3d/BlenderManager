@@ -100,7 +100,7 @@ class Downloader:
         fallo llega a mitad de la descarga, mejor no empezar de cero. Un
         ``HTTPError`` (404, 500...) no se reintenta: no va a cambiar.
         """
-        for intento in range(1, CONNECT_ATTEMPTS + 1):
+        for attempt in range(1, CONNECT_ATTEMPTS + 1):
             try:
                 request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
                 # Con contexto explicito: si no, en Arch no encuentra las CAs y
@@ -112,17 +112,17 @@ class Downloader:
                 # sí se reintenta (respetando ``Retry-After`` si lo manda). El
                 # resto de errores HTTP (404, 500...) no cambian al reintentar.
                 if (error.code != 429 or self._cancel.is_set()
-                        or intento == CONNECT_ATTEMPTS):
+                        or attempt == CONNECT_ATTEMPTS):
                     raise
                 wait = _retry_after(error)
-                log(f"download got 429 ({url}), reintento "
-                    f"{intento}/{CONNECT_ATTEMPTS} en {wait}s")
+                log(f"download got 429 ({url}), retry "
+                    f"{attempt}/{CONNECT_ATTEMPTS} en {wait}s")
                 time.sleep(wait)
             except Exception as error:
-                if self._cancel.is_set() or intento == CONNECT_ATTEMPTS:
+                if self._cancel.is_set() or attempt == CONNECT_ATTEMPTS:
                     raise
-                log(f"download connect failed ({url}), reintento "
-                    f"{intento}/{CONNECT_ATTEMPTS}: {error}")
+                log(f"download connect failed ({url}), retry "
+                    f"{attempt}/{CONNECT_ATTEMPTS}: {error}")
                 time.sleep(RETRY_DELAY)
 
     def _run(self, url, dest_folder, filename, expected_sha256, on_progress, on_done, on_error):

@@ -546,7 +546,7 @@ class SettingsMigrationTests(unittest.TestCase):
         self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
                          "/tmp/datos")
         # Pero se sigue mirando: las LTS ya instaladas ahí no desaparecen.
-        self.assertIn("/tmp/ssd", loaded.scan_roots())
+        self.assertIn("/tmp/ssd", loaded.library_roots())
 
     def test_lts_apuntando_al_destino_no_es_separar(self):
         """Si las dos rutas son la misma no hay nada separado.
@@ -737,7 +737,7 @@ class SettingsTests(unittest.TestCase):
                          "/tmp/datos")
         self.assertEqual(settings.destination_for(
             self._build("5.3.0", "main", risk="alpha")), "/tmp/datos")
-        self.assertEqual(settings.scan_roots(), ["/tmp/ssd", "/tmp/datos"])
+        self.assertEqual(settings.library_roots(), ["/tmp/ssd", "/tmp/datos"])
 
     def test_un_tipo_sin_carpeta_no_tiene_destino(self):
         """Nadie recibe las diarias: se dice, no se inventa un sitio."""
@@ -753,7 +753,7 @@ class SettingsTests(unittest.TestCase):
             self._carpeta("/tmp/datos", channels.BUILD_TYPES),
             self._carpeta("/tmp/viejos", [], writable=False),
         ])
-        self.assertEqual(settings.scan_roots(), ["/tmp/datos", "/tmp/viejos"])
+        self.assertEqual(settings.library_roots(), ["/tmp/datos", "/tmp/viejos"])
         self.assertEqual([f.path for f in settings.install_folders()],
                          ["/tmp/datos"])
         self.assertEqual(settings.destination_for(self._build()), "/tmp/datos")
@@ -763,7 +763,7 @@ class SettingsTests(unittest.TestCase):
             self._carpeta("/tmp/datos", channels.BUILD_TYPES),
             self._carpeta("/tmp/datos", []),
         ])
-        self.assertEqual(settings.scan_roots(), ["/tmp/datos"])
+        self.assertEqual(settings.library_roots(), ["/tmp/datos"])
 
     def test_folder_for_localiza_el_candado(self):
         settings = settings_module.Settings(folders=[

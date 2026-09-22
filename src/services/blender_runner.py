@@ -301,7 +301,8 @@ def running_blenders(executable=None) -> list:
     if sys.platform == "darwin":
         try:
             completed = subprocess.run(["pgrep", "-x", "Blender"],
-                                       capture_output=True, text=True, timeout=5)
+                                       capture_output=True, text=True, timeout=5,
+                                       env=clean_env())
         except (OSError, subprocess.SubprocessError):
             return []
         return [int(value) for value in completed.stdout.split() if value.isdigit()]

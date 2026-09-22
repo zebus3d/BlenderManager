@@ -173,7 +173,7 @@ def link(entry, folder, platform: str, env=None) -> dict:
     else:
         raise AddonError("no_addon", str(folder))
     destination.parent.mkdir(parents=True, exist_ok=True)
-    _backup(destination)
+    bc.park_existing(destination)
     try:
         destination.symlink_to(folder.resolve(), target_is_directory=True)
     except OSError as error:
@@ -215,26 +215,13 @@ def _find_addon_root(folder: Path):
     raise AddonError("no_addon", str(folder))
 
 
-def _backup(destination: Path) -> None:
-    """Aparta lo que ya haya en el destino (o quita el enlace viejo).
-
-    Un symlink roto no lo ve ``park_existing`` (``exists()`` es False), así que
-    se borra directamente para no chocar al copiar encima.
-    """
-    if destination.is_symlink():
-        bc.delete_path(destination)
-    elif destination.exists():
-        backed_up, actions = [], []
-        bc.park_existing(destination, backed_up, actions)
-
-
 def _install_file(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    _backup(destination)
+    bc.park_existing(destination)
     shutil.copy2(source, destination)
 
 
 def _install_tree(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    _backup(destination)
+    bc.park_existing(destination)
     shutil.copytree(source, destination, symlinks=True)

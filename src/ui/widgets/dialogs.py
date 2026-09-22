@@ -78,10 +78,10 @@ class AppDialog(QDialog):
         así que se recalcula; y si se redimensiona, se vuelve a ajustar.
         """
         super().resizeEvent(event)
-        for etiqueta in self._wrapped:
-            alto = etiqueta.heightForWidth(etiqueta.width())
-            if alto and etiqueta.minimumHeight() != alto:
-                etiqueta.setMinimumHeight(alto)
+        for label in self._wrapped:
+            height = label.heightForWidth(label.width())
+            if height and label.minimumHeight() != height:
+                label.setMinimumHeight(height)
 
     def add_button(self, text: str, variant: str = "neutral",
                    on_click=None, tooltip: str = "") -> CardButton:

@@ -34,6 +34,7 @@ import urllib.request
 from pathlib import Path
 
 import version
+from services import opener
 from paths import APP_DIR
 from services import macos_dmg, opener, tls
 from services.downloader import log
@@ -184,7 +185,8 @@ def source_update(timeout: int = 120):
     try:
         result = subprocess.run(
             ["git", "-C", str(root), "pull", "--ff-only"],
-            capture_output=True, text=True, timeout=timeout)
+            capture_output=True, text=True, timeout=timeout,
+            env=opener.clean_env())
     except Exception as error:
         log(f"git pull failed: {error}")
         return False, "failed"
@@ -213,7 +215,10 @@ def relaunch_source() -> bool:
     """Relanza la app en modo fuente para usar el código recién descargado."""
     if source_root() is None:
         return False
-    kwargs = {}
+    # ``clean_env`` en todos los relanzamientos: el proceso nuevo heredaría el
+    # LD_LIBRARY_PATH del bootloader viejo y, peor, lo guardaría como el
+    # "original" que después pasa a Blender y al navegador (ver opener).
+    kwargs = {"env": opener.clean_env()}
     if sys.platform.startswith("win"):
         kwargs["creationflags"] = _DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP
     else:
@@ -370,7 +375,8 @@ def _apply_appimage(archive: Path) -> bool:
         _make_executable(archive)
         return False
     try:
-        subprocess.Popen([str(target)], start_new_session=True, close_fds=True)
+        subprocess.Popen([str(target)], start_new_session=True, close_fds=True,
+                         env=opener.clean_env())
     except OSError as error:
         log(f"appimage relaunch failed: {error}")
         _make_executable(archive)
@@ -410,7 +416,7 @@ def _apply_windows(archive: Path) -> bool:
         subprocess.Popen(
             [str(helper), "--apply-update", str(app_dir), str(os.getpid())],
             creationflags=_DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP,
-            close_fds=True,
+            close_fds=True, env=opener.clean_env(),
         )
     except OSError as error:
         log(f"windows update launch failed: {error}")
@@ -598,11 +604,11 @@ def apply_update(app_dir, pid) -> None:
         # y copiamos igualmente (la app antigua ya se está cerrando).
         _wait_for_exit(int(pid))
     except (TypeError, ValueError):
-        log(f"update: pid invalido ({pid!r}), copiando sin esperar")
+        log(f"update: invalid pid ({pid!r}), copying without waiting")
     _copy_tree(source, target)
     exe = target / EXE_NAME
     try:
-        subprocess.Popen([str(exe)], close_fds=True)
+        subprocess.Popen([str(exe)], close_fds=True, env=opener.clean_env())
     except OSError as error:
         log(f"update relaunch failed: {error}")
 

@@ -196,24 +196,6 @@ def config_for(version: str, platform: str, env: dict | None = None) -> BlenderC
     )
 
 
-def configs_for_installed(installed, platform: str,
-                          env: dict | None = None) -> list[BlenderConfig]:
-    """Carpeta de configuración de cada versión instalada, de nueva a vieja.
-
-    Se deduplica por serie: dos builds de la misma serie (por ejemplo dos
-    diarias de ``main``) comparten carpeta, no hay que ofrecerlas dos veces.
-    """
-    seen = set()
-    configs = []
-    for entry in installed:
-        minor = minor_of(getattr(entry, "version", "") or "")
-        if not minor or minor in seen:
-            continue
-        seen.add(minor)
-        configs.append(config_for(entry.version, platform, env))
-    return configs
-
-
 # -------------------------------------------------------------------- addons
 
 @dataclass
@@ -496,14 +478,6 @@ def wheel_problem(wheels, target_python: str) -> str:
     return ""
 
 
-def wheel_conflict(wheels, target_python: str) -> bool:
-    """True si algún paquete de los wheels no sirve para ese Python.
-
-    Envoltorio de ``wheel_problem`` para cuando solo interesa el sí/no.
-    """
-    return bool(wheel_problem(wheels, target_python))
-
-
 def compat_report(addon: Addon, target_version: str, target_platform: str = "",
                   target_arch: str = "", target_python: str = "") -> tuple:
     """Estado de un addon frente a la versión destino.
@@ -522,7 +496,7 @@ def compat_report(addon: Addon, target_version: str, target_platform: str = "",
     if addon.platforms and not _platform_ok(
             addon.platforms, target_platform, target_arch):
         return BLOCKED, REASON_PLATFORM
-    if addon.wheels and target_python and wheel_conflict(
+    if addon.wheels and target_python and wheel_problem(
             addon.wheels, target_python):
         return WARN, REASON_WHEEL_ABI
     if not addon.min_version:
@@ -563,16 +537,14 @@ class AddonPlan:
 
     @property
     def enable_module(self) -> str:
-        """Módulo que Blender destino tiene que habilitar."""
-        addon_id = self.addon.module.rsplit(".", 1)[-1]
-        if self.addon.kind == "extension":
-            return f"bl_ext.{LOCAL_REPO}.{addon_id}"
-        return self.addon.module
+        """Módulo que Blender destino tiene que habilitar.
 
-    @property
-    def is_extension(self) -> bool:
-        """True si es una extensión (manifest) y no un addon legacy."""
-        return self.addon.kind == "extension"
+        Las extensiones se copian al repositorio local, así que su módulo en
+        destino es ``bl_ext.user_default.<id>`` aunque en origen fuera otro.
+        """
+        if self.addon.kind == "extension":
+            return f"bl_ext.{LOCAL_REPO}.{addon_id_of(self.addon.module)}"
+        return self.addon.module
 
 
 def addon_id_of(module: str) -> str:
@@ -593,8 +565,7 @@ def destination_for(addon: Addon, target: BlenderConfig) -> Path:
     remotos solo para copiar una carpeta.
     """
     if addon.kind == "extension":
-        addon_id = addon.module.rsplit(".", 1)[-1]
-        return target.extensions_dir / LOCAL_REPO / addon_id
+        return target.extensions_dir / LOCAL_REPO / addon_id_of(addon.module)
     return target.addons_dir / addon.path.name
 
 
@@ -661,7 +632,8 @@ def delete_path(path: Path) -> None:
         pass
 
 
-def park_existing(destination: Path, backed_up: list, actions: list) -> None:
+def park_existing(destination: Path, backed_up: list | None = None,
+                  actions: list | None = None) -> None:
     """Aparta lo que ya hay en ``destination`` a su copia de seguridad.
 
     **Una sola copia por destino, reutilizable**: los usuarios migran más de una
@@ -670,10 +642,18 @@ def park_existing(destination: Path, backed_up: list, actions: list) -> None:
     mismo nombre y se pisa: lo que interesa conservar es el estado
     *inmediatamente anterior* al último cambio, no un histórico.
 
-    No hace nada si ``destination`` no existe.
+    ``backed_up`` y ``actions`` (si se pasan) recogen el respaldo hecho, que es
+    lo que permite deshacer. Un enlace simbólico roto no "existe" para
+    ``Path.exists`` pero sí estorba al copiar encima: se quita sin más. No hace
+    nada si no hay nada.
     """
+    if destination.is_symlink() and not destination.exists():
+        delete_path(destination)
+        return
     if not destination.exists():
         return
+    backed_up = backed_up if backed_up is not None else []
+    actions = actions if actions is not None else []
     # Quita un sufijo .bak ya existente, para no respaldar el respaldo.
     base = destination.name.split(BACKUP_SUFFIX, 1)[0]
     # Limpia restos de intentos anteriores (y de versiones viejas de la app,
@@ -694,11 +674,17 @@ def _write_marker(target: BlenderConfig, actions: list, key: str = "actions") ->
     copió la de preferencias (``preferences``): el deshacer lee las dos listas.
     """
     path = target.root / MIGRATION_MARKER
-    payload = {
+    # Se conserva lo que ya anotase la otra migración (addons y luego
+    # preferencias, o al revés): antes se sobrescribía el fichero entero y el
+    # "deshacer" de la primera se perdía en silencio.
+    payload = read_migration_marker(target)
+    if payload.get("version") != target.version:
+        payload = {}
+    payload.update({
         "version": target.version,
         "date": datetime.now().isoformat(timespec="seconds"),
         key: actions,
-    }
+    })
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(path.name + ".tmp")
@@ -753,7 +739,7 @@ SNAPSHOT_DIR = ".blendermanager-snapshots"
 SNAPSHOT_PREFIX = "config"
 
 
-def snapshot_config(target: BlenderConfig, label: str = "",
+def set_config_aside(target: BlenderConfig, label: str = "",
                     keep: int = 0) -> Path | None:
     """Aparta la carpeta ``config`` de una versión y devuelve dónde quedó.
 
@@ -784,11 +770,11 @@ def snapshot_config(target: BlenderConfig, label: str = "",
     return destination
 
 
-def snapshot_dirs(target: BlenderConfig) -> list:
+def all_snapshots(target: BlenderConfig) -> list:
     """Todas las instantáneas de ``config`` de esa versión, vacías incluidas.
 
     Es la lista cruda (para borrar o para saber si hay algo), de la más nueva a
-    la más vieja. Lo que se ofrece restaurar es ``snapshots_for``.
+    la más vieja. Lo que se ofrece restaurar es ``snapshots_with_settings``.
     """
     folder = target.root / SNAPSHOT_DIR
     if not folder.is_dir():
@@ -811,7 +797,7 @@ def _has_settings(snapshot: Path) -> bool:
                for name in ("userpref.blend", "startup.blend"))
 
 
-def snapshots_for(target: BlenderConfig) -> list:
+def snapshots_with_settings(target: BlenderConfig) -> list:
     """Instantáneas con ajustes de verdad, de la más nueva a la más vieja.
 
     Las vacías se descartan: al restaurar se aparta la config que hubiera, y si
@@ -819,7 +805,7 @@ def snapshots_for(target: BlenderConfig) -> list:
     reciente", el botón de restaurar no recuperaría los ajustes de verdad (le
     pasó al usuario: su config real quedaba tapada por una vacía).
     """
-    return [item for item in snapshot_dirs(target) if _has_settings(item)]
+    return [item for item in all_snapshots(target) if _has_settings(item)]
 
 
 def snapshot_date(snapshot) -> str:
@@ -887,7 +873,7 @@ def snapshot_details(snapshot) -> dict:
 
 def restore_snapshot(target: BlenderConfig, snapshot,
                      keep: int = 0) -> Path | None:
-    """Copia una instantánea a su sitio (``config``), sin consumirla.
+    """Pone una instantánea en el sitio de ``config`` (reemplazándola), sin consumirla.
 
     Antes se **movía** (el guardado desaparecía). Eso dejaba al usuario sin
     segunda oportunidad: si algo pisaba la config después (un Blender de la
@@ -904,10 +890,13 @@ def restore_snapshot(target: BlenderConfig, snapshot,
         return None
     aside = None
     if _has_settings(target.config_dir):
-        aside = snapshot_config(target, label="factory")
-    target.config_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(snapshot, target.config_dir, dirs_exist_ok=True,
-                    symlinks=True)
+        aside = set_config_aside(target, label="factory")
+    elif target.config_dir.exists():
+        # Sin ajustes no merece guardado, pero tampoco puede quedarse: restaurar
+        # es **reemplazar** la config, no fundir el guardado con lo que hubiera.
+        shutil.rmtree(target.config_dir)
+    target.config_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(snapshot, target.config_dir, symlinks=True)
     if keep > 0:
         prune_snapshots(target, keep, protect=snapshot)
     return aside
@@ -934,7 +923,7 @@ def prune_snapshots(target: BlenderConfig, keep: int, protect=None) -> list:
     """
     if keep <= 0:
         return []
-    snapshots = snapshot_dirs(target)      # de la más nueva a la más vieja
+    snapshots = all_snapshots(target)      # de la más nueva a la más vieja
     protected = Path(protect) if protect is not None else None
     removed = []
     for index, snapshot in enumerate(snapshots):
@@ -1029,12 +1018,12 @@ def summary_counts(plans) -> dict:
 USERPREF_FILE = "userpref.blend"
 STARTUP_FILE = "startup.blend"
 
-# Opciones de la migración de preferencias: (clave, fichero, aviso).
+# Ficheros que se pueden copiar como "preferencias": (clave, fichero). El
+# ``userpref`` lleva ajustes, tema, keymap y addons activos; el ``startup`` es
+# la escena y la disposición por defecto (la interfaz avisa de que pisa más).
 PREFERENCE_FILES = (
-    ("userpref", USERPREF_FILE,
-     "Preferences: keymap, theme, add-ons enabled, settings."),
-    ("startup", STARTUP_FILE,
-     "Startup file with the default scene and UI layout."),
+    ("userpref", USERPREF_FILE),
+    ("startup", STARTUP_FILE),
 )
 
 
@@ -1063,7 +1052,7 @@ def preference_plan(source: BlenderConfig, target: BlenderConfig) -> list:
     (y el aviso de que pisa lo que ya hubiera) es del usuario.
     """
     items = []
-    for key, filename, _ in PREFERENCE_FILES:
+    for key, filename in PREFERENCE_FILES:
         origin = source.config_dir / filename
         destination = target.config_dir / filename
         items.append(PreferenceItem(
@@ -1091,7 +1080,7 @@ class PreferenceResult:
     marker: Path | None = None
 
 
-def apply_preferences(items, target: BlenderConfig,
+def copy_preference_files(items, target: BlenderConfig,
                       dry_run: bool = False) -> PreferenceResult:
     """Copia los ficheros de preferencias marcados, con copia de seguridad.
 

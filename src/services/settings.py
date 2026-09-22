@@ -157,10 +157,6 @@ class Folder:
     types: list[str] = field(default_factory=list)
     writable: bool = True
 
-    def expanded(self) -> Path:
-        """La ruta con el ``~`` ya expandido."""
-        return Path(self.path).expanduser()
-
     def takes(self, build_type: str) -> bool:
         """True si las compilaciones de ese tipo se descargan aquí."""
         return self.writable and build_type in self.types
@@ -508,7 +504,7 @@ class Settings:
                 return folder
         return None
 
-    def scan_roots(self) -> list[str]:
+    def library_roots(self) -> list[str]:
         """Todas las carpetas donde puede haber versiones instaladas.
 
         Se escanean **todas**, reciban descargas o no: una carpeta sin tipos

@@ -42,11 +42,6 @@ class Move:
     target_root: Path
     build_type: str
 
-    @property
-    def target_path(self) -> Path:
-        """Dónde quedaría la carpeta tras el movimiento."""
-        return Path(self.target_root) / Path(self.entry.path).name
-
 
 class OrganizerError(Exception):
     """Fallo al mover, con un código en vez de un texto.

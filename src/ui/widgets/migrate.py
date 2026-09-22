@@ -903,7 +903,7 @@ class MigrateView(QWidget):
         """
         self._forget_analysis()
         self._factory_live_count = None
-        self._refresh_factory()
+        self._fill_factory()
         self._check_running(self._factory_entry(), self.factory_warning)
 
     def _show_header(self, index: int) -> None:
@@ -932,7 +932,7 @@ class MigrateView(QWidget):
             page.layout().insertWidget(0, header)
         header.show()
         if is_factory:
-            self._refresh_factory()
+            self._fill_factory()
             self._check_running(self._factory_entry(), self.factory_warning)
 
     def _new_page(self) -> tuple:
@@ -1240,7 +1240,7 @@ class MigrateView(QWidget):
         combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         combo.setMinimumWidth(150)
         combo.setToolTip(tooltip)
-        combo.currentIndexChanged.connect(lambda _: self._reload_versions())
+        combo.currentIndexChanged.connect(lambda _: self._fill_from_installed())
         return combo
 
     def _board_column(self, title: str, tooltip: str = ""):
@@ -1309,7 +1309,7 @@ class MigrateView(QWidget):
 
         self.copy_prefs_btn = _accent_button(
             tr("Copy preferences"), tr("Copy the selected preference files."),
-            self.apply_preferences)
+            self.copy_preference_files)
         row = QHBoxLayout()
         row.addStretch()
         row.addWidget(self._undo_button())
@@ -1363,7 +1363,7 @@ class MigrateView(QWidget):
         self.detail_load_btn = CardButton(
             tr("Read again"),
             tooltip=tr("Read the settings from the source version again."))
-        self.detail_load_btn.clicked.connect(lambda: self.read_source(force=True))
+        self.detail_load_btn.clicked.connect(lambda: self._read_source_blender(force=True))
         row.addWidget(self.detail_load_btn)
         # Las preferencias de un addon solo existen si el addon está activado
         # en el destino: con esto se activa en el mismo arranque en que se
@@ -1394,7 +1394,7 @@ class MigrateView(QWidget):
         self.detail_apply_btn = _accent_button(
             tr("Apply to destination"),
             tr("Write the selected settings in the destination version."),
-            self.apply_detail_prefs)
+            self.write_detail_prefs)
         row.addWidget(self.detail_apply_btn)
         lay.addLayout(row)
         # Asa en la esquina inferior derecha de la **tarjeta** (no de la fila).
@@ -1434,7 +1434,7 @@ class MigrateView(QWidget):
         executable, _ = _entry_info(self.source_entry)
         return bool(executable) and Path(executable).is_file()
 
-    def read_source(self, force: bool = False) -> None:
+    def _read_source_blender(self, force: bool = False) -> None:
         """Lee el estado del origen (addons activos + preferencias) en un hilo.
 
         Se llama **sola** al cambiar de versión (el usuario no tiene que pulsar
@@ -1493,7 +1493,7 @@ class MigrateView(QWidget):
         # Recalcula el plan con el estado real (marca ``was_enabled``).
         if self.source_cfg is not None and self.target_cfg is not None:
             self._rebuild_plan()
-        self._refresh_plan_status()
+        self._update_detail_status()
 
     def _rebuild_plan(self) -> None:
         """Recalcula el plan de addons con el estado activado del origen."""
@@ -1503,7 +1503,7 @@ class MigrateView(QWidget):
             enabled_ids=self.source_enabled)
         self._fill_board()
 
-    def _refresh_plan_status(self) -> None:
+    def _update_detail_status(self) -> None:
         """Resume en una línea qué se ha leído del origen: ajustes y addons."""
         active = sum(1 for plan in self.plans if plan.was_enabled)
         text = tr(
@@ -1560,7 +1560,7 @@ class MigrateView(QWidget):
             return
         self._fill_detail_rows()
         self._show_detail_buttons(True)
-        self._refresh_plan_status()
+        self._update_detail_status()
 
     def _no_changes_message(self) -> str:
         """Por qué no hay nada que copiar, con la causa cuando la sabemos.
@@ -1574,7 +1574,7 @@ class MigrateView(QWidget):
         """
         base = tr("You have no settings changed from Blender's defaults.")
         config = self.source_cfg
-        snapshots = bc.snapshots_for(config) if config is not None else []
+        snapshots = bc.snapshots_with_settings(config) if config is not None else []
         if not snapshots:
             return base
         _, version = _entry_info(self.source_entry)
@@ -1612,7 +1612,7 @@ class MigrateView(QWidget):
         for row in getattr(self, "detail_checks", []):
             row.set_checked(checked)
 
-    def apply_detail_prefs(self) -> None:
+    def write_detail_prefs(self) -> None:
         """Aplica las claves marcadas en el Blender destino."""
         executable, version = _entry_info(self.target_entry)
         if not executable or not Path(executable).is_file():
@@ -1680,7 +1680,7 @@ class MigrateView(QWidget):
         verlos, restaurarlo o borrarlo. El reset sigue siendo una acción aparte.
         """
         # Sin título dentro: la pestaña ya se llama "Factory settings". El
-        # texto se rellena en ``_refresh_factory`` porque nombra la versión
+        # texto se rellena en ``_fill_factory`` porque nombra la versión
         # destino, que el usuario puede cambiar en la barra de arriba.
         card, lay = settings_card()
         self.factory_hint = QLabel("")
@@ -1770,7 +1770,7 @@ class MigrateView(QWidget):
         card.set_grip(self.snapshot_grip)
         self.snapshot_card = card
 
-        self._refresh_factory()
+        self._fill_factory()
         return card
 
     def set_snapshot_keep(self, value: int) -> None:
@@ -1793,7 +1793,7 @@ class MigrateView(QWidget):
         config = self._factory_config()
         if config is not None and self.snapshot_keep > 0:
             bc.prune_snapshots(config, self.snapshot_keep)
-        self._refresh_factory()
+        self._fill_factory()
 
     def _forget_analysis(self) -> None:
         """Tira el análisis de los guardados (es de otra versión o ya no vale).
@@ -1820,7 +1820,7 @@ class MigrateView(QWidget):
         self._snapshot_widgets = {}
         clear_layout(self.snapshot_rows, keep_stretch=True)
 
-    def _build_snapshot_rows(self, snapshots) -> None:
+    def _fill_snapshot_rows(self, snapshots) -> None:
         """Crea una fila por guardado y le vuelca el análisis ya cacheado."""
         self._snapshot_widgets = {}
         for snapshot in snapshots:
@@ -1852,7 +1852,7 @@ class MigrateView(QWidget):
             "Right now this Blender is at its defaults; restoring a copy "
             "brings your settings back.")
 
-    def _refresh_factory(self) -> None:
+    def _fill_factory(self) -> None:
         """Repinta la tarjeta de fábrica: estado, lista de guardados y análisis."""
         if not hasattr(self, "factory_status"):
             return
@@ -1872,8 +1872,8 @@ class MigrateView(QWidget):
             "Start Blender {version} as if it were freshly installed. Its "
             "current settings are saved aside and can be put back.",
             version=version))
-        snapshots = bc.snapshots_for(config)
-        self.delete_all_btn.setEnabled(bool(bc.snapshot_dirs(config)))
+        snapshots = bc.snapshots_with_settings(config)
+        self.delete_all_btn.setEnabled(bool(bc.all_snapshots(config)))
         if not snapshots:
             self.factory_status.setText("")
             self.factory_empty.setVisible(True)
@@ -1882,7 +1882,7 @@ class MigrateView(QWidget):
             self._factory_live_count = None
             return
         self.factory_empty.setVisible(False)
-        self._build_snapshot_rows(snapshots)
+        self._fill_snapshot_rows(snapshots)
         self.snapshot_scroll.setVisible(True)
         self.snapshot_list.fit()
         self.factory_status.setText(self._factory_status_text(len(snapshots)))
@@ -1906,7 +1906,7 @@ class MigrateView(QWidget):
         config = self._factory_config()
         if config is None or not executable or not Path(executable).is_file():
             return
-        snapshots = list(bc.snapshots_for(config))
+        snapshots = list(bc.snapshots_with_settings(config))
         if not snapshots:
             return
         self._analyzed_for = version
@@ -1991,16 +1991,16 @@ class MigrateView(QWidget):
         bc.delete_snapshot(snapshot)
         self._analysis.pop(str(snapshot), None)
         self.status_message.emit(tr("Saved settings deleted."))
-        self._refresh_factory()
+        self._fill_factory()
 
     def delete_all_snapshots(self) -> None:
         """Borra todos los guardados de esa versión (irreversible)."""
         config = self._factory_config()
         if config is None:
             return
-        # ``snapshot_dirs`` (no ``snapshots_for``): se borra también lo vacío,
+        # ``all_snapshots`` (no ``snapshots_with_settings``): se borra también lo vacío,
         # que si no quedaría ahí sin forma de limpiarlo desde la interfaz.
-        snapshots = bc.snapshot_dirs(config)
+        snapshots = bc.all_snapshots(config)
         if not snapshots:
             return
         if not confirm(
@@ -2013,7 +2013,7 @@ class MigrateView(QWidget):
             bc.delete_snapshot(snapshot)
         self._forget_analysis()
         self.status_message.emit(tr("Saved settings deleted."))
-        self._refresh_factory()
+        self._fill_factory()
 
     def reset_to_factory(self) -> None:
         """Aparta la config de esa versión (instantánea) para dejarla limpia."""
@@ -2031,7 +2031,7 @@ class MigrateView(QWidget):
                    "this same screen.", version=version),
                 accept_text=tr("Reset"), danger=True):
             return
-        snapshot = bc.snapshot_config(config, label=f"v{version}",
+        snapshot = bc.set_config_aside(config, label=f"v{version}",
                                       keep=self.snapshot_keep)
         if snapshot is None:
             self.factory_status.setText(tr(
@@ -2042,7 +2042,7 @@ class MigrateView(QWidget):
         show_info(self, tr("Reset to factory settings"),
                   tr("Your settings were saved. Blender {version} will start "
                      "clean the next time you open it.", version=version))
-        self._refresh_factory()
+        self._fill_factory()
 
     def restore_factory_snapshot(self, snapshot=None) -> None:
         """Copia un guardado a su sitio (el más reciente si no se dice cuál)."""
@@ -2050,7 +2050,7 @@ class MigrateView(QWidget):
         config = self._factory_config()
         if config is None:
             return
-        snapshots = bc.snapshots_for(config)
+        snapshots = bc.snapshots_with_settings(config)
         if not snapshots:
             return
         target = Path(snapshot) if snapshot is not None else snapshots[0]
@@ -2070,7 +2070,7 @@ class MigrateView(QWidget):
         bc.restore_snapshot(config, target, keep=self.snapshot_keep)
         self._forget_analysis()
         self.status_message.emit(tr("Settings restored."))
-        self._refresh_factory()
+        self._fill_factory()
 
     def _undo_button(self) -> CardButton:
         """Botón para revertir la última migración (si la hay)."""
@@ -2154,14 +2154,14 @@ class MigrateView(QWidget):
 
         # Al reordenar, el desplegable mantiene la versión que tuviera elegida.
         self._fill_combo(self.source_combo, choices,
-                         self._current_version(self.source_combo))
+                         self._selected_entry(self.source_combo))
         self._fill_combo(self.target_combo, choices,
-                         self._current_version(self.target_combo))
+                         self._selected_entry(self.target_combo))
         # La pestaña de fábrica tiene su propio selector de una versión: se
         # mantiene lo elegido y, la primera vez, arranca en la más nueva (igual
         # que el destino de la migración).
         self._fill_combo(self.factory_combo, choices,
-                         self._current_version(self.factory_combo),
+                         self._selected_entry(self.factory_combo),
                          label=_version_label)
         if choices and self.factory_combo.currentIndex() < 0:
             self.factory_combo.setCurrentIndex(0)
@@ -2173,9 +2173,9 @@ class MigrateView(QWidget):
                 self.source_combo.setCurrentIndex(1)
             if self.target_combo.currentIndex() < 0:
                 self.target_combo.setCurrentIndex(0)
-        self._reload_versions()
+        self._fill_from_installed()
 
-    def _current_version(self, combo) -> str:
+    def _selected_entry(self, combo) -> str:
         index = combo.currentIndex()
         if 0 <= index < len(self._choices):
             return self._choices[index].version
@@ -2206,7 +2206,7 @@ class MigrateView(QWidget):
         return None
 
     # ------------------------------------------------------------- informe
-    def _reload_versions(self) -> None:
+    def _fill_from_installed(self) -> None:
         self._clear_rows()
         self.plans = []
         self.source_cfg = None
@@ -2237,7 +2237,7 @@ class MigrateView(QWidget):
         self.target_cfg = bc.config_for(target.version, self.platform)
         self._fill_preference_files()
         self._refresh_undo()
-        self._refresh_factory()
+        self._fill_factory()
         self.source_path_label.setText(str(self.source_cfg.root))
         self.target_path_label.setText(str(self.target_cfg.root))
         self._rebuild_plan()
@@ -2245,7 +2245,7 @@ class MigrateView(QWidget):
         self._refresh_undo()
         # Lectura automática del origen (addons activos + preferencias). Si esa
         # versión ya se leyó, no vuelve a arrancar Blender.
-        self.read_source()
+        self._read_source_blender()
 
     def _fill_board(self) -> None:
         """Pinta el tablero con el plan actual (o el mensaje de vacío)."""
@@ -2374,7 +2374,7 @@ class MigrateView(QWidget):
             return
         self._start_activation(executable, modules, version)
 
-    def apply_preferences(self) -> None:
+    def copy_preference_files(self) -> None:
         """Copia los ficheros de preferencias marcados.
 
         Antes de tocar ``userpref.blend`` hay que asegurarse de que el Blender
@@ -2386,7 +2386,7 @@ class MigrateView(QWidget):
         if not any(item.selected and item.safe for item in self.pref_items):
             self.status_message.emit(tr("Nothing selected"))
             return
-        result = bc.apply_preferences(self.pref_items, self.target_cfg)
+        result = bc.copy_preference_files(self.pref_items, self.target_cfg)
         self._finish_copy(
             result, tr("Copied {count} preference files.",
                        count=len(result.copied)),
@@ -2436,7 +2436,7 @@ class MigrateView(QWidget):
             (f"{Path(path).name}: {message}" for path, message in result.failed)))
         show_info(self, tr("Migration undone"), "\n".join(lines))
         self.status_message.emit(tr("Migration undone"))
-        self._reload_versions()
+        self._fill_from_installed()
 
     def _start_activation(self, executable, modules, version) -> None:
         """Habilita los addons copiados en un hilo (Blender tarda en arrancar)."""

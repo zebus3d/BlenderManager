@@ -74,9 +74,9 @@ def release_url(build) -> Optional[str]:
     combinacion = RELEASE_NAMES.get((build.platform, build.arch))
     if not combinacion:
         return None
-    nombre, extension = combinacion
+    name, extension = combinacion
     return (f"{RELEASE_BASE}/Blender{minor_of(build.version)}/"
-            f"blender-{build.version}-{nombre}.{extension}")
+            f"blender-{build.version}-{name}.{extension}")
 
 
 def release_checksum(build, timeout: int = 15) -> Optional[str]:
@@ -88,22 +88,22 @@ def release_checksum(build, timeout: int = 15) -> Optional[str]:
     url = release_url(build)
     if not url:
         return None
-    nombre = url.rsplit("/", 1)[-1]
+    name = url.rsplit("/", 1)[-1]
     sha_url = f"{RELEASE_BASE}/Blender{minor_of(build.version)}/" \
               f"blender-{build.version}.sha256"
-    peticion = urllib.request.Request(sha_url,
+    request = urllib.request.Request(sha_url,
                                       headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(peticion, timeout=timeout,
+        with urllib.request.urlopen(request, timeout=timeout,
                                     context=tls.ssl_context()) as response:
-            texto = response.read().decode("utf-8", "replace")
+            text = response.read().decode("utf-8", "replace")
     except Exception as error:
         log(f"release checksum unavailable: {error}")
         return None
-    for linea in texto.splitlines():
-        partes = linea.split()
-        if len(partes) == 2 and partes[1].lstrip("*").strip() == nombre:
-            return partes[0]
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1].lstrip("*").strip() == name:
+            return parts[0]
     return None
 
 
@@ -113,21 +113,21 @@ def _speed(url: str, timeout: int = PROBE_TIMEOUT) -> Optional[float]:
     Se corta a ``PROBE_BYTES``: si el servidor ignora el ``Range`` seguimos
     leyendo solo eso, no el fichero entero.
     """
-    peticion = urllib.request.Request(
+    request = urllib.request.Request(
         url, headers={"User-Agent": USER_AGENT,
                       "Range": f"bytes=0-{PROBE_BYTES - 1}"})
-    inicio = time.monotonic()
+    started = time.monotonic()
     try:
-        with urllib.request.urlopen(peticion, timeout=timeout,
+        with urllib.request.urlopen(request, timeout=timeout,
                                     context=tls.ssl_context()) as response:
-            leidos = len(response.read(PROBE_BYTES))
+            read_bytes = len(response.read(PROBE_BYTES))
     except (urllib.error.URLError, OSError, ValueError) as error:
         log(f"source probe failed ({url}): {error}")
         return None
-    transcurrido = time.monotonic() - inicio
-    if leidos <= 0 or transcurrido <= 0:
+    elapsed = time.monotonic() - started
+    if read_bytes <= 0 or elapsed <= 0:
         return None
-    return leidos / transcurrido
+    return read_bytes / elapsed
 
 
 def candidates(build) -> list:
