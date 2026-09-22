@@ -606,6 +606,14 @@ def write_preferences(executable, preferences, timeout: int = 180,
                       enable_addons: bool = False) -> dict:
     """Escribe esas claves (``Preference`` o pares ``(ruta, valor)``) en Blender.
 
+    **Escribe en la configuración REAL de la versión de ``executable``**, que
+    es justo lo que se quiere al migrar (el destino es esa versión) y no tiene
+    equivalente de ``config_dir``: Blender resuelve su propia carpeta. Para
+    probar esto sin tocar la config del usuario hay que apuntar
+    ``BLENDER_USER_CONFIG`` a un temporal **en el entorno del proceso**, que
+    ``clean_env`` hereda. Aprendido a la mala: una prueba de ida y vuelta sin
+    esa variable reescribió las preferencias reales de un Blender 5.2.
+
     Devuelve ``{"applied", "errors", "addons_enabled", "log"}``. Nunca lanza:
     si Blender no está o se cuelga, el motivo viaja en ``errors``. Con
     ``enable_addons`` intenta activar antes los addons cuyas preferencias se
