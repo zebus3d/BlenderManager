@@ -817,6 +817,15 @@ class MigrateView(QWidget):
         self.tabs.addTab(self._build_addons_tab(), tr("Add-ons"))
         self.tabs.addTab(self._build_preferences_page(), tr("User prefs"))
         self.tabs.addTab(self._build_factory_page(), tr("Factory settings"))
+        # "User prefs" y "Factory settings" suenan parecido: el tooltip dice
+        # cuál copia de una versión a otra y cuál deja una versión limpia.
+        for index, tip in enumerate((
+                tr("Copy add-ons and extensions from one version to another."),
+                tr("Copy settings: one by one, as theme and key map presets, "
+                   "or the whole preferences file."),
+                tr("Start a version as if it were freshly installed, keeping "
+                   "your current settings saved aside."))):
+            self.tabs.setTabToolTip(index, tip)
         # Las pestañas se alinean por **arriba** con la barra lateral y con los
         # tags de canal (``TABS_TOP``): las tres filas no miden lo mismo, así
         # que alinear por abajo las dejaba a distinta altura.
@@ -1153,6 +1162,8 @@ class MigrateView(QWidget):
         lay.addLayout(rows)
 
         self.style_status = QLabel("")
+        self.style_status.setToolTip(tr(
+            "Result of copying the theme and the key map."))
         self.style_status.setWordWrap(True)
         lay.addWidget(self.style_status)
 
@@ -1335,6 +1346,9 @@ class MigrateView(QWidget):
         lay.addWidget(hint)
 
         self.detail_status = QLabel("")
+        self.detail_status.setToolTip(tr(
+            "How the reading went. If something could not be read, the "
+            "details show up here."))
         self.detail_status.setWordWrap(True)
         lay.addWidget(self.detail_status)
 
@@ -1705,6 +1719,9 @@ class MigrateView(QWidget):
 
         # Resumen: cuántos guardados hay y en qué estado está la config viva.
         self.factory_status = QLabel("")
+        self.factory_status.setToolTip(tr(
+            "How many saved copies this version has and what state its "
+            "live settings are in."))
         self.factory_status.setWordWrap(True)
         lay.addWidget(self.factory_status)
 
@@ -1748,7 +1765,11 @@ class MigrateView(QWidget):
         # Retención: cuántas copias se conservan por versión. Va aquí (y no en
         # Ajustes) porque es justo donde se ven y se borran.
         keep_row = QHBoxLayout()
-        keep_row.addWidget(QLabel(tr("Keep at most")))
+        keep_label = QLabel(tr("Keep at most"))
+        keep_label.setToolTip(tr(
+            "How many saved copies to keep per version. The oldest are deleted "
+            "when a new one is saved."))
+        keep_row.addWidget(keep_label)
         keep_row.addStretch()
         self.snapshot_keep_combo = QComboBox()
         for value, label in ((3, "3"), (5, "5"), (10, "10"), (0, tr("All"))):

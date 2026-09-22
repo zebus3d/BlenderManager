@@ -152,7 +152,9 @@ class ProgressDialog(AppDialog):
 
     def __init__(self, parent=None, title: str = "", message: str = "",
                  primary_text: str | None = None,
-                 secondary_text: str | None = None):
+                 secondary_text: str | None = None,
+                 primary_tooltip: str = "",
+                 secondary_tooltip: str = ""):
         """``primary_text``/``secondary_text`` cambian los botones.
 
         Por defecto son los de la actualización de la app, que es para lo que
@@ -173,9 +175,12 @@ class ProgressDialog(AppDialog):
         layout.insertWidget(layout.count() - 1, self.progress)
         primary = tr("Update") if primary_text is None else primary_text
         secondary = tr("Later") if secondary_text is None else secondary_text
-        self._primary = (self.add_button(primary, variant="accent")
-                         if primary else None)
-        self._secondary = self.add_button(secondary) if secondary else None
+        self._primary = (self.add_button(
+            primary, variant="accent",
+            tooltip=primary_tooltip or tr("Go ahead.")) if primary else None)
+        self._secondary = (self.add_button(
+            secondary, tooltip=secondary_tooltip or tr("Do nothing."))
+            if secondary else None)
         if self._secondary is not None:
             self._secondary.clicked.connect(self.reject)
 

@@ -113,6 +113,8 @@ class _RecentRow(QFrame):
         for entry in self._versions:
             action = menu.addAction(
                 tr("Open in Blender {version}", version=entry.version))
+            action.setToolTip(tr("Open this file with that version instead of "
+                                 "the newest one."))
             action.triggered.connect(
                 lambda _=False, e=entry: self._on_open(self.path, e))
         menu.exec(self._menu_btn.mapToGlobal(

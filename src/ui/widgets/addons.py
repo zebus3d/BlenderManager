@@ -113,8 +113,10 @@ class _AddonRow(QFrame):
     def _show_menu(self, position=None) -> None:
         menu = card_menu(self)
         open_action = menu.addAction(tr("Open file location"))
+        open_action.setToolTip(tr("Show the file in your file manager."))
         open_action.triggered.connect(lambda: self._on_open(self.state))
         delete_action = menu.addAction(tr("Delete add-on"))
+        delete_action.setToolTip(tr("Remove it from this Blender version."))
         delete_action.triggered.connect(lambda: self._on_delete(self.state))
         if position is None:
             position = self._menu_btn.mapToGlobal(

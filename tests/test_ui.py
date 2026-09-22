@@ -2592,6 +2592,66 @@ class TooltipTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(abierto and cerrado)
         self.assertNotEqual(abierto, cerrado)
 
+    def test_los_botones_de_los_dialogos_tienen_tooltip(self):
+        """Hasta "Cerrar" dice qué pasa al pulsarlo.
+
+        Son los botones que deciden si algo se borra, se mueve o se instala:
+        el que no explica lo que hace es el que da miedo pulsar.
+        """
+        from unittest import mock as _mock
+
+        from ui.widgets.buttons import CardButton
+        from ui.widgets.dialogs import AppDialog, ProgressDialog, confirm
+
+        vistos = []
+        real_exec = AppDialog.exec
+
+        def espia(self):
+            vistos.append([b.toolTip() for b in self.findChildren(CardButton)])
+            return 0
+
+        with _mock.patch.object(AppDialog, "exec", espia):
+            confirm(None, "t", "m")
+            confirm(None, "t", "m", accept_text="Borrar", danger=True)
+        for tooltips in vistos:
+            self.assertTrue(all(tooltips), tooltips)
+        progreso = ProgressDialog(None, "t", "m")
+        for boton in progreso.findChildren(CardButton):
+            self.assertTrue(boton.toolTip())
+        del real_exec
+
+    def test_las_acciones_de_los_menus_tienen_tooltip(self):
+        """Los menús contextuales explican cada entrada, como los botones."""
+        from pathlib import Path
+
+        from model.build import InstalledBuild
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        entry = InstalledBuild(name="b", path=Path("/tmp/b"), version="5.2.2",
+                               branch="v52", executable=Path("/tmp/b/blender"))
+        for menu in (window._installed_menu(entry),
+                     window._store_menu(_build("5.2.2", "v52", "stable"))):
+            self.assertTrue(menu.toolTipsVisible())
+            for action in menu.actions():
+                if action.isSeparator():
+                    continue
+                self.assertTrue(action.toolTip() != action.text(),
+                                action.text())
+
+    def test_las_pestanas_explican_que_hay_en_cada_una(self):
+        """Ajustes y Migración: cada pestaña con su tooltip.
+
+        "User prefs" y "Factory settings" suenan parecido y hacen cosas muy
+        distintas; el nombre solo no basta.
+        """
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        for tabs in (window.settings_tabs, window.migrate_view.tabs):
+            for index in range(tabs.count()):
+                self.assertTrue(tabs.tabToolTip(index), tabs.tabText(index))
+
     def test_los_botones_de_las_tarjetas_tienen_tooltip(self):
         from pathlib import Path
 

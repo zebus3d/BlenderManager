@@ -43,6 +43,8 @@ class TrayIcon(QObject):
         # menú nativo claro desentona con el tema oscuro.
         self._menu = QMenu()
         self._menu.setObjectName("TrayMenu")
+        # Qt no enseña los tooltips de las acciones si no se le pide.
+        self._menu.setToolTipsVisible(True)
         self.show_action = self._menu.addAction(tr("Show"))
         self.show_action.setToolTip(tr("Bring the BlenderManager window back."))
         self.show_action.triggered.connect(lambda: self.restore_requested.emit())

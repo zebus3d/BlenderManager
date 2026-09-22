@@ -765,6 +765,17 @@ class MainWindow(QWidget):
         # Avanzado va al final: son opciones que la mayoría no toca.
         tabs.addTab(self._settings_tab(self._settings_advanced_card()),
                     tr("Advanced"))
+        # Qué hay en cada pestaña, sin tener que entrar a mirarlas.
+        for index, tip in enumerate((
+                tr("Where downloads go and how they are unpacked."),
+                tr("The folders where your Blender versions live, and what "
+                   "kind of build each one receives."),
+                tr("Language, zoom and how the window behaves."),
+                tr("Arguments and console for every Blender you launch."),
+                tr("Tray icon, autostart and other system integration."),
+                tr("Updates of BlenderManager itself."),
+                tr("Options still in development."))):
+            tabs.setTabToolTip(index, tip)
         # Las pestañas se alinean por **arriba** con la barra lateral y con los
         # tags de canal (``TABS_TOP``).
         outer.setContentsMargins(0, t.TABS_TOP, 0, 0)
@@ -982,7 +993,9 @@ class MainWindow(QWidget):
                  "point the app at folders where you already had Blender, and "
                  "lock them so nothing is ever written there."))
         choice = {"open": False}
-        dialog.add_button(tr("Not now"), on_click=dialog.reject)
+        dialog.add_button(tr("Not now"), on_click=dialog.reject,
+                          tooltip=tr("Close this message. You can open\n"
+                                     "Settings > Folders whenever you want."))
         dialog.add_button(
             tr("Show me"), variant="accent",
             on_click=lambda: (choice.update(open=True), dialog.accept()),
@@ -2035,18 +2048,24 @@ class MainWindow(QWidget):
         """
         menu = card_menu(self)
         launch = menu.addAction(tr("Launch"))
+        launch.setToolTip(tr("Launch this installed version"))
         launch.triggered.connect(lambda: self.launch_installed(entry))
         if self.settings.experimental_features:
             console = menu.addAction(tr("Launch with console"))
+            console.setToolTip(tr("Launch this version with the console visible: Python "
+                            "output and script errors."))
             console.triggered.connect(lambda: self._launch_with_console(entry))
         menu.addSeparator()
         open_folder = menu.addAction(tr("Open folder"))
+        open_folder.setToolTip(tr("Open the folder where this version is installed."))
         open_folder.triggered.connect(lambda: opener.open_path(entry.path))
         copy = menu.addAction(tr("Copy path"))
+        copy.setToolTip(tr("Copy the path of this version to the clipboard."))
         copy.triggered.connect(
             lambda: QApplication.clipboard().setText(str(entry.path)))
         menu.addSeparator()
         remove = menu.addAction(tr("Uninstall"))
+        remove.setToolTip(tr("Remove this installed version"))
         remove.triggered.connect(lambda: self.delete_installed(entry))
         return menu
 
@@ -2068,11 +2087,14 @@ class MainWindow(QWidget):
         """Menú contextual de una tarjeta de la tienda (sin mostrarlo)."""
         menu = card_menu(self)
         install = menu.addAction(tr("Download and install"))
+        install.setToolTip(tr("Download and install this version"))
         install.triggered.connect(lambda: self.install_build(build))
         notes = menu.addAction(tr("Release notes"))
+        notes.setToolTip(tr("Read the release notes for this version"))
         notes.triggered.connect(lambda: self.open_release_notes(build.version))
         menu.addSeparator()
         copy = menu.addAction(tr("Copy download link"))
+        copy.setToolTip(tr("Copy the download link to the clipboard."))
         copy.triggered.connect(
             lambda: QApplication.clipboard().setText(build.url))
         return menu
@@ -2594,7 +2616,8 @@ class MainWindow(QWidget):
             + tr("Open Settings and tick {type} on the folder where you want "
                  "them.", type=tr(TYPE_LABELS[build_type])))
         choice = {"open": False}
-        dialog.add_button(tr("Close"), on_click=dialog.reject)
+        dialog.add_button(tr("Close"), on_click=dialog.reject,
+                          tooltip=tr("Close this message and download nothing."))
         dialog.add_button(
             tr("Open folder settings"), variant="accent",
             on_click=lambda: (choice.update(open=True), dialog.accept()),
@@ -2622,14 +2645,20 @@ class MainWindow(QWidget):
                                  "Documents or another drive."))
         dialog = AppDialog(self, tr("Download failed"), message)
         choice = {"other": False, "admin": False}
-        dialog.add_button(tr("Close"), on_click=dialog.reject)
+        dialog.add_button(tr("Close"), on_click=dialog.reject,
+                          tooltip=tr("Give up on this download for now."))
         dialog.add_button(
             tr("Choose another folder"), variant="accent",
-            on_click=lambda: (choice.update(other=True), dialog.accept()))
+            on_click=lambda: (choice.update(other=True), dialog.accept()),
+            tooltip=tr("Pick a folder you can write to. It is added to your\n"
+                       "folders with this kind of build ticked, so the fix "
+                       "lasts."))
         if elevate.available():
             dialog.add_button(
                 tr("Grant permission (admin)"),
-                on_click=lambda: (choice.update(admin=True), dialog.accept()))
+                on_click=lambda: (choice.update(admin=True), dialog.accept()),
+                tooltip=tr("Asks Windows for permission to write in that "
+                           "folder.\nYou will see the system's own prompt."))
         dialog.exec()
 
         if choice["admin"]:

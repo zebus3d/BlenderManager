@@ -857,6 +857,72 @@ _TRANSLATIONS = {
         "Run git pull and restart the app.":
             "Ejecuta git pull y reinicia la aplicación.",
         "Go ahead.": "Adelante.",
+
+        # --- Tooltips de pestañas, menús y diálogos (repaso de cobertura) ---
+        "Where downloads go and how they are unpacked.":
+            "Dónde van las descargas y cómo se descomprimen.",
+        "The folders where your Blender versions live, and what kind of build "
+        "each one receives.":
+            "Las carpetas donde viven tus versiones de Blender, y qué tipo de "
+            "versión recibe cada una.",
+        "Language, zoom and how the window behaves.":
+            "Idioma, zoom y comportamiento de la ventana.",
+        "Arguments and console for every Blender you launch.":
+            "Argumentos y consola para cada Blender que lanzas.",
+        "Tray icon, autostart and other system integration.":
+            "Icono de bandeja, arranque automático y otra integración con el "
+            "sistema.",
+        "Updates of BlenderManager itself.":
+            "Actualizaciones del propio BlenderManager.",
+        "Options still in development.":
+            "Opciones todavía en desarrollo.",
+        "Copy add-ons and extensions from one version to another.":
+            "Copia addons y extensiones de una versión a otra.",
+        "Copy settings: one by one, as theme and key map presets, or the whole "
+        "preferences file.":
+            "Copia ajustes: uno a uno, como presets de tema y mapa de teclas, "
+            "o el fichero de preferencias entero.",
+        "Start a version as if it were freshly installed, keeping your current "
+        "settings saved aside.":
+            "Arranca una versión como si acabaras de instalarla, guardando "
+            "aparte tus ajustes actuales.",
+        "How the reading went. If something could not be read, the details "
+        "show up here.":
+            "Cómo fue la lectura. Si algo no se pudo leer, el detalle sale "
+            "aquí.",
+        "Result of copying the theme and the key map.":
+            "Resultado de copiar el tema y el mapa de teclas.",
+        "How many saved copies this version has and what state its live "
+        "settings are in.":
+            "Cuántas copias guardadas tiene esta versión y en qué estado están "
+            "sus ajustes actuales.",
+        "Open the folder where this version is installed.":
+            "Abre la carpeta donde está instalada esta versión.",
+        "Copy the path of this version to the clipboard.":
+            "Copia la ruta de esta versión al portapapeles.",
+        "Copy the download link to the clipboard.":
+            "Copia el enlace de descarga al portapapeles.",
+        "Remove it from this Blender version.":
+            "Lo quita de esta versión de Blender.",
+        "Open this file with that version instead of the newest one.":
+            "Abre este fichero con esa versión en vez de con la más nueva.",
+        "Close this message. You can open\nSettings > Folders whenever you "
+        "want.":
+            "Cierra este mensaje. Puedes abrir\nAjustes > Carpetas cuando "
+            "quieras.",
+        "Close this message and download nothing.":
+            "Cierra este mensaje y no descarga nada.",
+        "Give up on this download for now.":
+            "Deja esta descarga por ahora.",
+        "Pick a folder you can write to. It is added to your\nfolders with "
+        "this kind of build ticked, so the fix lasts.":
+            "Elige una carpeta en la que puedas escribir. Se añade a tus\n"
+            "carpetas con este tipo de versión marcado, así que el arreglo "
+            "dura.",
+        "Asks Windows for permission to write in that folder.\nYou will see "
+        "the system's own prompt.":
+            "Pide permiso a Windows para escribir en esa carpeta.\nVerás el "
+            "aviso del propio sistema.",
         "Do nothing.": "No hace nada.",
         "This cannot be undone.": "Esto no se puede deshacer.",
         "Close this message.": "Cierra este aviso.",
