@@ -24,6 +24,7 @@ from PySide6.QtGui import QColor
 BG = "#1D1D1D"          # fondo de la ventana (el más oscuro)
 FIELD = "#171717"       # campos de texto (hundidos)
 BUTTON = "#585858"      # botones neutros
+BUTTON_HOVER = "#6A6A6A"  # botones neutros con texto, al pasar el ratón
 FILTER = "#1D1D1D"      # botones de filtro
 SURFACE = "#303030"     # paneles y tarjetas
 CHROME = "#303030"      # cabecera, barra lateral y de estado
@@ -75,6 +76,12 @@ FILTERS_HEIGHT = 50
 # de los tags de canal. Se alinea por arriba, no por abajo: las pestañas y los
 # tags no miden lo mismo.
 TABS_TOP = 14
+# Alto de los controles de la fila de filtros (pastillas de canal, rejilla/lista,
+# desplegables) **y** de las pestañas de Migración y Ajustes: todo lo que se
+# lee como "una pestaña o un filtro" mide lo mismo, aunque viva en filas
+# distintas. Antes cada una salía de su padding y las de Migración/Ajustes
+# quedaban 1 px más bajas que las pastillas.
+CONTROL_HEIGHT = 28
 
 # --- Tipografía ---
 FONT_SIZE = 13

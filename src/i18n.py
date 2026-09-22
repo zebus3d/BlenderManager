@@ -715,10 +715,14 @@ _TRANSLATIONS = {
         "This version is already installed": "Esta versión ya está instalada",
 
         # --- Tooltips descriptivos (pueden ser de varias líneas con \n) ---
-        "Download the list of builds again.\nUse it if something looks out of "
-        "date.":
-            "Vuelve a descargar la lista de compilaciones.\n"
+        "Read the Blender versions available to download again.\n"
+        "Use it if something looks out of date.":
+            "Vuelve a leer las versiones de Blender que se pueden descargar.\n"
             "Úsalo si ves algo desactualizado.",
+        "Look for the installed Blender versions again.\n"
+        "Use it if you added or removed one outside this app.":
+            "Vuelve a buscar las versiones de Blender instaladas.\n"
+            "Úsalo si has añadido o quitado alguna fuera de esta app.",
         "Filter by version, branch or file name as you type.":
             "Filtra por versión, rama o nombre de archivo mientras escribes.",
         "Show every build: stable, LTS, daily and alpha.":

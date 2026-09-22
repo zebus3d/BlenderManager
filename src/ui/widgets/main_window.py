@@ -106,7 +106,7 @@ MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
 FILTERS_HEIGHT = t.FILTERS_HEIGHT
 # Alto de los controles de la fila de filtros (pastillas de vista y combos):
 # el mismo que los tags de canal, para que la fila quede a ras.
-FILTER_CONTROL_HEIGHT = 28
+FILTER_CONTROL_HEIGHT = t.CONTROL_HEIGHT
 # Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
 ZOOM_STEP = 0.1
 
@@ -514,21 +514,16 @@ class MainWindow(QWidget):
         lay.addLayout(titles)
         lay.addStretch()
 
+        # El buscador va en la cabecera (a la derecha, como en cualquier app);
+        # el botón de refrescar vive con los filtros, que es lo que refresca.
         self.header_tools = QWidget()
         self.header_tools.setObjectName("HeaderTools")  # fondo transparente (QSS)
-        # Sin esto el bloque se estira y reparte el hueco que sobra: a 1500 px de
-        # ancho llegaban a verse ~97 px entre el botón de refrescar y el
-        # buscador. Es el mismo caso que el zoom del pie.
+        # Sin esto el bloque se estira y reparte el hueco que sobra. Es el mismo
+        # caso que el zoom del pie.
         self.header_tools.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         tools = QHBoxLayout(self.header_tools)
         tools.setContentsMargins(0, 0, 0, 0)
         tools.setSpacing(10)
-        refresh = IconFlatButton(icons.REFRESH, tr(
-            "Download the list of builds again.\n"
-            "Use it if something looks out of date."))
-        refresh.setFont(icon_font(16))
-        refresh.clicked.connect(lambda: self.refresh(force=True))
-        tools.addWidget(refresh)
         self.search_input = QLineEdit()
         self.search_input.setObjectName("SearchField")
         self.search_input.setPlaceholderText(tr("Search..."))
@@ -576,6 +571,14 @@ class MainWindow(QWidget):
         self.channel_tabs.currentChanged.connect(self._on_channel_tab_changed)
         lay.addWidget(self.channel_tabs, 0, Qt.AlignBottom)
         lay.addStretch()
+
+        # Refrescar va junto a los controles de la lista (y no en la cabecera):
+        # refresca **lo que se ve**, la nube o las instaladas, y el tooltip lo
+        # dice según la vista (``_update_refresh_tooltip``).
+        self.refresh_btn = IconFlatButton(icons.REFRESH)
+        self.refresh_btn.setFont(icon_font(16))
+        self.refresh_btn.clicked.connect(self.refresh_current)
+        lay.addWidget(self.refresh_btn)
 
         self.layout_group = QButtonGroup(bar)
         self.layout_group.setExclusive(True)
@@ -1600,6 +1603,24 @@ class MainWindow(QWidget):
         # y el pie).
         self.header_tools.setVisible(show_tools)
         self.zoom_box.setVisible(show_tools and self.layout_mode == "grid")
+        self._update_refresh_tooltip()
+
+    def _update_refresh_tooltip(self) -> None:
+        """El botón de refrescar explica qué va a refrescar en esta vista."""
+        if self.view == "installed":
+            text = tr("Look for the installed Blender versions again.\n"
+                      "Use it if you added or removed one outside this app.")
+        else:
+            text = tr("Read the Blender versions available to download again.\n"
+                      "Use it if something looks out of date.")
+        self.refresh_btn.setToolTip(text)
+
+    def refresh_current(self) -> None:
+        """Refresca la lista que está a la vista: instaladas o nube."""
+        if self.view == "installed":
+            self.refresh_installed()
+        else:
+            self.refresh(force=True)
 
     def set_layout_mode(self, mode: str) -> None:
         """Cambia entre rejilla y lista y recuerda la elección."""

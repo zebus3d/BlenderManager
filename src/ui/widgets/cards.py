@@ -158,6 +158,14 @@ def _favorite_star(marked: bool, on_toggle) -> StarButton:
     return star
 
 
+def _info_button(version: str, signal) -> IconLinkButton:
+    """La "i" de las notas de la versión (misma diana que la estrella: 24x24)."""
+    info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
+    info.setFont(_icon_font())
+    info.clicked.connect(lambda: signal.emit(version))
+    return info
+
+
 def _console_button(checked: bool, entry, signal) -> CardButton:
     """Botón para lanzar con consola, **por versión**.
 
@@ -274,10 +282,7 @@ class BaseBuildCard(_HoverCard, QFrame):
         return label
 
     def _info(self) -> IconLinkButton:
-        btn = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
-        btn.setFont(_icon_font())
-        btn.clicked.connect(lambda: self.notes_clicked.emit(self.version))
-        return btn
+        return _info_button(self.version, self.notes_clicked)
 
     def _star(self, marked: bool) -> StarButton:
         return _favorite_star(
@@ -315,8 +320,8 @@ class BuildCard(BaseBuildCard):
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
-        lay.addWidget(self._info())
         lay.addWidget(self._star(marked))
+        lay.addWidget(self._info())
 
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
@@ -393,8 +398,8 @@ class GridBuildCard(BaseBuildCard):
         row = QHBoxLayout()
         row.setSpacing(int(5 * zoom))
         row.addStretch()
-        row.addWidget(self._info())
         row.addWidget(self._star(marked))
+        row.addWidget(self._info())
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
             variant="dark" if installed else "accent",
@@ -461,8 +466,12 @@ class InstalledCard(_HoverCard, QFrame):
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
+        # Estrella e "i" van juntas y en ese orden en las cuatro tarjetas
+        # (tienda e instaladas, lista y rejilla): así no bailan al cambiar de
+        # pestaña. Detrás, el grupo de acciones.
         lay.addWidget(_favorite_star(
             marked, lambda on: self.favorite_toggled.emit(entry, on)))
+        lay.addWidget(_info_button(entry.version, self.notes_clicked))
 
         if update is not None:
             update_btn = CardButton(
@@ -476,13 +485,6 @@ class InstalledCard(_HoverCard, QFrame):
 
         if console is not None:
             lay.addWidget(_console_button(console, entry, self.console_toggled))
-
-        # La "i" va pegada al lanzar (entre la consola y el botón): así el
-        # grupo de acciones queda junto y el nombre tiene más sitio.
-        info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
-        info.setFont(_icon_font())
-        info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
-        lay.addWidget(info)
 
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
@@ -562,6 +564,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         row.setSpacing(int(5 * zoom))
         row.addWidget(_favorite_star(
             marked, lambda on: self.favorite_toggled.emit(entry, on)))
+        row.addWidget(_info_button(entry.version, self.notes_clicked))
         if update is not None:
             # En rejilla el aviso va sin texto: un botón ancho pediría más
             # ancho mínimo y ensancharía su columna (justo lo que arreglamos
@@ -581,11 +584,6 @@ class GridInstalledCard(_HoverCard, QFrame):
             console_btn.setFixedWidth(max(int(42 * zoom),
                                           MIN_ICON_BUTTON_WIDTH))
             row.addWidget(console_btn)
-        # La "i" va entre la consola y el lanzar, pegada al grupo de acciones.
-        info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
-        info.setFont(_icon_font())
-        info.clicked.connect(lambda: self.notes_clicked.emit(entry.version))
-        row.addWidget(info)
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())

@@ -35,6 +35,13 @@ def _volume(color: str, amount: float = 0.09) -> str:
 # para que se note que es pulsable, sin el salto del ACCENT a plena saturación.
 LAUNCH_HOVER = "#2B4A66"
 
+# Alto de la caja de contenido de una pestaña para que el total sea
+# ``CONTROL_HEIGHT`` (el de las pastillas): padding vertical 4+4 y el borde,
+# que en las pestañas "abiertas" (Migración/Ajustes, sin borde inferior) es de
+# 1 px y en las "cerradas" (canales) de 2.
+TAB_CONTENT_OPEN = t.CONTROL_HEIGHT - 8 - 1
+TAB_CONTENT_CLOSED = t.CONTROL_HEIGHT - 8 - 2
+
 
 def build_qss() -> str:
     """Devuelve el stylesheet completo, con los tokens del tema interpolados."""
@@ -91,6 +98,10 @@ def build_qss() -> str:
         border-top-right-radius: 6px;
         padding: 4px 12px;
         margin-right: 4px;
+        /* Mismo alto que las pastillas de filtro (CONTROL_HEIGHT). En QSS el
+           alto es el de la caja de contenido: al total le restamos el padding
+           (4+4) y el borde de arriba (abajo no hay). */
+        min-height: {TAB_CONTENT_OPEN}px; max-height: {TAB_CONTENT_OPEN}px;
         color: {t.TEXT};
         font-weight: bold;
     }}
@@ -104,6 +115,8 @@ def build_qss() -> str:
            que no queden a ras del contenido de debajo. */
         border-radius: 6px;
         padding: 4px 14px;
+        /* Alto explícito (ver arriba): aquí hay borde arriba y abajo. */
+        min-height: {TAB_CONTENT_CLOSED}px; max-height: {TAB_CONTENT_CLOSED}px;
         /* Pegados arriba (a la altura del botón de Local) y con aire debajo,
            para no quedar a ras del contenido. */
         margin: 8px 6px 16px 0;
@@ -141,7 +154,7 @@ def build_qss() -> str:
         color: {t.TEXT};
         font-weight: bold;
     }}
-    QPushButton#CardButton:hover {{ background-color: #6A6A6A; }}
+    QPushButton#CardButton:hover {{ background-color: {t.BUTTON_HOVER}; }}
     QPushButton#CardButton:pressed {{ background-color: {t.ACCENT_DARK}; }}
     QPushButton#CardButton:disabled {{ color: rgba(230,230,230,0.35); }}
     QPushButton#CardButton[variant="accent"] {{
@@ -190,6 +203,13 @@ def build_qss() -> str:
        lado) el glifo no cabe cuando la rejilla va pequeña y queda el recuadro
        rojo vacío. Con 4 px sobra sitio incluso a zoom 0.6. */
     QPushButton#CardButton[iconOnly="true"] {{ padding: 6px 4px; }}
+    /* El botón de consola (gris, solo icono) se realza **oscureciéndose**, al
+       revés que los botones grises con texto: un glifo suelto que se aclara se
+       lee como si cambiara de color, no como un realce. Se acota a [iconOnly]
+       para no tocar el resto de botones neutros. */
+    QPushButton#CardButton[variant="neutral"][iconOnly="true"]:hover {{
+        background-color: {t.SURFACE_ALT};
+    }}
 
     /* --- Botón de info (círculo azul con la "i"), diana 24x24 (WCAG 2.5.8) --- */
     QPushButton#IconLink {{
@@ -221,7 +241,10 @@ def build_qss() -> str:
         min-width: 24px; max-width: 24px;
         min-height: 24px; max-height: 24px;
     }}
-    QPushButton#StarButton:hover {{ color: {t.TEXT}; }}
+    /* Al pasar por encima ya se enciende en ámbar: adelanta lo que va a pasar
+       al pulsar (en gris claro parecía un icono cualquiera al que se le sube
+       el brillo). */
+    QPushButton#StarButton:hover {{ color: {t.WARNING}; }}
     QPushButton#StarButton:checked {{ color: {t.WARNING}; }}
 
     /* --- Botón de icono plano (refrescar, etc.) --- */

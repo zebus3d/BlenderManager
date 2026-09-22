@@ -809,22 +809,107 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
                         window.experimental_switch):
             self.assertIsNotNone(control)
 
-    def test_el_buscador_va_pegado_al_boton_de_refrescar(self):
-        from ui.widgets.buttons import IconFlatButton
+    def test_refrescar_vive_con_los_filtros_y_refresca_lo_que_se_ve(self):
+        """El botón de refrescar va a la izquierda de rejilla/lista.
+
+        Antes iba en la cabecera junto al buscador y solo refrescaba la nube,
+        aunque se viera también en Local.
+        """
+        from unittest import mock as _mock
+
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
         window.resize(1500, 620)
         window.show()
-        refresh = window.header_tools.findChild(IconFlatButton)
-        hueco = window.search_input.x() - (refresh.x() + refresh.width())
-        # Antes el bloque se estiraba y repartia el hueco que sobraba: a 1500 px
-        # llegaba a 97 px entre el icono y el campo.
+        self.app.processEvents()
+        refresh = window.refresh_btn
+        # Justo a la izquierda de la pastilla de rejilla, en la misma fila.
+        self.assertIs(refresh.parentWidget(), window.grid_btn.parentWidget())
+        hueco = window.grid_btn.x() - (refresh.x() + refresh.width())
         self.assertLessEqual(hueco, 14)
-        # Y el bloque queda pegado al borde derecho (margen de la cabecera).
+        # El buscador sigue pegado al borde derecho de la cabecera.
         self.assertLessEqual(
             window.width() - (window.header_tools.x() + window.header_tools.width()),
             18)
+        # Refresca lo que está a la vista, y el tooltip lo dice.
+        with _mock.patch.object(window, "refresh") as nube, \
+                _mock.patch.object(window, "refresh_installed") as local:
+            window.set_view("store")
+            tooltip_nube = refresh.toolTip()
+            refresh.click()
+            nube.assert_called_once_with(force=True)
+            local.assert_not_called()
+            window.set_view("installed")
+            local.reset_mock()
+            refresh.click()
+            local.assert_called_once()
+            self.assertNotEqual(refresh.toolTip(), tooltip_nube)
+
+    def test_estrella_e_info_van_en_ese_orden_en_las_cuatro_tarjetas(self):
+        """Estrella → i → acciones, igual en tienda e instaladas.
+
+        Si el orden cambia entre tarjetas, al pasar de Nube a Local los iconos
+        bailan de sitio.
+        """
+        from pathlib import Path
+
+        from model.build import InstalledBuild
+        from ui.widgets.buttons import IconLinkButton, StarButton
+        from ui.widgets.cards import (BuildCard, GridBuildCard,
+                                      GridInstalledCard, InstalledCard)
+
+        build = _build("5.2.1", "v52", "stable")
+        entry = InstalledBuild(name="blender-5.2.1", path=Path("/tmp/b"),
+                               version="5.2.1", branch="v52")
+        cards = (BuildCard(build, False, False), GridBuildCard(build, False, False, 1.0),
+                 InstalledCard(entry, False), GridInstalledCard(entry, False, 1.0))
+        for card in cards:
+            card.show()
+            self.app.processEvents()
+            star = card.findChild(StarButton)
+            info = card.findChild(IconLinkButton)
+            self.assertLess(star.x(), info.x(), type(card).__name__)
+
+    def test_los_iconos_de_tarjeta_se_realzan_con_su_color(self):
+        """Estrella en ámbar, consola en gris oscuro, "i" en azul al pasar."""
+        from ui import qss
+        from ui import theme as t
+
+        hoja = qss.build_qss()
+        self.assertIn(
+            f"QPushButton#StarButton:hover {{ color: {t.WARNING}; }}", hoja)
+        self.assertIn(
+            'QPushButton#CardButton[variant="neutral"][iconOnly="true"]:hover {\n'
+            f"        background-color: {t.SURFACE_ALT};", hoja)
+        self.assertIn(
+            f"QPushButton#IconLink:hover {{ background-color: {t.ACCENT}; }}", hoja)
+        # Los tres realces se distinguen del estado normal (>= 1,5:1 es lo que
+        # separa dos grises contiguos de la escala; la estrella y la "i" van
+        # mucho más allá).
+        self.assertGreaterEqual(t.contrast(t.WARNING, t.MUTED), 1.5)
+        self.assertGreaterEqual(t.contrast(t.BUTTON, t.SURFACE_ALT), 1.5)
+        self.assertGreaterEqual(t.contrast(t.ACCENT, t.INFO_DISC), 1.1)
+
+    def test_las_pestanas_miden_lo_mismo_que_las_pastillas(self):
+        """Canales, rejilla/lista y las pestañas de Migración/Ajustes: 28 px."""
+        from ui import theme as t
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(1100, 700)
+        window.show()
+        self.app.processEvents()
+        canal = window.channel_tabs.tabRect(0)
+        # El rect del tab incluye sus márgenes (8 arriba, 16 abajo).
+        self.assertEqual(canal.height() - 24, t.CONTROL_HEIGHT)
+        self.assertEqual(window.grid_btn.height(), t.CONTROL_HEIGHT)
+        self.assertEqual(window.migrate_view.tabs.tabBar().tabRect(0).height(),
+                         t.CONTROL_HEIGHT)
+        window.set_view("settings")
+        self.app.processEvents()
+        self.assertEqual(window.settings_tabs.tabBar().tabRect(0).height(),
+                         t.CONTROL_HEIGHT)
 
     def test_recuerda_el_filtro_al_volver_a_abrir(self):
         from ui.widgets.main_window import CHANNELS, MainWindow
