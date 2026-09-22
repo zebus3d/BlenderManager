@@ -109,10 +109,11 @@ FILTERS_HEIGHT = t.FILTERS_HEIGHT
 FILTER_CONTROL_HEIGHT = t.CONTROL_HEIGHT
 
 # Vistas que solo se ven con las opciones experimentales (Ajustes > Avanzado).
-# Recientes salió de aquí cuando quedó probada; el gestor de add-ons sigue en
-# desarrollo (arranca Blender para leer el estado) y Migración sale al cerrar
-# la lectura de preferencias v2.
-EXPERIMENTAL_VIEWS = ("migrate", "addons")
+# Recientes y Migración salieron de aquí cuando quedaron probadas (Migración
+# tiene la batería de tests de UI más grande de la app y feedback de usuarios
+# reales); el gestor de add-ons sigue en desarrollo (arranca Blender para leer
+# el estado).
+EXPERIMENTAL_VIEWS = ("addons",)
 # Cuánto sube/baja el zoom con Ctrl +/-. El slider va en pasos de 1 %.
 ZOOM_STEP = 0.1
 
@@ -673,9 +674,6 @@ class MainWindow(QWidget):
         self.side_group.addButton(migrate_btn)
         migrate_btn.clicked.connect(lambda: self.set_view("migrate"))
         lay.addWidget(migrate_btn)
-        # Oculta hasta activar las opciones experimentales: Migración sigue en
-        # desarrollo y así la release es estable (Ajustes > Avanzado).
-        migrate_btn.setVisible(self.settings.experimental_features)
         self.side_buttons["migrate"] = migrate_btn
         settings_btn = SideButton(icons.SETTINGS, tr("Settings."))
         settings_btn.setFont(icon_font(20))

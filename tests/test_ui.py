@@ -690,16 +690,18 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(window.view, "store")
 
     def test_las_vistas_nuevas_estan_tras_experimental(self):
-        """Migración y Add-ons no aparecen hasta activar Avanzado.
+        """El gestor de Add-ons no aparece hasta activar Avanzado.
 
-        Recientes ya no está aquí: quedó probada y se ve siempre.
+        Recientes y Migración ya no están aquí: quedaron probadas y se ven
+        siempre.
         """
         from ui.widgets.main_window import EXPERIMENTAL_VIEWS, MainWindow
 
         window = MainWindow()
         hidden = EXPERIMENTAL_VIEWS
-        self.assertNotIn("recent", hidden)
-        self.assertFalse(window.side_buttons["recent"].isHidden())
+        for key in ("recent", "migrate"):
+            self.assertNotIn(key, hidden)
+            self.assertFalse(window.side_buttons[key].isHidden(), key)
         # Apagado (por defecto): los botones no se ven y no se puede entrar.
         for key in hidden:
             self.assertTrue(window.side_buttons[key].isHidden(), key)
@@ -710,12 +712,12 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.experimental_switch.setChecked(True)
         for key in hidden:
             self.assertFalse(window.side_buttons[key].isHidden(), key)
-        window.set_view("migrate")
-        self.assertEqual(window.view, "migrate")
+        window.set_view("addons")
+        self.assertEqual(window.view, "addons")
         self.assertFalse(window.console_row.isHidden())
         # Al apagarlo estando dentro de una de ellas, sale.
         window.experimental_switch.setChecked(False)
-        self.assertNotEqual(window.view, "migrate")
+        self.assertNotEqual(window.view, "addons")
         for key in hidden:
             self.assertTrue(window.side_buttons[key].isHidden(), key)
 
