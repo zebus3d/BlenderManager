@@ -34,7 +34,6 @@ import urllib.request
 from pathlib import Path
 
 import version
-from services import opener
 from paths import APP_DIR
 from services import macos_dmg, opener, tls
 from services.downloader import log

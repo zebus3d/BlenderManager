@@ -13,13 +13,14 @@ sus acciones a los otros mixins (descargar, lanzar, borrar).
 import threading
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout,
-                               QHBoxLayout, QLabel, QScrollArea, QTabBar,
-                               QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFrame,
+                               QGridLayout, QHBoxLayout, QLabel, QMenu,
+                               QScrollArea, QTabBar, QStackedWidget,
+                               QVBoxLayout, QWidget)
 
 from i18n import tr
 from model.build import minor_of
-from services import api
+from services import api, opener
 from services import installed as installed_service
 from services.downloader import log as download_log
 from ui import icons
