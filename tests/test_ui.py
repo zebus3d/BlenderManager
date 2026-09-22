@@ -3116,7 +3116,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock as _mock
 
         view = self._view()
-        with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+        with _mock.patch("services.blender_runner.is_running",
                          return_value=False):
             view.set_installed([_fake_installed("5.2.1")])
         self.assertEqual(len(view._choices), 1)
@@ -3131,7 +3131,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             # Dos versiones instaladas, pero apuntando la misma en los dos lados.
             configs = {"4.5.0": self._config(tmp, "4.5.0"),
                        "5.3.0": self._config(tmp, "5.3.0")}
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False):
                 self._with_configs(view, configs, source="5.3.0",
                                    target="5.3.0")
@@ -3153,7 +3153,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                         '"blender": (6, 0, 0)}\n'))
             target = self._config(tmp, "5.3.0")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
@@ -3176,9 +3176,9 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                         '"blender": (6, 0, 0)}\n'))
             target = self._config(tmp, "5.3.0")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
-                    _mock.patch("ui.widgets.migrate.show_info"):
+                    _mock.patch("ui.widgets.dialogs.show_info"):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
                 view._select_all(True)
@@ -3197,9 +3197,9 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                         '"blender": (4, 0, 0)}\n'))
             target = self._config(tmp, "5.3.0")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
-                    _mock.patch("ui.widgets.migrate.show_info"):
+                    _mock.patch("ui.widgets.dialogs.show_info"):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
                 # Sin lectura del origen, ``was_enabled`` es False, así que no
@@ -3225,13 +3225,13 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             exe = Path(tmp) / "blender"
             exe.write_text("", encoding="utf-8")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
-                    _mock.patch("ui.widgets.migrate.show_info"), \
-                    _mock.patch("ui.widgets.migrate.confirm",
+                    _mock.patch("ui.widgets.dialogs.show_info"), \
+                    _mock.patch("ui.widgets.dialogs.confirm",
                                 return_value=True), \
-                    _mock.patch("ui.widgets.migrate.threading") as threading, \
-                    _mock.patch("ui.widgets.migrate.blender_runner.enable_addons",
+                    _mock.patch("ui.widgets.migrate.addons_tab.threading") as threading, \
+                    _mock.patch("services.blender_runner.enable_addons",
                                 return_value={"enabled": ["activo"],
                                               "errors": []}) as enable:
                 # El hilo de activación se ejecuta síncrono: así el test no deja
@@ -3262,10 +3262,10 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             target = self._config(tmp, "5.3.0")
             view = self._view()
             # El ejecutable de la instalada falsa no existe en disco.
-            with _mock.patch("ui.widgets.migrate.blender_runner.enable_addons") \
+            with _mock.patch("services.blender_runner.enable_addons") \
                     as enable, \
-                    _mock.patch("ui.widgets.migrate.show_info"), \
-                    _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                    _mock.patch("ui.widgets.dialogs.show_info"), \
+                    _mock.patch("services.blender_runner.is_running",
                                 return_value=False):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
@@ -3283,9 +3283,9 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
             (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
-                    _mock.patch("ui.widgets.migrate.show_info"):
+                    _mock.patch("ui.widgets.dialogs.show_info"):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
                 view.copy_preference_files()
@@ -3305,9 +3305,9 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             (source.config_dir / "userpref.blend").write_bytes(b"P")
             (source.config_dir / "startup.blend").write_bytes(b"S")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
-                    _mock.patch("ui.widgets.migrate.show_info"):
+                    _mock.patch("ui.widgets.dialogs.show_info"):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
                 view.copy_preference_files()
@@ -3323,9 +3323,9 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             source.config_dir.mkdir(parents=True)
             (source.config_dir / "userpref.blend").write_bytes(b"P")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=True), \
-                    _mock.patch("ui.widgets.migrate.show_info") as info:
+                    _mock.patch("ui.widgets.dialogs.show_info") as info:
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
                 view.copy_preference_files()
@@ -3344,10 +3344,10 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             (source.config_dir / "userpref.blend").write_bytes(b"NUEVO")
             (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
-                    _mock.patch("ui.widgets.migrate.show_info"), \
-                    _mock.patch("ui.widgets.migrate.confirm",
+                    _mock.patch("ui.widgets.dialogs.show_info"), \
+                    _mock.patch("ui.widgets.dialogs.confirm",
                                 return_value=True):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
@@ -3382,14 +3382,14 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             exe = Path(tmp) / "blender"
             exe.write_text("", encoding="utf-8")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
-                    _mock.patch("ui.widgets.migrate.show_info"), \
-                    _mock.patch("ui.widgets.migrate.bprefs.read_preferences",
+                    _mock.patch("ui.widgets.dialogs.show_info"), \
+                    _mock.patch("services.blender_prefs.read_preferences",
                                 side_effect=[user, factory]), \
-                    _mock.patch("ui.widgets.migrate.blender_runner.enabled_addons",
+                    _mock.patch("services.blender_runner.enabled_addons",
                                 return_value=["matplus"]), \
-                    _mock.patch("ui.widgets.migrate.bprefs.write_preferences",
+                    _mock.patch("services.blender_prefs.write_preferences",
                                 return_value={"applied": ["view.ui_scale"],
                                               "errors": []}) as apply:
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
@@ -3469,7 +3469,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 values={"addons.hurricane.cache_format": "USD"}),
             "factory": bprefs.PreferenceDump(values={})})
         self.assertFalse(view.enable_addons_check.isHidden())
-        with _mock.patch("ui.widgets.migrate.show_info") as info:
+        with _mock.patch("ui.widgets.dialogs.show_info") as info:
             view._prefs_waiting = True
             view._on_prefs_applied({"result": {
                 "applied": [],
@@ -3493,7 +3493,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         fuera de él.
         """
         from services import blender_prefs as bprefs
-        from ui.widgets.migrate import DETAIL_SCROLL_HEIGHT
+        from ui.widgets.migrate.common import DETAIL_SCROLL_HEIGHT
 
         view = self._view()
         # Sin filas no se enseña el área de scroll.
@@ -3545,7 +3545,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
     def test_la_lista_de_claves_no_se_queda_en_una_rendija(self):
         """Encogida del todo siguen cabiendo las filas enteras del suelo."""
         from services import blender_prefs as bprefs
-        from ui.widgets.migrate import DETAIL_MIN_ROWS
+        from ui.widgets.migrate.common import DETAIL_MIN_ROWS
 
         view = self._view()
         view.resize(1100, 900)
@@ -3581,7 +3581,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 (config.config_dir / "userpref.blend").write_bytes(b"X" * (i + 1))
                 bc.set_config_aside(config, label=f"v5.2.{i}")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False),                     _mock.patch.object(view, "_factory_config",
                                        return_value=config):
                 view.tabs.setCurrentIndex(2)
@@ -3684,10 +3684,10 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             target.config_dir.mkdir(parents=True)
             (target.config_dir / "userpref.blend").write_bytes(b"MIO")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
-                    _mock.patch("ui.widgets.migrate.show_info"), \
-                    _mock.patch("ui.widgets.migrate.confirm",
+                    _mock.patch("ui.widgets.dialogs.show_info"), \
+                    _mock.patch("ui.widgets.dialogs.confirm",
                                 return_value=True):
                 # La pestaña de fábrica usa su propio selector de una versión.
                 entry = _fake_installed("5.3.0")
@@ -3747,7 +3747,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             (config.config_dir / "userpref.blend").write_bytes(b"MIO")
             bc.set_config_aside(config, label="v5.2.2")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
                     _mock.patch.object(
                         view, "_factory_config", return_value=config):
@@ -3781,7 +3781,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             configs = {"4.5.0": self._config(tmp, "4.5.0"),
                        "5.3.0": self._config(tmp, "5.3.0")}
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False):
                 self._with_configs(view, configs, source="4.5.0",
                                    target="5.3.0")
@@ -3805,7 +3805,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             second = bc.set_config_aside(config, label="v5.2.2")
             newest = bc.snapshots_with_settings(config)[0]
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
                     _mock.patch.object(
                         view, "_factory_config", return_value=config):
@@ -3837,7 +3837,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 self.assertTrue(
                     view._snapshot_widgets[most].details_btn.isEnabled())
                 # Borrar uno (con confirmación) deja el otro.
-                with _mock.patch("ui.widgets.migrate.confirm",
+                with _mock.patch("ui.widgets.dialogs.confirm",
                                  return_value=True):
                     view.delete_snapshot(first)
                 self.assertEqual(len(view._snapshot_widgets), 1)
@@ -3855,7 +3855,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             (config.config_dir / "userpref.blend").write_bytes(b"MIO")
             snap = bc.set_config_aside(config, label="v5.2.2")
             view = self._view()
-            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+            with _mock.patch("services.blender_runner.is_running",
                              return_value=False), \
                     _mock.patch.object(
                         view, "_factory_config", return_value=config):
@@ -3871,7 +3871,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                             bprefs.Preference("view.ui_scale", 1.25)]},
                     "live": 0,
                 })
-                with _mock.patch("ui.widgets.migrate.AppDialog.exec",
+                with _mock.patch("ui.widgets.dialogs.AppDialog.exec",
                                  return_value=0) as run:
                     view.show_snapshot_details(snap)
             self.assertTrue(run.called)
@@ -3901,9 +3901,9 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
 
         view = self._view()
         view.target_entry = _fake_installed("5.3.0")
-        with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+        with _mock.patch("services.blender_runner.is_running",
                          return_value=True) as running, \
-                _mock.patch("ui.widgets.migrate.show_info") as info:
+                _mock.patch("ui.widgets.dialogs.show_info") as info:
             self.assertTrue(view._blocked_by_running())
         running.assert_called_with(None)
         self.assertTrue(info.called)
@@ -3911,7 +3911,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
     def test_review_explica_como_revisar(self):
         """El amarillo "Review" tiene que decir qué hacer, no solo el motivo."""
         from services import blender_config as bc
-        from ui.widgets.migrate import _status_tooltip
+        from ui.widgets.migrate.common import _status_tooltip
 
         addon = bc.Addon(kind="legacy", module="x", name="X", version="1.0",
                          min_version="", max_version="", path=Path("/tmp/x"))
@@ -3933,7 +3933,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
 
     def test_compatible_explica_que_se_copia(self):
         from services import blender_config as bc
-        from ui.widgets.migrate import _status_tooltip
+        from ui.widgets.migrate.common import _status_tooltip
 
         addon = bc.Addon(kind="legacy", module="x", name="X", version="1.0",
                          min_version="4.0.0", max_version="", path=Path("/tmp/x"))
