@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
 from pathlib import Path
 
 from i18n import tr
-from model.build import minor_of, version_tuple
+from model.build import human_size, minor_of, version_tuple
 from services import blender_config as bc
 from services import blender_prefs as bprefs
 from services import blender_runner
@@ -50,7 +50,8 @@ from ui import icons
 from ui import theme as t
 from ui.fonts import glyph_icon, icon_font
 from ui.widgets.buttons import CardButton, CheckPill
-from ui.widgets.cards import card_shadow
+from ui.widgets.cards import settings_card
+from ui.widgets.layouts import clear_layout, list_scroll, muted_note
 from ui.widgets.dialogs import AppDialog, confirm, show_info
 from ui.widgets.labels import ElidedLabel
 
@@ -177,31 +178,16 @@ def _meta_text(addon) -> str:
 
 
 def _destination_text(plan) -> str:
-    """Carpeta relativa donde quedará el addon en la versión destino."""
+    """Carpeta donde quedará el addon (``user_default/<id>``, ``addons/<x>``).
+
+    Sale de ``plan.destination``, que ya decidió ``bc.destination_for`` (el
+    mismo que usa la copia de verdad): así lo que se enseña y donde se escribe
+    no pueden discrepar. Se enseñan los dos últimos tramos, que es lo que
+    distingue una extensión de un addon clásico.
+    """
     if plan.blocked:
         return tr("(not copied)")
-    addon = plan.addon
-    if addon.kind == "extension":
-        addon_id = addon.module.rsplit(".", 1)[-1]
-        return f"user_default/{addon_id}"
-    return f"addons/{addon.path.name}"
-
-
-def _clear_layout(layout) -> None:
-    """Vacía un layout de widgets de verdad.
-
-    Se **quita del layout y se oculta** además de ``deleteLater()``: el borrado
-    diferido no es inmediato, así que sin el ``setParent(None)`` el widget viejo
-    seguía ocupando su hueco (y salía duplicado) hasta que el bucle de eventos
-    lo recogía.
-    """
-    while layout.count():
-        item = layout.takeAt(0)
-        widget = item.widget()
-        if widget is not None:
-            widget.setParent(None)
-            widget.hide()
-            widget.deleteLater()
+    return "/".join(Path(plan.destination).parts[-2:])
 
 
 def _accent_button(text: str, tooltip: str, on_click) -> CardButton:
@@ -214,82 +200,6 @@ def _accent_button(text: str, tooltip: str, on_click) -> CardButton:
     button.setIcon(glyph_icon(icons.ARROW_RIGHT, 13, _ICON_ON_ACCENT))
     button.clicked.connect(on_click)
     return button
-
-
-class _GripCard(QFrame):
-    """Tarjeta de ajustes que coloca su asa en la esquina del panel.
-
-    El asa iba como un widget más de la fila de botones, así que quedaba a los
-    márgenes de la tarjeta (16 px a la derecha, 14 abajo): se leía como un
-    botón pequeño al lado de "Aplicar" y no como la esquina del panel gris, que
-    es donde todo el mundo va a buscar el redimensionado. Un layout no puede
-    sacar un hijo de sus márgenes, así que el asa se pone **flotando** sobre la
-    tarjeta y se recoloca en cada ``resizeEvent``. A cambio, ``set_grip``
-    reserva abajo la altura del asa para que ningún botón quede debajo.
-
-    La tarjeta no fija su propio alto: lo hereda de la lista de dentro, que sí
-    lo tiene fijo (``MigrateView._fit_scroll``). Así estirar la esquina mueve
-    el panel gris entero sin que haya dos sitios decidiendo el mismo alto.
-    """
-
-    # Separación del asa respecto a los bordes de la tarjeta: lo justo para que
-    # no se coma el borde redondeado.
-    GRIP_MARGIN = 4
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        # Sin esto, una subclase de QFrame puede no pintar el fondo del QSS.
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self._grip = None
-
-    def set_grip(self, grip) -> None:
-        """Adopta el asa y la saca de los márgenes del layout."""
-        self._grip = grip
-        grip.setParent(self)
-        grip.raise_()
-        lay = self.layout()
-        if lay is not None:
-            margins = lay.contentsMargins()
-            # El contenido termina por encima del asa: si no, el botón de
-            # acento pasaría justo por debajo de las rayitas.
-            lay.setContentsMargins(
-                margins.left(), margins.top(), margins.right(),
-                max(margins.bottom(), grip.height() + self.GRIP_MARGIN * 2))
-        self._place_grip()
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._place_grip()
-
-    def _place_grip(self) -> None:
-        if self._grip is None:
-            return
-        self._grip.move(
-            self.width() - self._grip.width() - self.GRIP_MARGIN,
-            self.height() - self._grip.height() - self.GRIP_MARGIN)
-
-
-def _settings_card(title: str = "") -> tuple:
-    """Tarjeta con el aspecto de los ajustes y su layout vertical.
-
-    Es el mismo ``QFrame#SettingsCard`` que usa la pantalla de ajustes (título
-    apagado, bordes redondeados, mismos márgenes); tenerlo en un solo sitio
-    evita que las tarjetas de esta vista se vayan separando con el tiempo.
-    Devuelve ``(tarjeta, layout)`` y, si hay ``title``, ya lo añade.
-    """
-    card = _GripCard()
-    card.setObjectName("SettingsCard")
-    # Sombra abajo a la derecha (la misma que las tarjetas de la tienda): las
-    # tarjetas van sobre el fondo oscuro de la pestaña y así se despegan de él.
-    card_shadow(card)
-    lay = QVBoxLayout(card)
-    lay.setContentsMargins(16, 14, 16, 14)
-    lay.setSpacing(8)
-    if title:
-        label = QLabel(tr(title))
-        label.setObjectName("Muted")
-        lay.addWidget(label)
-    return card, lay
 
 
 def _entry_info(entry) -> tuple:
@@ -332,19 +242,6 @@ def _report_lines(summary: str, backed_up: bool, failed, failure_title: str,
         for item, message in failed[:10]:
             lines.append(f"· {failure_label(item)}: {message}")
     return lines
-
-
-def _size_text(size: int) -> str:
-    """Tamaño legible (``180 KB``, ``1.2 MB``). Unidades, no palabras.
-
-    No pasa por ``tr``: un número con su unidad (KB/MB) se lee igual en los dos
-    idiomas y así no hay una clave de traducción por cada medida.
-    """
-    if size < 1024:
-        return f"{size} B"
-    if size < 1024 * 1024:
-        return f"{size / 1024:.0f} KB"
-    return f"{size / (1024 * 1024):.1f} MB"
 
 
 def _section_names(paths) -> list:
@@ -490,7 +387,7 @@ def _snapshot_files_text(details) -> str:
     if details.get("recent"):
         parts.append(tr("recent files ({count})", count=details["recent"]))
     if details.get("total"):
-        parts.append(_size_text(int(details["total"])))
+        parts.append(human_size(int(details["total"])))
     return "  ·  ".join(parts) or tr("Empty")
 
 
@@ -600,16 +497,9 @@ def _show_snapshot_details(parent, snapshot, preferences) -> None:
     dialog = AppDialog(parent, tr("Saved settings of {date}", date=date),
                        tr("These are the settings this copy changes from "
                           "Blender's defaults."))
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    scroll.setFrameShape(QFrame.NoFrame)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll, body_lay = list_scroll("SnapshotDetails", "SnapshotDetailsBody",
+                                   align_top=False)
     scroll.setMaximumHeight(360)
-    body = QWidget()
-    body.setObjectName("SnapshotDetailsBody")
-    body_lay = QVBoxLayout(body)
-    body_lay.setContentsMargins(0, 0, 0, 0)
-    body_lay.setSpacing(4)
     if not preferences:
         empty = QLabel(tr("No settings changed from Blender's defaults"))
         empty.setObjectName("Muted")
@@ -625,7 +515,6 @@ def _show_snapshot_details(parent, snapshot, preferences) -> None:
                 body_lay.addWidget(rows[-1])
         _PrefRow.align_columns(rows)
     body_lay.addStretch()
-    scroll.setWidget(body)
     layout = dialog.layout()
     layout.insertWidget(layout.count() - 1, scroll)
     dialog.add_button(tr("Close"), variant="accent", on_click=dialog.accept,
@@ -687,12 +576,7 @@ def _make_scroll(object_name: str, cap: int, minimum: int) -> QScrollArea:
     se pone **fijo** a propósito (ver allí el porqué), así que estos dos valores
     solo valen mientras el área está vacía.
     """
-    scroll = QScrollArea()
-    scroll.setObjectName(object_name)
-    scroll.setWidgetResizable(True)
-    scroll.setFrameShape(QFrame.NoFrame)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    scroll.setSizeAdjustPolicy(QScrollArea.AdjustToContents)
+    scroll, _ = list_scroll(object_name, object_name + "Body", align_top=False)
     scroll.setMinimumHeight(minimum)
     scroll.setMaximumHeight(cap)
     _sunken_when_scrolling(scroll)
@@ -967,7 +851,7 @@ class MigrateView(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(12)
 
-        card, card_lay = _settings_card()
+        card, card_lay = settings_card()
         card.setToolTip(tr(
             "Pick the version whose settings you want to reset or put back."))
         column = QVBoxLayout()
@@ -1062,11 +946,7 @@ class MigrateView(QWidget):
         su sitio y la que crecía se metía por detrás. Con esto, estirar una
         empuja a las demás hacia abajo y la página se desplaza.
         """
-        scroll = QScrollArea()
-        scroll.setObjectName("MigrateScroll")
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll, _ = list_scroll("MigrateScroll", "MigratePageBody")
         scroll.setWidget(page)
         return scroll
 
@@ -1083,7 +963,7 @@ class MigrateView(QWidget):
         *dónde* se va a escribir, sobre todo con las LTS en otro disco o una
         config movida con ``BLENDER_USER_CONFIG``.
         """
-        card, lay = _settings_card()
+        card, lay = settings_card()
         card.setToolTip(tr(
             "Pick a source and a destination version here, then use the tabs "
             "to copy add-ons, individual settings or the whole preferences "
@@ -1149,11 +1029,11 @@ class MigrateView(QWidget):
         board_lay.setContentsMargins(0, 0, 0, 0)
         board_lay.setSpacing(14)
         self.left_card, self.left_title, self.left_rows = self._board_column(
-            tr("Source"), None,
+            tr("Source"),
             tr("Add-ons installed in the version you are copying from. Tick "
                "the ones you want in the destination version."))
         self.right_card, self.right_title, self.right_rows = self._board_column(
-            tr("Destination"), None,
+            tr("Destination"),
             tr("Where each add-on lands in the destination version. Add-ons "
                "that were enabled in the source are enabled here too."))
         board_lay.addWidget(self.left_card, 1)
@@ -1238,7 +1118,7 @@ class MigrateView(QWidget):
         nombre (``BlenderManager <serie>``) que el usuario puede volver a
         elegir, sin perder lo que tuviera.
         """
-        card, lay = _settings_card("Theme and keymap")
+        card, lay = settings_card("Theme and keymap")
         hint = QLabel(tr(
             "Copy your theme and key map as named presets, without replacing "
             "the whole preferences file. They arrive as \"BlenderManager\" and "
@@ -1353,33 +1233,19 @@ class MigrateView(QWidget):
         combo.currentIndexChanged.connect(lambda _: self._reload_versions())
         return combo
 
-    def _board_column(self, title: str, combo: QComboBox | None,
-                      tooltip: str = ""):
-        """Una columna del tablero: título (y combo opcional) y hueco de filas.
+    def _board_column(self, title: str, tooltip: str = ""):
+        """Una columna del tablero: título y hueco de filas.
 
         Comparte el ``SettingsCard`` con las demás tarjetas, pero con menos
-        margen que ``_settings_card``: el tablero va a dos columnas y con los
-        16 px de las tarjetas de texto las filas se quedaban estrechas.
-
-        ``combo`` es opcional porque el selector de versiones vive en la barra
-        superior (es común a las dos pestañas); se admite aquí por si alguna
-        vista futura quiere el suyo en cada columna.
+        margen: el tablero va a dos columnas y con los 16 px de las tarjetas
+        de texto las filas se quedaban estrechas.
         """
-        card = QFrame()
-        card.setObjectName("SettingsCard")
-        card_shadow(card)
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(12, 10, 12, 10)
-        lay.setSpacing(8)
-        header = QHBoxLayout()
+        card, lay = settings_card(margins=(12, 10, 12, 10))
         label = QLabel(title)
         label.setObjectName("Muted")
         if tooltip:
             label.setToolTip(tooltip)
-        header.addWidget(label)
-        if combo is not None:
-            header.addWidget(combo, 1)
-        lay.addLayout(header)
+        lay.addWidget(label)
         rows = QVBoxLayout()
         rows.setSpacing(4)
         lay.addLayout(rows)
@@ -1406,7 +1272,7 @@ class MigrateView(QWidget):
         Va aparte del tablero porque es otra cosa: aquí no hay addons ni
         manifiestos, son ficheros de Blender y el usuario decide si los pisa.
         """
-        card, lay = _settings_card("Preferences file")
+        card, lay = settings_card("Preferences file")
         hint = QLabel(tr(
             "Copy the preferences file of the source version. It replaces the "
             "current one (a backup is kept)."))
@@ -1450,7 +1316,7 @@ class MigrateView(QWidget):
         versión de origen (arranca Blender una vez); el botón solo sirve para
         reintentarla si algo falló.
         """
-        card, lay = _settings_card("Preferences in detail")
+        card, lay = settings_card("Preferences in detail")
         hint = QLabel(tr(
             "Pick individual settings changed from Blender's defaults. They are "
             "read automatically from the source version (it starts once, it may "
@@ -1535,7 +1401,7 @@ class MigrateView(QWidget):
 
     def _clear_detail_rows(self) -> None:
         self.detail_checks = []
-        _clear_layout(self.detail_rows)
+        clear_layout(self.detail_rows)
         # Sin filas no se enseña el área: un hueco vacío con su barra (y su
         # esquinita) quedaría raro cuando aún no se ha leído nada.
         if hasattr(self, "detail_scroll"):
@@ -1892,7 +1758,7 @@ class MigrateView(QWidget):
         # Sin título dentro: la pestaña ya se llama "Factory settings". El
         # texto se rellena en ``_refresh_factory`` porque nombra la versión
         # destino, que el usuario puede cambiar en la barra de arriba.
-        card, lay = _settings_card()
+        card, lay = settings_card()
         self.factory_hint = QLabel("")
         self.factory_hint.setWordWrap(True)
         lay.addWidget(self.factory_hint)
@@ -2016,14 +1882,7 @@ class MigrateView(QWidget):
     def _clear_snapshot_rows(self) -> None:
         """Vacía la lista de guardados (deja el hueco del final)."""
         self._snapshot_widgets = {}
-        for index in range(self.snapshot_rows.count() - 1, -1, -1):
-            widget = self.snapshot_rows.itemAt(index).widget()
-            if widget is None:
-                continue
-            self.snapshot_rows.takeAt(index)
-            widget.setParent(None)
-            widget.hide()
-            widget.deleteLater()
+        clear_layout(self.snapshot_rows, keep_stretch=True)
 
     def _build_snapshot_rows(self, snapshots) -> None:
         """Crea una fila por guardado y le vuelca el análisis ya cacheado."""
@@ -2305,7 +2164,7 @@ class MigrateView(QWidget):
 
     def _fill_preference_files(self) -> None:
         """Rellena las casillas de preferencias según el origen/destino."""
-        _clear_layout(self.pref_rows)
+        clear_layout(self.pref_rows)
         self.pref_checks = {}
         self.pref_items = []
         if self.source_cfg is None or self.target_cfg is None:
@@ -2466,10 +2325,10 @@ class MigrateView(QWidget):
         self._clear_rows()
         if not self.plans:
             self.summary.setText(tr("No add-ons to migrate"))
-            self._add_placeholder(self.left_rows,
-                                  tr("No add-ons found in this version"))
-            self._add_placeholder(self.right_rows, tr(
-                "Install some add-ons in the source version first."))
+            self.left_rows.addWidget(
+                muted_note(tr("No add-ons found in this version")))
+            self.right_rows.addWidget(muted_note(tr(
+                "Install some add-ons in the source version first.")))
             self._set_controls_enabled(False)
             return
         for index, plan in enumerate(self.plans):
@@ -2533,18 +2392,11 @@ class MigrateView(QWidget):
             total=len(self.plans), ok=counts[bc.OK], warn=counts[bc.WARN],
             blocked=counts[bc.BLOCKED]))
 
-    def _add_placeholder(self, layout, text: str) -> None:
-        label = QLabel(text)
-        label.setObjectName("Muted")
-        label.setWordWrap(True)
-        label.setAlignment(Qt.AlignHCenter)
-        layout.addWidget(label)
-
     def _clear_rows(self) -> None:
         """Vacía las dos columnas del tablero."""
         self._rows = []
         for layout in (self.left_rows, self.right_rows):
-            _clear_layout(layout)
+            clear_layout(layout)
 
     def _select_all(self, checked: bool) -> None:
         for row in self._rows:

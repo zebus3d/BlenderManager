@@ -100,6 +100,23 @@ def _action_icon(glyph: str, color: str):
     return glyph_icon(glyph, 12, color)
 
 
+def _drop_shadow(widget, blur: float, offset: float, alpha: int):
+    """Sombra negra suave bajo un widget (el ``drop-shadow`` de CSS, en Qt).
+
+    Único sitio que construye el efecto: la del logo y la de la tarjeta solo
+    se diferencian en cuánto difumina y cuánto se desplaza.
+    """
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+    effect = QGraphicsDropShadowEffect(widget)
+    effect.setBlurRadius(blur)
+    effect.setOffset(offset, offset)
+    effect.setColor(QColor(0, 0, 0, alpha))
+    widget.setGraphicsEffect(effect)
+    return effect
+
+
 def logo_shadow(widget, size: int):
     """Sombra negra suave bajo el logo: el `drop-shadow` de CSS, versión Qt.
 
@@ -112,16 +129,9 @@ def logo_shadow(widget, size: int):
     desplazada abajo a la derecha y con poco contraste: solo busca despegar el
     logo del fondo, no dibujar un contorno marcado.
     """
-    from PySide6.QtGui import QColor
-    from PySide6.QtWidgets import QGraphicsDropShadowEffect
-
-    effect = QGraphicsDropShadowEffect(widget)
-    effect.setBlurRadius(max(3.0, size * 0.14))
     offset = max(1.0, size * 0.04)
-    effect.setOffset(offset, offset)
-    effect.setColor(QColor(0, 0, 0, 120))
-    widget.setGraphicsEffect(effect)
-    return effect
+    return _drop_shadow(widget, blur=max(3.0, size * 0.14), offset=offset,
+                        alpha=120)
 
 
 def card_shadow(widget) -> None:
@@ -139,14 +149,7 @@ def card_shadow(widget) -> None:
     bajo el ratón, así que es medio milisegundo, pero conviene saberlo antes de
     añadir más efectos.
     """
-    from PySide6.QtGui import QColor
-    from PySide6.QtWidgets import QGraphicsDropShadowEffect
-
-    effect = QGraphicsDropShadowEffect(widget)
-    effect.setBlurRadius(10.0)
-    effect.setOffset(2.0, 2.0)
-    effect.setColor(QColor(0, 0, 0, 110))
-    widget.setGraphicsEffect(effect)
+    _drop_shadow(widget, blur=10.0, offset=2.0, alpha=110)
 
 
 def _favorite_star(marked: bool, on_toggle) -> StarButton:
@@ -631,3 +634,81 @@ class GridInstalledCard(_HoverCard, QFrame):
         delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
         row.addWidget(delete)
         lay.addLayout(row)
+
+
+class GripCard(QFrame):
+    """Tarjeta de ajustes que coloca su asa en la esquina del panel.
+
+    El asa iba como un widget más de la fila de botones, así que quedaba a los
+    márgenes de la tarjeta (16 px a la derecha, 14 abajo): se leía como un
+    botón pequeño al lado de "Aplicar" y no como la esquina del panel gris, que
+    es donde todo el mundo va a buscar el redimensionado. Un layout no puede
+    sacar un hijo de sus márgenes, así que el asa se pone **flotando** sobre la
+    tarjeta y se recoloca en cada ``resizeEvent``. A cambio, ``set_grip``
+    reserva abajo la altura del asa para que ningún botón quede debajo.
+
+    La tarjeta no fija su propio alto: lo hereda de la lista de dentro, que sí
+    lo tiene fijo (``MigrateView._fit_scroll`` (Migración)). Así estirar la esquina mueve
+    el panel gris entero sin que haya dos sitios decidiendo el mismo alto.
+    """
+
+    # Separación del asa respecto a los bordes de la tarjeta: lo justo para que
+    # no se coma el borde redondeado.
+    GRIP_MARGIN = 4
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Sin esto, una subclase de QFrame puede no pintar el fondo del QSS.
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self._grip = None
+
+    def set_grip(self, grip) -> None:
+        """Adopta el asa y la saca de los márgenes del layout."""
+        self._grip = grip
+        grip.setParent(self)
+        grip.raise_()
+        lay = self.layout()
+        if lay is not None:
+            margins = lay.contentsMargins()
+            # El contenido termina por encima del asa: si no, el botón de
+            # acento pasaría justo por debajo de las rayitas.
+            lay.setContentsMargins(
+                margins.left(), margins.top(), margins.right(),
+                max(margins.bottom(), grip.height() + self.GRIP_MARGIN * 2))
+        self._place_grip()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._place_grip()
+
+    def _place_grip(self) -> None:
+        if self._grip is None:
+            return
+        self._grip.move(
+            self.width() - self._grip.width() - self.GRIP_MARGIN,
+            self.height() - self._grip.height() - self.GRIP_MARGIN)
+
+
+def settings_card(title: str = "", spacing: int = 8,
+                  margins=(16, 14, 16, 14)) -> tuple:
+    """Tarjeta con el aspecto de Ajustes y su layout vertical: ``(card, layout)``.
+
+    Es el ``QFrame#SettingsCard`` que usan Ajustes, Migración y el gestor de
+    add-ons (título apagado, bordes redondeados, sombra, mismos márgenes).
+    Antes cada vista tenía la suya y ya iban distintas (una sin sombra, otra
+    con otro espaciado): un solo sitio evita que se separen con el tiempo.
+    Devuelve un ``GripCard`` para que quien quiera pueda colgarle un asa.
+    """
+    card = GripCard()
+    card.setObjectName("SettingsCard")
+    # Sombra abajo a la derecha (la misma que las tarjetas de la tienda): las
+    # tarjetas van sobre el fondo oscuro y así se despegan de él.
+    card_shadow(card)
+    lay = QVBoxLayout(card)
+    lay.setContentsMargins(*margins)
+    lay.setSpacing(spacing)
+    if title:
+        label = QLabel(tr(title))
+        label.setObjectName("Muted")
+        lay.addWidget(label)
+    return card, lay

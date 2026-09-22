@@ -20,8 +20,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMenu,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -34,8 +32,11 @@ from services import blender_runner, opener
 from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, IconFlatButton, SwitchPill
+from ui.widgets.cards import settings_card
 from ui.widgets.dialogs import confirm, show_error, show_info
 from ui.widgets.labels import ElidedLabel
+from ui.widgets.layouts import clear_layout, list_scroll
+from ui.widgets.menus import card_menu
 
 # Filtros de tipo de la barra: (clave, etiqueta).
 _TYPE_FILTERS = (
@@ -43,21 +44,6 @@ _TYPE_FILTERS = (
     (addons_service.EXTENSION, "Extensions"),
     (addons_service.LEGACY, "Add-ons (legacy)"),
 )
-
-
-def _menu(parent) -> QMenu:
-    menu = QMenu(parent)
-    menu.setObjectName("CardMenu")
-    return menu
-
-
-def _clear(layout) -> None:
-    while layout.count():
-        item = layout.takeAt(0)
-        widget = item.widget()
-        if widget is not None:
-            widget.setParent(None)
-            widget.deleteLater()
 
 
 class _AddonRow(QFrame):
@@ -125,7 +111,7 @@ class _AddonRow(QFrame):
         self._show_menu(event.globalPos())
 
     def _show_menu(self, position=None) -> None:
-        menu = _menu(self)
+        menu = card_menu(self)
         open_action = menu.addAction(tr("Open file location"))
         open_action.triggered.connect(lambda: self._on_open(self.state))
         delete_action = menu.addAction(tr("Delete add-on"))
@@ -164,7 +150,7 @@ class AddonsView(QWidget):
         root.setContentsMargins(24, 20, 24, 20)
         root.setSpacing(12)
 
-        header, header_lay = self._card()
+        header, header_lay = settings_card()
         row = QHBoxLayout()
         row.addWidget(QLabel(tr("Version")))
         self.version_combo = QComboBox()
@@ -185,7 +171,7 @@ class AddonsView(QWidget):
         header_lay.addWidget(self.path_label)
         root.addWidget(header)
 
-        card, lay = self._card()
+        card, lay = settings_card()
         toolbar = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText(tr("Search add-ons..."))
@@ -226,31 +212,12 @@ class AddonsView(QWidget):
         self.status.setWordWrap(True)
         lay.addWidget(self.status)
 
-        self.scroll = QScrollArea()
-        self.scroll.setObjectName("AddonsScroll")
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        body = QWidget()
-        body.setObjectName("AddonsBody")
-        self.rows = QVBoxLayout(body)
-        self.rows.setContentsMargins(0, 0, 0, 0)
-        self.rows.setSpacing(4)
-        self.rows.setAlignment(Qt.AlignTop)
-        self.scroll.setWidget(body)
+        self.scroll, self.rows = list_scroll("AddonsScroll", "AddonsBody")
         lay.addWidget(self.scroll, 1)
         root.addWidget(card, 1)
 
         self._set_enabled_controls(False)
 
-    @staticmethod
-    def _card() -> tuple:
-        card = QFrame()
-        card.setObjectName("SettingsCard")
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(16, 14, 16, 14)
-        lay.setSpacing(8)
-        return card, lay
 
     def _set_enabled_controls(self, enabled: bool) -> None:
         for widget in (self.install_btn, self.link_btn, self.reload_btn):
@@ -342,7 +309,7 @@ class AddonsView(QWidget):
         self._fill_rows()
 
     def _fill_rows(self) -> None:
-        _clear(self.rows)
+        clear_layout(self.rows)
         self._rows = []
         query = self.search.text().strip().lower()
         kind = self.type_combo.currentData()

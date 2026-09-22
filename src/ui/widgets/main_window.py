@@ -71,6 +71,8 @@ from ui import icons
 from ui import theme as t
 from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, IconFlatButton, Pill, SideButton, SwitchPill
+from ui.widgets.layouts import clear_layout, list_scroll
+from ui.widgets.menus import card_menu
 from ui.widgets.cards import (
     BuildCard,
     GridBuildCard,
@@ -78,6 +80,7 @@ from ui.widgets.cards import (
     InstalledCard,
     card_shadow,
     logo_shadow,
+    settings_card,
 )
 from ui.widgets.dialogs import (
     AppDialog,
@@ -785,22 +788,8 @@ class MainWindow(QWidget):
         lay.addStretch()
         return page
 
-    def _settings_card(self, title: str) -> tuple[QFrame, QVBoxLayout]:
-        card = QFrame()
-        card.setObjectName("SettingsCard")
-        # Misma sombra que las tarjetas de Migración: van sobre el gris, así se
-        # despegan en vez de fundirse con el fondo.
-        card_shadow(card)
-        lay = QVBoxLayout(card)
-        lay.setContentsMargins(16, 14, 16, 14)
-        lay.setSpacing(10)
-        label = QLabel(title)
-        label.setObjectName("Muted")
-        lay.addWidget(label)
-        return card, lay
-
     def _settings_downloads_card(self) -> QFrame:
-        card, lay = self._settings_card(tr("Downloads"))
+        card, lay = settings_card("Downloads", spacing=10)
 
         # Resumen de a dónde va lo que se descargue ahora mismo. La lista de
         # carpetas vive en su pestaña; aquí solo se dice el resultado, que es
@@ -842,7 +831,7 @@ class MainWindow(QWidget):
         la lista. Es un estado real —cuántas carpetas hay— y no una preferencia
         guardada que pudiera desincronizarse de las carpetas de verdad.
         """
-        card, lay = self._settings_card(tr("Folders"))
+        card, lay = settings_card("Folders", spacing=10)
 
         self.folders_hint = ElidedLabel("", Qt.ElideRight)
         self.folders_hint.setObjectName("Muted")
@@ -884,20 +873,11 @@ class MainWindow(QWidget):
         lay.addWidget(self.simple_box)
 
         # --- modo ramificado: la lista de carpetas
-        self.folder_list = QScrollArea()
-        self.folder_list.setObjectName("FolderList")
-        self.folder_list.setWidgetResizable(True)
-        self.folder_list.setFrameShape(QFrame.NoFrame)
-        self.folder_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.folder_list, self.folder_body = list_scroll(
+            "FolderList", "FolderListBody", spacing=6, align_top=False)
         self.folder_list.setMaximumHeight(
             MAX_VISIBLE_ROWS * FolderRow.HEIGHT + (MAX_VISIBLE_ROWS - 1) * 6)
-        body = QWidget()
-        body.setObjectName("FolderListBody")
-        self.folder_body = QVBoxLayout(body)
-        self.folder_body.setContentsMargins(0, 0, 0, 0)
-        self.folder_body.setSpacing(6)
         self.folder_body.addStretch()
-        self.folder_list.setWidget(body)
         lay.addWidget(self.folder_list)
 
         add_row = QHBoxLayout()
@@ -939,11 +919,7 @@ class MainWindow(QWidget):
             self.dest_input.setText(self.settings.folders[0].path)
             self.dest_input.blockSignals(False)
 
-        while self.folder_body.count() > 1:
-            item = self.folder_body.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+        clear_layout(self.folder_body, keep_stretch=True)
         self.folder_rows = {}
         for index, folder in enumerate(self.settings.folders):
             row = FolderRow(folder, zebra=bool(index % 2),
@@ -1127,7 +1103,7 @@ class MainWindow(QWidget):
         self._refresh_dest_summary()
 
     def _settings_interface_card(self) -> QFrame:
-        card, lay = self._settings_card(tr("Interface"))
+        card, lay = settings_card("Interface", spacing=10)
 
         row3 = QHBoxLayout()
         row3.addWidget(QLabel(tr("Language")))
@@ -1181,7 +1157,7 @@ class MainWindow(QWidget):
         return card
 
     def _settings_system_card(self) -> QFrame:
-        card, lay = self._settings_card(tr("System"))
+        card, lay = settings_card("System", spacing=10)
 
         # Bandeja del sistema: dos decisiones independientes (cerrar y
         # minimizar). Si el escritorio no la soporta se deshabilitan, porque
@@ -1263,7 +1239,7 @@ class MainWindow(QWidget):
         return card
 
     def _settings_launch_card(self) -> QFrame:
-        card, lay = self._settings_card(tr("Launch options"))
+        card, lay = settings_card("Launch options", spacing=10)
 
         # Lanzar con consola: se puede alternar también desde cada tarjeta
         # instalada; aquí queda el ajuste (el mismo) para dejarlo fijo. Es una
@@ -1294,7 +1270,7 @@ class MainWindow(QWidget):
         return card
 
     def _settings_updates_card(self) -> QFrame:
-        card, lay = self._settings_card(tr("Updates"))
+        card, lay = settings_card("Updates", spacing=10)
 
         # Dos ajustes independientes: comprobar al arrancar, y comprobar cada X
         # rato. Apagar el primero NO apaga el segundo.
@@ -1379,7 +1355,7 @@ class MainWindow(QWidget):
 
     def _settings_advanced_card(self) -> QFrame:
         """Opciones avanzadas/experimentales (hoy solo la vista de Migración)."""
-        card, lay = self._settings_card(tr("Advanced"))
+        card, lay = settings_card("Advanced", spacing=10)
 
         row = QHBoxLayout()
         row.addWidget(QLabel(tr("Experimental options")))
@@ -1946,18 +1922,6 @@ class MainWindow(QWidget):
             self._rebuild_store()
             self._rebuild_installed()
 
-    def _clear_grid(self, grid: QGridLayout) -> None:
-        while grid.count():
-            item = grid.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                # Sacarla del layout NO la oculta: sigue dibujándose en su
-                # posición vieja hasta que el bucle procese el deleteLater, así
-                # que durante un frame se veían las tarjetas viejas encima de
-                # las nuevas. setParent(None) la desliga y desaparece ya.
-                widget.setParent(None)
-                widget.deleteLater()
-
     def _columns_for(self, scroll: QScrollArea, card_width: int) -> int:
         """Número de columnas que caben en el ancho visible (mínimo 1).
 
@@ -1991,7 +1955,7 @@ class MainWindow(QWidget):
         las tarjetas, cada una se estira para llenar su celda: la rejilla se
         adapta al ancho de la ventana en vez de dejar huecos a la derecha.
         """
-        self._clear_grid(grid)
+        clear_layout(grid)
         # Reseteamos stretches de una rejilla anterior con más columnas.
         for col in range(24):
             grid.setColumnStretch(col, 1 if col < columns else 0)
@@ -2016,7 +1980,7 @@ class MainWindow(QWidget):
         return frame
 
     def _rebuild_store(self) -> None:
-        self._clear_grid(self.store_grid)
+        clear_layout(self.store_grid)
         builds = self._filtered()
         columns = self._grid_columns(self.store_scroll, self.store_grid, 0)
         if not builds:
@@ -2063,19 +2027,13 @@ class MainWindow(QWidget):
             cards.append(card)
         self._fill_grid(self.store_grid, cards, columns)
 
-    def _card_menu(self) -> QMenu:
-        """Menú contextual de una tarjeta (mismo aspecto que el de la bandeja)."""
-        menu = QMenu(self)
-        menu.setObjectName("CardMenu")
-        return menu
-
     def _installed_menu(self, entry) -> QMenu:
         """Menú contextual de una tarjeta instalada (sin mostrarlo).
 
         Se separa de ``_show_installed_menu`` para poder comprobarlo sin abrir
         un menú modal (que en un test se queda esperando).
         """
-        menu = self._card_menu()
+        menu = card_menu(self)
         launch = menu.addAction(tr("Launch"))
         launch.triggered.connect(lambda: self.launch_installed(entry))
         if self.settings.experimental_features:
@@ -2108,7 +2066,7 @@ class MainWindow(QWidget):
 
     def _store_menu(self, build) -> QMenu:
         """Menú contextual de una tarjeta de la tienda (sin mostrarlo)."""
-        menu = self._card_menu()
+        menu = card_menu(self)
         install = menu.addAction(tr("Download and install"))
         install.triggered.connect(lambda: self.install_build(build))
         notes = menu.addAction(tr("Release notes"))
@@ -2153,7 +2111,7 @@ class MainWindow(QWidget):
             u for u in updates if u.kind == "series"]
 
     def _rebuild_installed(self) -> None:
-        self._clear_grid(self.installed_grid)
+        clear_layout(self.installed_grid)
         entries = self._filtered_installed()
         columns = self._grid_columns(self.installed_scroll, self.installed_grid, 0)
         if not entries:

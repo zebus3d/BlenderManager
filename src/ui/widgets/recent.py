@@ -22,8 +22,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QMenu,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -37,22 +35,8 @@ from ui import theme as t
 from ui.fonts import icon_font
 from ui.widgets.buttons import IconFlatButton
 from ui.widgets.labels import ElidedLabel
-
-
-def _menu(parent) -> QMenu:
-    """Menú contextual con el aspecto de la app (el mismo que el de la bandeja)."""
-    menu = QMenu(parent)
-    menu.setObjectName("CardMenu")
-    return menu
-
-
-def _clear(layout) -> None:
-    while layout.count():
-        item = layout.takeAt(0)
-        widget = item.widget()
-        if widget is not None:
-            widget.setParent(None)
-            widget.deleteLater()
+from ui.widgets.layouts import clear_layout, list_scroll, muted_note
+from ui.widgets.menus import card_menu
 
 
 class _RecentRow(QFrame):
@@ -116,14 +100,14 @@ class _RecentRow(QFrame):
     def contextMenuEvent(self, event) -> None:
         if self.missing:
             return
-        menu = _menu(self)
+        menu = card_menu(self)
         action = menu.addAction(tr("Open file location"))
         action.setToolTip(tr("Show the file in your file manager."))
         action.triggered.connect(lambda: self._on_reveal(self.path))
         menu.exec(event.globalPos())
 
     def _show_versions(self) -> None:
-        menu = _menu(self)
+        menu = card_menu(self)
         if not self._versions:
             menu.addAction(tr("No installed versions.")).setEnabled(False)
         for entry in self._versions:
@@ -180,18 +164,8 @@ class RecentView(QWidget):
         head_lay.addWidget(self.refresh_btn)
         root.addWidget(header)
 
-        self.scroll = QScrollArea()
-        self.scroll.setObjectName("RecentScroll")
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        body = QWidget()
-        body.setObjectName("RecentBody")
-        self.body = QVBoxLayout(body)
-        self.body.setContentsMargins(14, 14, 14, 14)
-        self.body.setSpacing(6)
-        self.body.setAlignment(Qt.AlignTop)
-        self.scroll.setWidget(body)
+        self.scroll, self.body = list_scroll("RecentScroll", "RecentBody",
+                                             spacing=6, margins=(14, 14, 14, 14))
         root.addWidget(self.scroll, 1)
 
     def set_system(self, platform: str) -> None:
@@ -205,13 +179,13 @@ class RecentView(QWidget):
 
     def refresh(self) -> None:
         """Vuelve a leer los recientes de cada serie y repinta la lista."""
-        _clear(self.body)
+        clear_layout(self.body)
         if not self.installed:
-            self._placeholder(tr("No installed Blender versions."))
+            self.body.addWidget(muted_note(tr("No installed Blender versions.")))
             return
         groups = recent_service.grouped(self.installed, self.platform)
         if not groups:
-            self._placeholder(tr("No recent files yet."))
+            self.body.addWidget(muted_note(tr("No recent files yet.")))
             return
         for group in groups:
             versions = [entry for entry in self.installed
@@ -224,13 +198,6 @@ class RecentView(QWidget):
                 self.body.addWidget(
                     _RecentRow(item.path, versions, self._open, self._reveal,
                                missing=item.missing))
-
-    def _placeholder(self, text: str) -> None:
-        label = QLabel(text)
-        label.setObjectName("Muted")
-        label.setAlignment(Qt.AlignHCenter)
-        label.setWordWrap(True)
-        self.body.addWidget(label)
 
     def _open(self, path, entry) -> None:
         """Abre el fichero en esa versión de Blender (vía ``open_file``)."""

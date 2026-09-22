@@ -856,6 +856,7 @@ _TRANSLATIONS = {
             "Puedes deshacerlo en Ajustes.",
         "Run git pull and restart the app.":
             "Ejecuta git pull y reinicia la aplicación.",
+        "Go ahead.": "Adelante.",
         "Do nothing.": "No hace nada.",
         "This cannot be undone.": "Esto no se puede deshacer.",
         "Close this message.": "Cierra este aviso.",

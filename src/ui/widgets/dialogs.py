@@ -104,35 +104,47 @@ class AppDialog(QDialog):
         return button
 
 
-def confirm(parent, title: str, message: str, confirm_text: str | None = None,
-            accept_text: str | None = None, danger: bool = False) -> bool:
+def confirm(parent, title: str, message: str, accept_text: str | None = None,
+            danger: bool = False) -> bool:
     """Diálogo de confirmación. Devuelve True si el usuario acepta.
 
     ``accept_text`` es el texto del botón que continúa; por convención las
     acciones destructivas lo dicen con el verbo ("Desinstalar"), no con un
-    "Aceptar" genérico.
+    "Aceptar" genérico. Con ``danger`` el botón va en rojo y avisa de que no
+    hay vuelta atrás.
     """
     dialog = AppDialog(parent, title, message)
     dialog.add_button(tr("Cancel"), on_click=dialog.reject,
                       tooltip=tr("Do nothing."))
-    dialog.add_button(accept_text or confirm_text or tr("Accept"),
+    dialog.add_button(accept_text or tr("Accept"),
                       variant="danger" if danger else "accent",
                       on_click=dialog.accept,
-                      tooltip=tr("This cannot be undone.") if danger else "")
+                      tooltip=tr("This cannot be undone.") if danger
+                      else tr("Go ahead."))
     return dialog.exec() == QDialog.Accepted
 
 
-def show_error(parent, title: str, message: str) -> None:
-    """Aviso de error (bloqueante)."""
+def _notice(parent, title: str, message: str) -> None:
+    """Aviso bloqueante con un solo botón de cerrar (base de error e info)."""
     dialog = AppDialog(parent, title, message)
     dialog.add_button(tr("Close"), variant="accent", on_click=dialog.accept,
                       tooltip=tr("Close this message."))
     dialog.exec()
 
 
+def show_error(parent, title: str, message: str) -> None:
+    """Aviso de que algo falló.
+
+    Mismo diálogo que ``show_info``: el nombre dice la intención en quien lo
+    llama; el aspecto lo distingue el título, no un icono (el tema oscuro no
+    los usa).
+    """
+    _notice(parent, title, message)
+
+
 def show_info(parent, title: str, message: str) -> None:
-    """Aviso informativo."""
-    show_error(parent, title, message)
+    """Aviso informativo (resultado de una operación)."""
+    _notice(parent, title, message)
 
 
 class ProgressDialog(AppDialog):
