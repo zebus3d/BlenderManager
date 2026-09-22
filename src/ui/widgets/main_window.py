@@ -649,29 +649,33 @@ class MainWindow(QWidget):
                 "Manage the add-ons and extensions of an installed version "
                 "without opening Blender.")),
         ):
-            btn = SideButton(glyph, tip)
+            # Con padre desde el principio: un widget sin padre al que se le
+            # hace ``setVisible(True)`` antes de entrar en el layout se enseña
+            # como una **ventana suelta** (se veía un cuadradito en el centro de
+            # la pantalla al arrancar, que desaparecía al colocarse el botón).
+            btn = SideButton(glyph, tip, parent=sidebar)
             btn.setFont(icon_font(20))
             self.side_group.addButton(btn)
             btn.clicked.connect(lambda _=False, k=key: self.set_view(k))
+            lay.addWidget(btn)
             # El gestor de add-ons es nuevo: oculto hasta activar las opciones
             # experimentales (Ajustes > Avanzado), como Migración.
             if key == "addons":
                 btn.setVisible(self.settings.experimental_features)
-            lay.addWidget(btn)
             self.side_buttons[key] = btn
         lay.addStretch()
         # Migración va abajo (encima de Ajustes): es una herramienta puntual, no
         # una pestaña de uso diario como la tienda o las instaladas.
         migrate_btn = SideButton(icons.MIGRATE, tr(
             "Copy add-ons, extensions and preferences from one Blender version "
-            "to another."))
+            "to another."), parent=sidebar)
         migrate_btn.setFont(icon_font(20))
         self.side_group.addButton(migrate_btn)
         migrate_btn.clicked.connect(lambda: self.set_view("migrate"))
+        lay.addWidget(migrate_btn)
         # Oculta hasta activar las opciones experimentales: Migración sigue en
         # desarrollo y así la release es estable (Ajustes > Avanzado).
         migrate_btn.setVisible(self.settings.experimental_features)
-        lay.addWidget(migrate_btn)
         self.side_buttons["migrate"] = migrate_btn
         settings_btn = SideButton(icons.SETTINGS, tr("Settings."))
         settings_btn.setFont(icon_font(20))
@@ -1273,8 +1277,9 @@ class MainWindow(QWidget):
                        "script errors."))
         self.console_switch.toggled.connect(self._on_console_default_toggled)
         console_lay.addWidget(self.console_switch)
-        self.console_row.setVisible(self.settings.experimental_features)
+        # Primero al layout y luego la visibilidad (ver ``_build_sidebar``).
         lay.addWidget(self.console_row)
+        self.console_row.setVisible(self.settings.experimental_features)
 
         lay.addWidget(QLabel(tr("Launch arguments")))
         self.args_input = QLineEdit(self.launch_args)

@@ -814,6 +814,53 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
                         window.experimental_switch):
             self.assertIsNotNone(control)
 
+    def test_al_arrancar_no_se_asoma_ninguna_ventana_suelta(self):
+        """Solo se muestra la ventana principal; ningún widget se cuela solo.
+
+        Un widget sin padre al que se le hace ``setVisible(True)`` antes de
+        entrar en su layout se enseña como una ventana de nivel superior: al
+        arrancar con las opciones experimentales activadas se veía un
+        cuadradito (el botón de la barra lateral) en el centro de la pantalla
+        que desaparecía enseguida.
+        """
+        import json
+        from unittest import mock
+
+        from PySide6.QtCore import QEvent, QObject
+        from PySide6.QtWidgets import QWidget
+
+        from services import settings as settings_service
+        from ui.widgets.main_window import MainWindow
+
+        config = Path(settings_service.config_dir())
+        (config / "settings.json").write_text(json.dumps({
+            "dest_folder": str(config / "Blenders"),
+            "folders_hint_shown": True,
+            "experimental_features": True,
+        }), encoding="utf-8")
+
+        shown = []
+
+        class Spy(QObject):
+            def eventFilter(self, obj, event):
+                if (event.type() == QEvent.Show and isinstance(obj, QWidget)
+                        and obj.isWindow()):
+                    shown.append(type(obj).__name__)
+                return False
+
+        spy = Spy()
+        self.app.installEventFilter(spy)
+        try:
+            window = MainWindow()
+            window.show()
+            self.app.processEvents()
+        finally:
+            self.app.removeEventFilter(spy)
+        self.assertEqual(shown, ["MainWindow"])
+        # Y lo experimental sigue respetándose.
+        self.assertFalse(window.side_buttons["addons"].isHidden())
+        self.assertFalse(window.console_row.isHidden())
+
     def test_refrescar_vive_con_los_filtros_y_refresca_lo_que_se_ve(self):
         """El botón de refrescar va a la izquierda de rejilla/lista.
 
