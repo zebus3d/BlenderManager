@@ -18,6 +18,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PySide6.QtWidgets import QApplication
 
+    # Las partes de la ventana principal (mixins): los tests parchean en el
+    # módulo donde **se usa** el nombre, no donde se define, que es lo que
+    # exige ``mock.patch``. Se importan aquí y no dentro de cada test para no
+    # repetir la línea cincuenta veces.
+    from ui.widgets import downloads, folder_library, main_window
+    from ui.widgets import settings_view, updates
+
     HAVE_QT = True
 except ImportError:  # sin PySide6 (p. ej. el job de tests sin deps)
     HAVE_QT = False
@@ -73,7 +80,7 @@ class SettingsIsolated:
         # esperando a que alguien pulsara un botón. Cada test inyecta sus builds.
         from ui.widgets import main_window
 
-        network = mock.patch.object(main_window.api, "get_builds", return_value=[])
+        network = mock.patch.object(downloads.api, "get_builds", return_value=[])
         network.start()
         self.addCleanup(network.stop)
 
@@ -236,7 +243,7 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
 
         window = MainWindow()
         abiertas = []
-        with mock.patch.object(main_window.opener, "open_url",
+        with mock.patch.object(downloads.opener, "open_url",
                                side_effect=lambda url: abiertas.append(url) or True):
             window.open_release_notes("5.2.1")
             QTest.qWait(200)
@@ -255,10 +262,10 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
 
         # Se deja pasar el refresco de arranque (a los 100 ms pone "Cargando...")
         # para que no pise el mensaje que estamos comprobando.
-        with mock.patch.object(main_window.api, "get_builds", return_value=[]):
+        with mock.patch.object(downloads.api, "get_builds", return_value=[]):
             window = MainWindow()
             QTest.qWait(300)
-            with mock.patch.object(main_window.opener, "open_url",
+            with mock.patch.object(downloads.opener, "open_url",
                                    return_value=False):
                 window.open_release_notes("5.2.1")
                 QTest.qWait(200)
@@ -1273,7 +1280,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
 
         window = MainWindow()
         window.settings.folders_hint_shown = False
-        with mock.patch.object(main_window, "AppDialog") as dialogo:
+        with mock.patch.object(folder_library, "AppDialog") as dialogo:
             dialogo.return_value.exec.return_value = 0
             window._show_folders_hint()
         self.assertTrue(dialogo.called)
@@ -1379,7 +1386,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
 
         window = MainWindow()
         ruta = window.settings.folders[0].path
-        with mock.patch.object(main_window, "confirm", return_value=True):
+        with mock.patch.object(folder_library, "confirm", return_value=True):
             window._on_folder_remove_requested(ruta)
         self.assertEqual(window.settings.folders, [])
 
@@ -1673,7 +1680,7 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        with mock.patch.object(main_window.updater, "source_root",
+        with mock.patch.object(updates.updater, "source_root",
                                return_value=Path("/tmp/repo")), \
                 mock.patch.object(window, "_show_update_available") as binario, \
                 mock.patch.object(window, "_show_source_update") as fuente:
@@ -1688,9 +1695,9 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        with mock.patch.object(main_window.updater, "source_root",
+        with mock.patch.object(updates.updater, "source_root",
                                return_value=None), \
-                mock.patch.object(main_window.updater, "open_releases") as abrir, \
+                mock.patch.object(updates.updater, "open_releases") as abrir, \
                 mock.patch.object(window, "_show_update_available") as binario, \
                 mock.patch.object(window, "_show_message"):
             window._on_update_result("v9.9.9", [], True)
@@ -1797,7 +1804,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         elegida = Source("Blender release (Cloudflare)",
                          "https://download.blender.org/release/Blender5.1/f.tar.xz",
                          "hash-del-release")
-        with mock.patch.object(main_window.sources, "choose",
+        with mock.patch.object(downloads.sources, "choose",
                                return_value=elegida), \
                 mock.patch.object(window.downloader, "start") as arranque:
             window.install_build(window.builds[0])
@@ -1814,15 +1821,15 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         import tempfile
         from pathlib import Path as _Path
 
-        from ui.widgets.main_window import _write_problem
+        from ui.widgets.shell import write_problem
 
         with tempfile.TemporaryDirectory() as tmp:
             # Una carpeta nueva se puede crear y escribir: no hay problema.
-            self.assertEqual(_write_problem(_Path(tmp) / "nueva"), "")
+            self.assertEqual(write_problem(_Path(tmp) / "nueva"), "")
             # Si el "padre" es un fichero, no se puede crear la carpeta.
             blocker = _Path(tmp) / "archivo"
             blocker.write_text("x", encoding="utf-8")
-            self.assertTrue(_write_problem(blocker / "sub"))
+            self.assertTrue(write_problem(blocker / "sub"))
 
     def test_no_descarga_si_no_se_puede_escribir_y_no_elige_otra(self):
         from unittest import mock
@@ -1834,7 +1841,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         window = MainWindow()
         build = _build("4.2.23", "v42", "stable")
         fuente = Source("Blender CDN", "https://x/f.zip")
-        with mock.patch.object(main_window, "_write_problem",
+        with mock.patch.object(downloads, "write_problem",
                                return_value="[Errno 13] Permission denied"), \
                 mock.patch.object(window, "_ask_other_folder",
                                   return_value=False) as preguntar, \
@@ -1861,7 +1868,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
             # La primera carpeta no deja; la que elige el usuario, sí.
             return "denied" if problemas["n"] == 1 else ""
 
-        with mock.patch.object(main_window, "_write_problem",
+        with mock.patch.object(downloads, "write_problem",
                                side_effect=problema), \
                 mock.patch.object(window, "_ask_other_folder",
                                   return_value=True), \
@@ -1872,17 +1879,18 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(problemas["n"], 2)
 
     def test_pide_permiso_de_administrador(self):
+        from ui.widgets import downloads
         from unittest import mock
 
         from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        with mock.patch.object(main_window.elevate, "available",
+        with mock.patch.object(folder_library.elevate, "available",
                                return_value=True), \
-                mock.patch.object(main_window.elevate, "relaunch_elevated",
+                mock.patch.object(folder_library.elevate, "relaunch_elevated",
                                   return_value=True) as relanzar, \
-                mock.patch.object(main_window, "_write_problem",
+                mock.patch.object(downloads, "write_problem",
                                   return_value=""):
             self.assertTrue(window._grant_permission("C:\\Program Files\\X"))
         # Se pide el UAC con el argumento interno que da el permiso.
@@ -1896,9 +1904,9 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        with mock.patch.object(main_window.elevate, "available",
+        with mock.patch.object(folder_library.elevate, "available",
                                return_value=True), \
-                mock.patch.object(main_window.elevate, "relaunch_elevated",
+                mock.patch.object(folder_library.elevate, "relaunch_elevated",
                                   return_value=False), \
                 mock.patch.object(window, "_show_message") as aviso:
             self.assertFalse(window._grant_permission("C:\\Program Files\\X"))
@@ -1912,7 +1920,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        with mock.patch.object(main_window, "show_error") as error:
+        with mock.patch.object(downloads, "show_error") as error:
             window._on_download_error("[Errno 13] Permission denied: 'C:\\\\LTS'")
         self.assertTrue(error.called)
         self.assertIn("Permission denied", error.call_args.args[2])
@@ -1925,7 +1933,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
-        with mock.patch.object(main_window, "show_error") as error:
+        with mock.patch.object(downloads, "show_error") as error:
             window._on_download_error("checksum")
         self.assertEqual(error.call_args.args[2], tr("Checksum error"))
 
@@ -1938,7 +1946,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
 
         window = MainWindow()
         window.cancel_download()
-        with mock.patch.object(main_window, "show_error") as error:
+        with mock.patch.object(downloads, "show_error") as error:
             window._on_download_error("cancelled")
         self.assertEqual(window.status_label.text(), tr("Cancelled"))
         error.assert_not_called()
@@ -1961,8 +1969,8 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             dmg = _Path(tmp) / "blender-5.2.1-macos-arm64.dmg"
             dmg.write_bytes(b"esto no es un tar")
-            with mock.patch.object(main_window, "extract") as extraer, \
-                    mock.patch.object(main_window.opener, "reveal",
+            with mock.patch.object(downloads, "extract") as extraer, \
+                    mock.patch.object(downloads.opener, "reveal",
                                       return_value=True) as revelar, \
                     mock.patch.object(window, "_show_message") as aviso:
                 window._on_download_done(str(dmg), _build("5.2.1", "v52", "stable"))
@@ -2003,7 +2011,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
             archivo.write_bytes(b"x")
             with mock.patch.object(window, "_destination_for",
                                    return_value=str(destino)), \
-                    mock.patch.object(main_window, "extract",
+                    mock.patch.object(downloads, "extract",
                                       return_value=carpeta):
                 window._on_download_done(str(archivo), build)
                 # La extracción va en un hilo: hay que dejarle terminar.
@@ -2026,8 +2034,8 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         window = MainWindow()
         motivo = ("<urlopen error _ssl.c:993: "
                   "The handshake operation timed out>")
-        with mock.patch.object(main_window, "AppDialog") as dialogo, \
-                mock.patch.object(main_window.updater, "open_releases") as abrir:
+        with mock.patch.object(updates, "AppDialog") as dialogo, \
+                mock.patch.object(updates.updater, "open_releases") as abrir:
             window._on_update_download_error(motivo)
             # El motivo real va en el cuerpo del diálogo.
             self.assertIn(motivo, dialogo.call_args.args[2])
@@ -2066,11 +2074,11 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
             carpeta.mkdir()
             with mock.patch.object(window, "_destination_for",
                                    return_value=str(destino)), \
-                    mock.patch.object(main_window.macos_dmg, "available",
+                    mock.patch.object(downloads.macos_dmg, "available",
                                       return_value=True), \
-                    mock.patch.object(main_window.macos_dmg, "install",
+                    mock.patch.object(downloads.macos_dmg, "install",
                                       return_value=carpeta) as instalar, \
-                    mock.patch.object(main_window.opener, "reveal") as revelar:
+                    mock.patch.object(downloads.opener, "reveal") as revelar:
                 window._on_download_done(str(dmg), build)
                 QTest.qWait(300)
             marcador = installed.read_marker(carpeta)
@@ -2097,11 +2105,11 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
             dmg.write_bytes(b"dmg")
             with mock.patch.object(window, "_destination_for",
                                    return_value=tmp), \
-                    mock.patch.object(main_window.macos_dmg, "available",
+                    mock.patch.object(downloads.macos_dmg, "available",
                                       return_value=True), \
-                    mock.patch.object(main_window.macos_dmg, "install",
+                    mock.patch.object(downloads.macos_dmg, "install",
                                       side_effect=RuntimeError("mount failed")), \
-                    mock.patch.object(main_window.opener, "reveal",
+                    mock.patch.object(downloads.opener, "reveal",
                                       return_value=True) as revelar, \
                     mock.patch.object(window, "_show_message") as aviso:
                 window._on_download_done(str(dmg), build)
@@ -2234,7 +2242,7 @@ class UninstallTests(SettingsIsolated, unittest.TestCase):
         window = MainWindow()
         with tempfile.TemporaryDirectory() as temp:
             entrada = self._entrada(Path(temp) / "blender-3.5.0-linux-x64")
-            with mock.patch.object(main_window, "confirm", return_value=False) as conf:
+            with mock.patch.object(downloads, "confirm", return_value=False) as conf:
                 window.delete_installed(entrada)
             # La ruta tiene que llegar como texto.
             _, _, mensaje = conf.call_args.args
@@ -2255,7 +2263,7 @@ class UninstallTests(SettingsIsolated, unittest.TestCase):
             carpeta = Path(temp) / "blender-3.5.0-linux-x64"
             carpeta.mkdir()
             (carpeta / "blender").write_text("binario", encoding="utf-8")
-            with mock.patch.object(main_window, "confirm", return_value=True), \
+            with mock.patch.object(downloads, "confirm", return_value=True), \
                     mock.patch.object(window, "refresh_installed"), \
                     mock.patch.object(window, "_show_message") as aviso:
                 window.delete_installed(self._entrada(carpeta))
@@ -2276,12 +2284,12 @@ class UninstallTests(SettingsIsolated, unittest.TestCase):
         window = MainWindow()
         with tempfile.TemporaryDirectory() as temp:
             carpeta = Path(temp) / "blender-3.5.0-linux-x64"
-            with mock.patch.object(main_window, "confirm", return_value=True), \
-                    mock.patch.object(main_window.shutil, "rmtree",
+            with mock.patch.object(downloads, "confirm", return_value=True), \
+                    mock.patch.object(downloads.shutil, "rmtree",
                                       side_effect=OSError("read-only")), \
                     mock.patch.object(window, "refresh_installed") as refresco, \
-                    mock.patch.object(main_window, "download_log") as registro, \
-                    mock.patch.object(main_window, "show_error") as error:
+                    mock.patch.object(downloads, "download_log") as registro, \
+                    mock.patch.object(downloads, "show_error") as error:
                 window.delete_installed(self._entrada(carpeta))
             self.assertTrue(error.called)
             self.assertIn("read-only", error.call_args.args[2])
@@ -2480,7 +2488,7 @@ class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
         window.current_version = "1.0.0"
         assets = [{"name": "BlenderManager-linux", "url": "u"}]
         with mock.patch.object(sys, "frozen", True, create=True), \
-                mock.patch.object(main_window.updater, "asset_for",
+                mock.patch.object(updates.updater, "asset_for",
                                   return_value="BlenderManager-linux"), \
                 mock.patch.object(window, "_show_update_available") as avisar:
             window._on_update_result("v1.1.0", assets, False)
@@ -2501,7 +2509,7 @@ class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
         window.settings.skipped_version = "v1.1.0"
         assets = [{"name": "BlenderManager-linux", "url": "u"}]
         with mock.patch.object(sys, "frozen", True, create=True), \
-                mock.patch.object(main_window.updater, "asset_for",
+                mock.patch.object(updates.updater, "asset_for",
                                   return_value="BlenderManager-linux"), \
                 mock.patch.object(window, "_show_update_available") as avisar:
             # Automático: la versión saltada no se ofrece.
@@ -2747,7 +2755,7 @@ class RenameTests(SettingsIsolated, unittest.TestCase):
             carpeta.mkdir()
             entry = InstalledBuild(name=carpeta.name, path=carpeta,
                                    version="5.2.1", branch="v52")
-            with mock.patch.object(main_window, "show_error") as error, \
+            with mock.patch.object(downloads, "show_error") as error, \
                     mock.patch.object(window, "refresh_installed") as refresco:
                 window.rename_installed(entry, "a/b")
             self.assertTrue(error.called)
@@ -2784,7 +2792,7 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         # en un equipo con el autoarranque ya activado el interruptor nace
         # marcado y el test del toggle no vería ningún cambio (en CI no existe
         # el fichero y sí lo vería). Lo fijamos para no depender de la máquina.
-        autostart = mock.patch.object(main_window.autostart, "is_enabled",
+        autostart = mock.patch.object(settings_view.autostart, "is_enabled",
                                       return_value=False)
         autostart.start()
         self.addCleanup(autostart.stop)
@@ -2889,7 +2897,7 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets import main_window
 
         window = self._window()
-        with mock.patch.object(main_window.updater, "relaunch_source",
+        with mock.patch.object(updates.updater, "relaunch_source",
                                return_value=True):
             window._restart_from_source()
         self.assertTrue(window._force_quit)
@@ -2915,7 +2923,7 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         """Wayland sin XWayland: el minimizado no se puede detectar siquiera."""
         from ui.widgets import main_window
 
-        with mock.patch.object(main_window.detector,
+        with mock.patch.object(settings_view.detector,
                                "minimize_to_tray_supported", return_value=False):
             window = self._window()
         # Cerrar a la bandeja sí sigue disponible; minimizar no.
@@ -2925,7 +2933,7 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
     def test_activar_minimizar_en_wayland_pide_reinicio(self):
         from ui.widgets import main_window
 
-        with mock.patch.object(main_window.detector, "session_is_wayland",
+        with mock.patch.object(settings_view.detector, "session_is_wayland",
                                return_value=True):
             window = self._window()
             with mock.patch.object(window, "_show_message") as aviso:
@@ -2967,18 +2975,18 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets import main_window
 
         window = self._window()
-        with mock.patch.object(main_window.autostart, "enable",
+        with mock.patch.object(settings_view.autostart, "enable",
                                return_value=True) as activar:
             window.autostart_switch.setChecked(True)
         self.assertTrue(activar.called)
 
         # Si el sistema no deja desactivarlo, se avisa y el interruptor vuelve
         # al estado real (no puede quedarse mintiendo).
-        with mock.patch.object(main_window.autostart, "disable",
+        with mock.patch.object(settings_view.autostart, "disable",
                                return_value=False), \
-                mock.patch.object(main_window.autostart, "is_enabled",
+                mock.patch.object(settings_view.autostart, "is_enabled",
                                   return_value=True), \
-                mock.patch.object(main_window, "show_error") as error:
+                mock.patch.object(settings_view, "show_error") as error:
             window.autostart_switch.setChecked(False)
         self.assertTrue(error.called)
         self.assertTrue(window.autostart_switch.isChecked())
@@ -2986,7 +2994,7 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
     def test_sin_soporte_de_autoarranque_el_interruptor_se_deshabilita(self):
         from ui.widgets import main_window
 
-        with mock.patch.object(main_window.autostart, "supported",
+        with mock.patch.object(settings_view.autostart, "supported",
                                return_value=False):
             window = self._window()
         self.assertFalse(window.autostart_switch.isEnabled())
@@ -4152,7 +4160,7 @@ class RecentViewTests(SettingsIsolated, unittest.TestCase):
                                executable=Path("/tmp/b/blender"))
         with _mock.patch.object(window.launcher, "launch") as launch, \
                 _mock.patch.object(window, "_console_state", return_value=True), \
-                _mock.patch("ui.widgets.main_window.launcher.terminal_available",
+                _mock.patch("ui.widgets.downloads.launcher.terminal_available",
                             return_value=True):
             self.assertTrue(window.launch_installed(entry, Path("/tmp/a.blend")))
         launch.assert_called_once_with(

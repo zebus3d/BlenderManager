@@ -3,7 +3,7 @@
 La descarga se hace siempre en un hilo aparte para no congelar la interfaz;
 las llamadas de vuelta (progreso, fin, error) las recibe quien nos llame y es
 su responsabilidad reenviarlas al hilo de la interfaz (con una señal de Qt; ver
-``MainWindow._Bridge``).
+``ui.widgets.shell.WorkerBridge``).
 """
 
 import hashlib
