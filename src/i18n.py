@@ -44,7 +44,7 @@ _TRANSLATIONS = {
         "Cancel": "Cancelar",
         "Close": "Cerrar",
         "Browse...": "Examinar...",
-        "No builds found": "No se encontraron compilaciones",
+        "No versions found": "No se encontró ninguna versión",
         "Loading...": "Cargando...",
         "Ready": "Listo",
         "Could not write to the destination folder:":
@@ -78,14 +78,14 @@ _TRANSLATIONS = {
             "Las del candado cerrado solo se miran.",
         "No folder for: {types}. Those builds cannot be downloaded until you "
         "tick one.":
-            "Ninguna carpeta recibe: {types}. Esas compilaciones no se pueden "
+            "Ninguna carpeta recibe: {types}. Esas versiones no se pueden "
             "descargar hasta que marques una.",
         "New downloads go to: {folder}":
             "Las descargas nuevas van a: {folder}",
         "No folder is set to receive downloads.":
             "No hay ninguna carpeta que reciba descargas.",
-        "{type} builds now go to {folder}":
-            "Las compilaciones {type} van ahora a {folder}",
+        "{type} versions now go to {folder}":
+            "Las versiones {type} van ahora a {folder}",
         "That folder is already in the list.":
             "Esa carpeta ya está en la lista.",
         "Added as read-only: that folder does not allow writing.":
@@ -96,9 +96,9 @@ _TRANSLATIONS = {
         "shown.":
             "No se borra nada del disco: sus versiones solo dejan de verse.",
         "Choose which folders your Blender versions live in, and which ones "
-        "receive each kind of build.":
+        "receive each kind of version.":
             "Elige en qué carpetas viven tus versiones de Blender y cuál "
-            "recibe cada tipo de compilación.",
+            "recibe cada tipo de versión.",
         "Add a folder where you already have Blender versions, or where you "
         "want to download them.":
             "Añade una carpeta donde ya tengas versiones de Blender, o donde "
@@ -151,11 +151,11 @@ _TRANSLATIONS = {
             "Estables: las versiones normales de Blender, las que usa casi "
             "todo el mundo.\nMárcalo y todas las estables que descargues "
             "caerán en esta carpeta.\nSolo una carpeta puede quedárselas.",
-        "Daily: builds made every day from the branch in development.\n"
+        "Daily: versions built every day from the branch in development.\n"
         "They bring the newest features and they can break; they also pile up\n"
         "fast, so many people keep them on a big drive.\n"
         "Only one folder can take them.":
-            "Diarias: compilaciones que se hacen cada día de la rama en "
+            "Diarias: versiones que se compilan cada día de la rama en "
             "desarrollo.\nTraen lo más nuevo y pueden fallar; además se "
             "acumulan rápido, así que\nmucha gente las guarda en un disco "
             "grande.\nSolo una carpeta puede quedárselas.",
@@ -181,7 +181,7 @@ _TRANSLATIONS = {
             "Esas versiones se quedan en esta carpeta y se siguen viendo en "
             "Local.\nSolo las descargas nuevas siguen las casillas que acabas "
             "de marcar.",
-        "Each version is moved to the folder that takes its kind of build.\n"
+        "Each version is moved to the folder that takes its kind.\n"
         "Nothing is deleted: a version is only removed from here once the "
         "copy is complete.\n"
         "With big folders on another drive this takes a while.":
@@ -195,12 +195,12 @@ _TRANSLATIONS = {
             "Abre el candado en Ajustes > Carpetas, o usa tu gestor de "
             "archivos.",
         "No folder is set to receive {type} builds.":
-            "No hay ninguna carpeta que reciba compilaciones {type}.",
+            "No hay ninguna carpeta que reciba versiones {type}.",
         "Open Settings and tick {type} on the folder where you want them.":
             "Abre Ajustes y marca {type} en la carpeta donde las quieras.",
         "Open folder settings": "Abrir ajustes de carpetas",
         "Takes you to Settings > Folders, where you choose which folder\n"
-        "receives each kind of build.":
+        "receives each kind of version.":
             "Te lleva a Ajustes > Carpetas, donde eliges qué carpeta\n"
             "recibe cada tipo de compilación.",
         "Start Blender {version} as if it were freshly installed. Its current "
@@ -380,9 +380,9 @@ _TRANSLATIONS = {
         "{failed} versions could not be moved.":
             "No se han podido mover {failed} versiones.",
         "Remove": "Quitar",
-        "Show only one kind of build at a time.\n"
+        "Show only one kind of version at a time.\n"
         "\"All\" mixes them; the rest narrow the list down.":
-            "Enseña un solo tipo de compilación a la vez.\n"
+            "Enseña un solo tipo de versión a la vez.\n"
             "«Todas» las mezcla; el resto acotan la lista.",
         "Pick a source and a destination version here, then use the tabs to "
         "copy add-ons, individual settings or the whole preferences file.":
@@ -671,8 +671,8 @@ _TRANSLATIONS = {
             "No se pudo lanzar Blender: {error}",
         "Filter by version, branch or file name as you type.":
             "Filtra por versión, rama o nombre de archivo mientras escribes.",
-        "Show every build: stable, LTS, daily and alpha.":
-            "Muestra todas las compilaciones: estables, LTS, diarias y alfa.",
+        "Show every version: stable, LTS, daily and alpha.":
+            "Muestra todas las versiones: estables, LTS, diarias y alfa.",
         "LTS = Long Term Support.\nVersions maintained for years and the most "
         "stable.\nRecommended for everyday work.":
             "LTS = soporte a largo plazo (Long Term Support).\n"
@@ -691,26 +691,26 @@ _TRANSLATIONS = {
         "for production and the list is usually empty.":
             "Ramas con funciones nuevas todavía en desarrollo.\n"
             "No están listas para producción y la lista suele estar vacía.",
-        "Only the builds you marked with the star.":
-            "Solo las compilaciones que marcaste con la estrella.",
-        "Show the builds as a grid of icons.":
-            "Muestra las compilaciones como una cuadrícula de iconos.",
-        "Show the builds as a list of rows.":
-            "Muestra las compilaciones como una lista de filas.",
-        "System the build is for.\nChange it to download for another computer "
+        "Only the versions you marked with the star.":
+            "Solo las versiones que marcaste con la estrella.",
+        "Show the versions as a grid of icons.":
+            "Muestra las versiones como una cuadrícula de iconos.",
+        "Show the versions as a list of rows.":
+            "Muestra las versiones como una lista de filas.",
+        "System the version is for.\nChange it to download for another computer "
         "(for example, to copy it on a USB stick).":
-            "Sistema para el que es la compilación.\n"
+            "Sistema para el que es la versión.\n"
             "Cámbialo para descargar para otro equipo (por ejemplo, para "
             "copiarla en un USB).",
-        "Processor type the build is for.\nx86_64 is the usual one on most "
+        "Processor type the version is for.\nx86_64 is the usual one on most "
         "PCs; arm64 is for Apple Silicon and ARM machines.":
-            "Tipo de procesador para el que es la compilación.\n"
+            "Tipo de procesador para el que es la versión.\n"
             "x86_64 es el habitual en la mayoría de PCs; arm64 es para Apple "
             "Silicon y equipos ARM.",
         "Show the versions you already have on this computer.":
             "Muestra las versiones que ya tienes en este equipo.",
-        "Show the builds you can download from the cloud.":
-            "Muestra las compilaciones que puedes descargar de la nube.",
+        "Show the versions you can download from the cloud.":
+            "Muestra las versiones que puedes descargar de la nube.",
         "Settings.":
             "Ajustes.",
         "Folder where the Blender versions you download are stored.\nEach "
@@ -776,7 +776,7 @@ _TRANSLATIONS = {
         # --- Tooltips de pestañas, menús y diálogos (repaso de cobertura) ---
         "Where downloads go and how they are unpacked.":
             "Dónde van las descargas y cómo se descomprimen.",
-        "The folders where your Blender versions live, and what kind of build "
+        "The folders where your Blender versions live, and what kind of version "
         "each one receives.":
             "Las carpetas donde viven tus versiones de Blender, y qué tipo de "
             "versión recibe cada una.",
@@ -830,7 +830,7 @@ _TRANSLATIONS = {
         "Give up on this download for now.":
             "Deja esta descarga por ahora.",
         "Pick a folder you can write to. It is added to your\nfolders with "
-        "this kind of build ticked, so the fix lasts.":
+        "this kind of version ticked, so the fix lasts.":
             "Elige una carpeta en la que puedas escribir. Se añade a tus\n"
             "carpetas con este tipo de versión marcado, así que el arreglo "
             "dura.",

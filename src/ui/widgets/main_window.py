@@ -158,7 +158,7 @@ SECTION_TITLES = {
 }
 
 CHANNEL_TOOLTIPS = {
-    "all": "Show every build: stable, LTS, daily and alpha.",
+    "all": "Show every version: stable, LTS, daily and alpha.",
     "lts": "LTS = Long Term Support.\nVersions maintained for years and the "
            "most stable.\nRecommended for everyday work.",
     "stable": "Stable versions that are not LTS.\nThey are the latest official "
@@ -167,7 +167,7 @@ CHANNEL_TOOLTIPS = {
              "for testing, not for work.",
     "experimental": "Branches with new features still in development.\nThey are "
                     "not ready for production and the list is usually empty.",
-    "favorites": "Only the builds you marked with the star.",
+    "favorites": "Only the versions you marked with the star.",
 }
 
 
@@ -574,7 +574,7 @@ class MainWindow(QWidget):
         self.channel_tabs.setDrawBase(False)
         self.channel_tabs.setUsesScrollButtons(False)
         self.channel_tabs.setToolTip(tr(
-            "Show only one kind of build at a time.\n"
+            "Show only one kind of version at a time.\n"
             "\"All\" mixes them; the rest narrow the list down."))
         for index, (key, label) in enumerate(CHANNELS):
             self.channel_tabs.addTab(tr(label))
@@ -596,9 +596,9 @@ class MainWindow(QWidget):
 
         self.layout_group = QButtonGroup(bar)
         self.layout_group.setExclusive(True)
-        self.grid_btn = Pill(icons.GRID, tr("Show the builds as a grid of icons."))
+        self.grid_btn = Pill(icons.GRID, tr("Show the versions as a grid of icons."))
         self.grid_btn.setFont(icon_font(14))
-        self.list_btn = Pill(icons.LIST, tr("Show the builds as a list of rows."))
+        self.list_btn = Pill(icons.LIST, tr("Show the versions as a list of rows."))
         self.list_btn.setFont(icon_font(14))
         for btn, mode in ((self.grid_btn, "grid"), (self.list_btn, "list")):
             self.layout_group.addButton(btn)
@@ -615,7 +615,7 @@ class MainWindow(QWidget):
         self.platform_combo.setFixedHeight(FILTER_CONTROL_HEIGHT)
         self.platform_combo.setFixedWidth(104)
         self.platform_combo.setToolTip(tr(
-            "System the build is for.\n"
+            "System the version is for.\n"
             "Change it to download for another computer (for example, to copy "
             "it on a USB stick)."))
         self.platform_combo.currentTextChanged.connect(self.set_platform)
@@ -628,7 +628,7 @@ class MainWindow(QWidget):
         self.arch_combo.setFixedHeight(FILTER_CONTROL_HEIGHT)
         self.arch_combo.setFixedWidth(82)
         self.arch_combo.setToolTip(tr(
-            "Processor type the build is for.\n"
+            "Processor type the version is for.\n"
             "x86_64 is the usual one on most PCs; arm64 is for Apple Silicon "
             "and ARM machines."))
         self.arch_combo.currentTextChanged.connect(self.set_arch)
@@ -649,7 +649,7 @@ class MainWindow(QWidget):
             ("installed", icons.INSTALLED, tr(
                 "Show the versions you already have on this computer.")),
             ("store", icons.STORE, tr(
-                "Show the builds you can download from the cloud.")),
+                "Show the versions you can download from the cloud.")),
             ("recent", icons.CLOCK, tr(
                 "Show the .blend files you opened recently, by Blender "
                 "version.")),
@@ -769,7 +769,7 @@ class MainWindow(QWidget):
         for index, tip in enumerate((
                 tr("Where downloads go and how they are unpacked."),
                 tr("The folders where your Blender versions live, and what "
-                   "kind of build each one receives."),
+                   "kind of version each one receives."),
                 tr("Language, zoom and how the window behaves."),
                 tr("Arguments and console for every Blender you launch."),
                 tr("Tray icon, autostart and other system integration."),
@@ -813,7 +813,7 @@ class MainWindow(QWidget):
         row.addStretch()
         folders_btn = CardButton(tr("Folders"), tooltip=tr(
             "Choose which folders your Blender versions live in, and which "
-            "ones receive each kind of build."))
+            "ones receive each kind of version."))
         folders_btn.clicked.connect(
             lambda: self.settings_tabs.setCurrentIndex(self.FOLDERS_TAB))
         row.addWidget(folders_btn)
@@ -1040,8 +1040,7 @@ class MainWindow(QWidget):
             tr("Move them"), variant="accent",
             on_click=lambda: (choice.update(move=True), dialog.accept()),
             tooltip=tr(
-                "Each version is moved to the folder that takes its kind of "
-                "build.\n"
+                "Each version is moved to the folder that takes its kind.\n"
                 "Nothing is deleted: a version is only removed from here once "
                 "the copy is complete.\n"
                 "With big folders on another drive this takes a while."))
@@ -2004,7 +2003,7 @@ class MainWindow(QWidget):
                 text = tr("No favorites yet")
                 hint = tr("Tap the star on a card to keep it here.")
             else:
-                text = tr("No builds found")
+                text = tr("No versions found")
                 hint = tr("Try clearing the search or another channel filter.")
             self._fill_grid(self.store_grid, [self._placeholder(text, hint)],
                             columns)
@@ -2350,7 +2349,7 @@ class MainWindow(QWidget):
                 row.set_folder(entry)
         if previous is not None:
             self._show_message(tr(
-                "{type} builds now go to {folder}",
+                "{type} versions now go to {folder}",
                 type=tr(TYPE_LABELS[build_type]), folder=folder.path), 6)
         # Al desmarcar, lo que ya estaba dentro puede dejar de encajar; al
         # marcar, es la carpeta que pierde el tipo la que se queda con builds
@@ -2622,7 +2621,7 @@ class MainWindow(QWidget):
             tr("Open folder settings"), variant="accent",
             on_click=lambda: (choice.update(open=True), dialog.accept()),
             tooltip=tr("Takes you to Settings > Folders, where you choose "
-                       "which folder\nreceives each kind of build."))
+                       "which folder\nreceives each kind of version."))
         dialog.exec()
         if choice["open"]:
             self.set_view("settings")
@@ -2651,7 +2650,7 @@ class MainWindow(QWidget):
             tr("Choose another folder"), variant="accent",
             on_click=lambda: (choice.update(other=True), dialog.accept()),
             tooltip=tr("Pick a folder you can write to. It is added to your\n"
-                       "folders with this kind of build ticked, so the fix "
+                       "folders with this kind of version ticked, so the fix "
                        "lasts."))
         if elevate.available():
             dialog.add_button(

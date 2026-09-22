@@ -40,7 +40,7 @@ TYPE_TOOLTIPS = {
         "Tick this and every stable release you download lands in this folder.\n"
         "Only one folder can take them."),
     channels.TYPE_DAILY: (
-        "Daily: builds made every day from the branch in development.\n"
+        "Daily: versions built every day from the branch in development.\n"
         "They bring the newest features and they can break; they also pile up\n"
         "fast, so many people keep them on a big drive.\n"
         "Only one folder can take them."),
