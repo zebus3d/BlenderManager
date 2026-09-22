@@ -44,6 +44,11 @@ SURFACE_HIGH = "#3D3D3D"
 # --- Texto ---
 TEXT = "#E6E6E6"
 MUTED = "#989898"
+# Texto de ejemplo (placeholder) de los campos. Más apagado que MUTED a
+# propósito: tiene que leerse como "esto es una pista", no como lo que hay
+# escrito. Sobre FIELD queda en 3,5:1, por encima del 3:1 de un elemento no
+# esencial, pero muy por debajo del texto real.
+PLACEHOLDER = "#6E6E6E"
 TEXT_SEL = "#FFFFFF"
 
 # --- Acentos y estados ---

@@ -432,8 +432,10 @@ def build_qss() -> str:
         padding: 6px 12px;
         color: {t.TEXT};
         selection-background-color: {t.ACCENT};
+        /* El color del texto de ejemplo va por aquí: ``QLineEdit::placeholder``
+           no existe en Qt Style Sheets y la regla se ignoraba en silencio. */
+        placeholder-text-color: {t.PLACEHOLDER};
     }}
-    QLineEdit::placeholder {{ color: {t.MUTED}; }}
     /* Campo multilínea (variables de entorno): mismo aspecto que un QLineEdit,
        pero con el texto alineado arriba. */
     QPlainTextEdit {{
@@ -443,6 +445,7 @@ def build_qss() -> str:
         padding: 6px 12px;
         color: {t.TEXT};
         selection-background-color: {t.ACCENT};
+        placeholder-text-color: {t.PLACEHOLDER};
     }}
     /* Campo de renombrado en línea (doble clic en una instalada): compacto y
        con borde de acento, para que se note que se está editando. */

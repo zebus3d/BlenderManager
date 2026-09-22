@@ -24,6 +24,10 @@ from services.opener import clean_env
 # el proceso de Blender.
 _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
+# Prefijo de shell que la gente copia de la terminal ("export FOO=bar",
+# "env FOO=bar"). No es parte del nombre, así que se quita antes de mirarlo.
+_SHELL_PREFIX = re.compile(r"^(?:export|env)\s+")
+
 
 def parse_env(text: str) -> dict:
     """Convierte las líneas ``CLAVE=VALOR`` de Ajustes en un mapa de entorno.
@@ -32,12 +36,17 @@ def parse_env(text: str) -> dict:
     (comentarios) se ignoran, igual que las que no traen ``=`` o cuyo nombre no
     es un identificador válido. El valor sí puede llevar espacios: es todo lo
     que va tras el primer ``=`` (recortado de espacios en los extremos).
+
+    Se admite un ``export `` o ``env `` delante porque es lo que sale al copiar
+    el apaño de una terminal (``export XMODIFIERS=@im=none``): sin quitarlo, el
+    nombre sería "export XMODIFIERS" y la variable se perdería en silencio.
     """
     result = {}
     for raw in (text or "").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
+        line = _SHELL_PREFIX.sub("", line, count=1)
         name, _, value = line.partition("=")
         name = name.strip()
         if _ENV_NAME.match(name):

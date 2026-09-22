@@ -83,6 +83,13 @@ class ParseEnvTest(unittest.TestCase):
         text = "1MAL=x\nCON-GUION=x\nBIEN=1\n"
         self.assertEqual(launcher.parse_env(text), {"BIEN": "1"})
 
+    def test_acepta_el_prefijo_export_o_env_de_la_terminal(self):
+        # Es lo que sale al copiar el apaño de una terminal; sin quitarlo, el
+        # nombre sería "export XMODIFIERS" y la variable se perdía en silencio.
+        text = "export XMODIFIERS=@im=none\nenv LANG=en_US.UTF-8\n"
+        self.assertEqual(launcher.parse_env(text),
+                         {"XMODIFIERS": "@im=none", "LANG": "en_US.UTF-8"})
+
     def test_texto_vacio(self):
         self.assertEqual(launcher.parse_env(""), {})
         self.assertEqual(launcher.parse_env(None), {})

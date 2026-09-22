@@ -39,6 +39,49 @@ from ui.widgets.shell import (EXPERIMENTAL_VIEWS, LANGUAGE_IDS, MAX_ZOOM,
 from ui.widgets.tray import TrayIcon
 
 
+class _GrowingPlainTextEdit(QPlainTextEdit):
+    """``QPlainTextEdit`` que crece con su contenido, de una a ``max_lines``.
+
+    El campo de variables de entorno vacío medía dos filas fijas y parecía un
+    hueco: aquí empieza a la altura de una línea y se estira al añadir
+    variables, hasta ``max_lines`` (a partir de ahí aparece la barra de scroll).
+    """
+
+    def __init__(self, text: str = "", max_lines: int = 4, parent=None):
+        super().__init__(text, parent)
+        self._max_lines = max_lines
+        self._fitted = 0
+        self.document().contentsChanged.connect(self._fit)
+        self._fit()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit()
+
+    def _visual_lines(self) -> int:
+        """Líneas que se ven, no párrafos: una larga que se parte ocupa dos."""
+        lines = 0
+        block = self.document().begin()
+        while block.isValid():
+            layout = block.layout()
+            lines += max(1, layout.lineCount()) if layout is not None else 1
+            block = block.next()
+        return max(1, lines)
+
+    def _fit(self) -> None:
+        # Altura = texto + relleno del QSS (márgenes de contenido) + margen
+        # interno del documento, con un píxel de redondeo. Se mide en vez de
+        # calcularse a ojo para que aguante un cambio de fuente.
+        margins = self.contentsMargins()
+        height = (self.fontMetrics().lineSpacing()
+                  * min(self._visual_lines(), self._max_lines)
+                  + margins.top() + margins.bottom()
+                  + int(self.document().documentMargin()) * 2 + 1)
+        if height != self._fitted:
+            self._fitted = height
+            self.setFixedHeight(height)
+
+
 class SettingsViewMixin:
     """Parte de ``MainWindow``; ver el docstring del módulo."""
 
@@ -303,7 +346,8 @@ class SettingsViewMixin:
 
         lay.addWidget(QLabel(tr("Launch arguments")))
         self.args_input = QLineEdit(self.launch_args)
-        self.args_input.setPlaceholderText("--background --python script.py")
+        self.args_input.setPlaceholderText(
+            tr("Example: --background --python script.py"))
         self.args_input.setToolTip(tr(
             "Extra arguments Blender receives when you launch it.\n"
             "Example: --background to start without the interface."))
@@ -314,9 +358,9 @@ class SettingsViewMixin:
         # aparte de los argumentos porque el apaño típico (desactivar el método
         # de entrada en Linux) no es un argumento sino entorno.
         lay.addWidget(QLabel(tr("Environment variables")))
-        self.env_input = QPlainTextEdit(self.launch_env)
-        self.env_input.setPlaceholderText("XMODIFIERS=@im=none")
-        self.env_input.setFixedHeight(64)
+        self.env_input = _GrowingPlainTextEdit(self.launch_env)
+        self.env_input.setPlaceholderText(
+            tr("Example: XMODIFIERS=@im=none"))
         self.env_input.setToolTip(tr(
             "Extra environment variables Blender receives when you launch it, "
             "one KEY=VALUE per line.\n"
