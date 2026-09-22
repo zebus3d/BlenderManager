@@ -295,6 +295,14 @@ def build_qss() -> str:
     QScrollArea#DetailPrefs {{ background: transparent; border: none; }}
     QScrollArea#DetailPrefs > QWidget > QWidget {{ background: transparent; }}
     QWidget#DetailPrefsBody {{ background: transparent; }}
+    /* Cuando la lista NO cabe entera y sale la barra, el lienzo baja al fondo
+       oscuro de las listas: así se ve de dónde a dónde llega lo que se
+       desplaza (con el gris de la tarjeta, la barra parecía salir de la nada).
+       La propiedad la pone ``_sunken_when_scrolling`` siguiendo el rango de la
+       barra. Van los dos selectores porque el cuerpo lleva id propio y gana al
+       del área. */
+    QScrollArea#DetailPrefs[scrolling="true"] {{ background-color: {t.BG}; }}
+    QWidget#DetailPrefsBody[scrolling="true"] {{ background-color: {t.BG}; }}
     /* Gestor de guardados (Migración > Valores de fábrica): cada guardado es
        una fila, como las de add-ons, y el scroll va transparente para no cortar
        la tarjeta. */
@@ -306,6 +314,9 @@ def build_qss() -> str:
     QScrollArea#SnapshotList {{ background: transparent; border: none; }}
     QScrollArea#SnapshotList > QWidget > QWidget {{ background: transparent; }}
     QWidget#SnapshotListBody {{ background: transparent; }}
+    /* Mismo lienzo hundido que en "Preferencias en detalle" cuando hay barra. */
+    QScrollArea#SnapshotList[scrolling="true"] {{ background-color: {t.BG}; }}
+    QWidget#SnapshotListBody[scrolling="true"] {{ background-color: {t.BG}; }}
     QWidget#SnapshotDetailsBody {{ background: transparent; }}
 
     /* --- Recientes: como las listas (fondo BG) con filas SURFACE encima --- */
@@ -364,6 +375,10 @@ def build_qss() -> str:
         top: -1px;
     }}
     QWidget#MigratePage {{ background-color: {t.BG}; }}
+    /* Las páginas de Migración que llevan tarjetas estirables van dentro de un
+       scroll: al agrandar una, las de abajo bajan en vez de quedarse debajo.
+       Transparente para que se vea el fondo de la página. */
+    QScrollArea#MigrateScroll {{ background: transparent; border: none; }}
     /* Las tarjetas se quedan con el SURFACE de `QFrame#SettingsCard` (el mismo
        gris que las tarjetas de las listas): ahora que la página va oscura, no
        hace falta subirlas un escalón más. Las filas de addons sí bajan, porque

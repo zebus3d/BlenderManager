@@ -2752,6 +2752,12 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         view.set_system("linux", "x86_64")
         return view
 
+    def _settle(self, view):
+        """Deja que el layout se asiente (sin pantalla no basta un processEvents)."""
+        self.app.processEvents()
+        view.repaint()
+        self.app.processEvents()
+
     @staticmethod
     def _run_now(target=None, *args, **kwargs):
         """Sustituto síncrono de ``threading.Thread`` (ver un test que lo usa).
@@ -3160,30 +3166,167 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(view.detail_scroll.isHidden())
 
     def test_los_paneles_con_scroll_se_pueden_estirar(self):
-        """Las dos listas se estiran desde su esquina inferior derecha."""
+        """El asa estira la lista y, con ella, la tarjeta."""
         from services import blender_prefs as bprefs
-        from ui.widgets.migrate import (DETAIL_MIN_HEIGHT,
-                                        SNAPSHOT_MIN_HEIGHT)
 
         view = self._view()
-        view.resize(900, 700)
-        # Lista de claves: la esquinita existe y estira el panel.
+        view.resize(1100, 900)
+        view.tabs.setCurrentIndex(1)
+        view.show()
+        self.app.processEvents()
         view.detail_prefs = [
             bprefs.Preference(f"view.clave_{i}", i) for i in range(20)]
         view._fill_detail_rows()
+        self._settle(view)
         self.assertIsNotNone(view.detail_grip)
-        before = view.detail_scroll.height()
+        card_before = view.detail_card.height()
+        scroll_before = view.detail_scroll.height()
         view._resize_detail(120)
-        self.assertGreater(view.detail_scroll.height(), before)
-        view._resize_detail(-10000)          # no baja del mínimo
-        self.assertEqual(view.detail_scroll.height(), DETAIL_MIN_HEIGHT)
+        self._settle(view)
+        self.assertGreater(view.detail_card.height(), card_before)
+        self.assertGreater(view.detail_scroll.height(), scroll_before)
 
-        # Lista de guardados: lo mismo.
-        view.snapshot_scroll.setFixedHeight(200)
-        view._resize_snapshots(80)
-        self.assertEqual(view.snapshot_scroll.height(), 280)
-        view._resize_snapshots(-10000)
-        self.assertEqual(view.snapshot_scroll.height(), SNAPSHOT_MIN_HEIGHT)
+        # Al encoger del todo, la tarjeta se encoge con la lista y los botones
+        # siguen dentro, por debajo de ella.
+        view._resize_detail(-10000)
+        self._settle(view)
+        self.assertLess(view.detail_card.height(), card_before)
+        self.assertLessEqual(view.detail_apply_btn.geometry().bottom(),
+                             view.detail_card.height())
+
+    def test_la_lista_de_claves_no_se_queda_en_una_rendija(self):
+        """Encogida del todo siguen cabiendo las filas enteras del suelo."""
+        from services import blender_prefs as bprefs
+        from ui.widgets.migrate import DETAIL_MIN_ROWS
+
+        view = self._view()
+        view.resize(1100, 900)
+        view.tabs.setCurrentIndex(1)
+        view.show()
+        self.app.processEvents()
+        view.detail_prefs = [
+            bprefs.Preference(f"view.clave_{i}", i) for i in range(40)]
+        view._fill_detail_rows()
+        view._resize_detail(-10000)
+        self._settle(view)
+        fila = view.detail_checks[0].sizeHint().height()
+        self.assertGreaterEqual(view.detail_scroll.height(),
+                                DETAIL_MIN_ROWS * fila)
+        # Y los botones siguen por debajo de la lista, no encima.
+        self.assertGreaterEqual(
+            view.detail_apply_btn.geometry().top(),
+            view.detail_scroll.geometry().bottom())
+
+    def test_la_lista_de_guardados_mide_igual_sea_cual_sea_la_ventana(self):
+        """Valores de fábrica sigue las mismas reglas que Preferencias.
+
+        Alto fijo (ni el layout la aplasta cuando la ventana se queda corta, ni
+        abre encogida), suelo de una tarjeta entera y lienzo hundido con barra.
+        """
+        from unittest import mock as _mock
+        from services import blender_config as bc
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp, "5.2.0")
+            for i in range(4):
+                config.config_dir.mkdir(parents=True, exist_ok=True)
+                (config.config_dir / "userpref.blend").write_bytes(b"X" * (i + 1))
+                bc.snapshot_config(config, label=f"v5.2.{i}")
+            view = self._view()
+            with _mock.patch("ui.widgets.migrate.blender_runner.is_running",
+                             return_value=False),                     _mock.patch.object(view, "_factory_config",
+                                       return_value=config):
+                view.tabs.setCurrentIndex(2)
+                alturas = []
+                for alto in (760, 600, 500):
+                    view.resize(950, alto)
+                    view.show()
+                    view._refresh_factory()
+                    self._settle(view)
+                    alturas.append(view.snapshot_scroll.height())
+                # El mismo alto en las tres: lo que sobra lo scrollea la página.
+                self.assertEqual(len(set(alturas)), 1)
+                self.assertEqual(view.snapshot_scroll.property("scrolling"),
+                                 "true")
+                # Encogida del todo cabe una tarjeta entera.
+                fila = next(iter(view._snapshot_widgets.values()))
+                view._resize_snapshots(-10000)
+                self._settle(view)
+                self.assertGreaterEqual(view.snapshot_scroll.height(),
+                                        fila.height())
+
+    def test_estirar_un_panel_empuja_a_los_de_abajo(self):
+        """La página de preferencias va en scroll: nada se queda por detrás."""
+        from PySide6.QtWidgets import QScrollArea
+        from services import blender_prefs as bprefs
+
+        view = self._view()
+        view.resize(1100, 900)
+        view.tabs.setCurrentIndex(1)
+        view.show()
+        self.app.processEvents()
+        host = view.tabs.currentWidget()
+        self.assertIsInstance(host, QScrollArea)
+        view.detail_prefs = [
+            bprefs.Preference(f"view.clave_{i}", i) for i in range(40)]
+        view._fill_detail_rows()
+        self._settle(view)
+        page = view._page_of(host)
+        before = page.height()
+        view._resize_detail(400)
+        self._settle(view)
+        # La página crece con la tarjeta y aparece la barra de la página.
+        self.assertGreater(page.height(), before)
+        self.assertGreater(host.verticalScrollBar().maximum(), 0)
+
+    def test_el_asa_vive_en_la_esquina_de_la_tarjeta(self):
+        """El asa va en la esquina del panel gris, no en la fila de botones.
+
+        Si vuelve a un layout queda a los márgenes de la tarjeta (se lee como
+        un botón más) y, peor, puede solaparse con el botón de acento.
+        """
+        view = self._view()
+        view.resize(900, 700)
+        view.show()
+        self.app.processEvents()
+        for grip, inside in ((view.detail_grip, view.detail_scroll),
+                             (view.snapshot_grip, view.snapshot_scroll)):
+            card = inside.parent()
+            while card.objectName() != "SettingsCard":
+                card = card.parent()
+            self.assertIs(grip.parent(), card)
+            # Pegada al borde de la tarjeta, no a los 16/14 px del layout.
+            self.assertLessEqual(card.width() - grip.geometry().right(), 6)
+            self.assertLessEqual(card.height() - grip.geometry().bottom(), 6)
+            # Y sin nada del layout por debajo.
+            margins = card.layout().contentsMargins()
+            self.assertGreaterEqual(margins.bottom(), grip.height())
+
+    def test_el_lienzo_se_hunde_solo_cuando_hay_barra(self):
+        """Con barra de scroll, el fondo de la lista baja al gris oscuro."""
+        from services import blender_prefs as bprefs
+
+        view = self._view()
+        view.resize(1100, 900)
+        # La pestaña tiene que estar abierta: una página oculta no se coloca,
+        # así que el scroll no tendría alto y nunca saldría la barra.
+        view.tabs.setCurrentIndex(1)
+        view.show()
+        self.app.processEvents()
+        def llenar(count):
+            view.detail_prefs = [
+                bprefs.Preference(f"view.clave_{i}", i) for i in range(count)]
+            view._fill_detail_rows()
+            # El rango de la barra no se recalcula hasta que el layout se
+            # asienta; sin el repaint, sin pantalla, se queda a cero.
+            self._settle(view)
+
+        llenar(1)
+        self.assertEqual(view.detail_scroll.property("scrolling"), "false")
+        llenar(80)
+        self.assertEqual(view.detail_scroll.property("scrolling"), "true")
+        self.assertEqual(
+            view.detail_scroll.widget().property("scrolling"), "true")
 
     def test_reset_fabrica_aparta_la_config_y_permite_recuperar(self):
         from unittest import mock as _mock

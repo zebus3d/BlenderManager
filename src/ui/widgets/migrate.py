@@ -73,6 +73,19 @@ SNAPSHOT_SCROLL_HEIGHT = 280
 DETAIL_MIN_HEIGHT = 60
 SNAPSHOT_MIN_HEIGHT = 60
 
+# Cuántas filas enteras tienen que caber como mínimo en la lista de claves
+# (más el título de sección). Es un suelo flojo a propósito: lo que hacía que
+# los botones pareciesen metidos dentro del listado no era el tamaño, sino que
+# el layout encogía la lista por debajo de su mínimo cuando la ventana se
+# quedaba corta (lo arregla ``_fit_scroll``). Se deja el suelo solo para que
+# encoger del todo siga enseñando una lista y no una rendija.
+DETAIL_MIN_ROWS = 2
+
+# Lo mismo para la lista de guardados. Ahí una fila es una tarjeta entera (con
+# su fecha, su resumen y sus botones), así que con una basta: media tarjeta
+# cortada contra el borde del área se lee como un fallo de pintado.
+SNAPSHOT_MIN_ROWS = 1
+
 # Color del glifo dentro de un botón (sobre el relleno de acento).
 _ICON_ON_ACCENT = "#FFFFFF"
 
@@ -203,6 +216,59 @@ def _accent_button(text: str, tooltip: str, on_click) -> CardButton:
     return button
 
 
+class _GripCard(QFrame):
+    """Tarjeta de ajustes que coloca su asa en la esquina del panel.
+
+    El asa iba como un widget más de la fila de botones, así que quedaba a los
+    márgenes de la tarjeta (16 px a la derecha, 14 abajo): se leía como un
+    botón pequeño al lado de "Aplicar" y no como la esquina del panel gris, que
+    es donde todo el mundo va a buscar el redimensionado. Un layout no puede
+    sacar un hijo de sus márgenes, así que el asa se pone **flotando** sobre la
+    tarjeta y se recoloca en cada ``resizeEvent``. A cambio, ``set_grip``
+    reserva abajo la altura del asa para que ningún botón quede debajo.
+
+    La tarjeta no fija su propio alto: lo hereda de la lista de dentro, que sí
+    lo tiene fijo (``MigrateView._fit_scroll``). Así estirar la esquina mueve
+    el panel gris entero sin que haya dos sitios decidiendo el mismo alto.
+    """
+
+    # Separación del asa respecto a los bordes de la tarjeta: lo justo para que
+    # no se coma el borde redondeado.
+    GRIP_MARGIN = 4
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Sin esto, una subclase de QFrame puede no pintar el fondo del QSS.
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self._grip = None
+
+    def set_grip(self, grip) -> None:
+        """Adopta el asa y la saca de los márgenes del layout."""
+        self._grip = grip
+        grip.setParent(self)
+        grip.raise_()
+        lay = self.layout()
+        if lay is not None:
+            margins = lay.contentsMargins()
+            # El contenido termina por encima del asa: si no, el botón de
+            # acento pasaría justo por debajo de las rayitas.
+            lay.setContentsMargins(
+                margins.left(), margins.top(), margins.right(),
+                max(margins.bottom(), grip.height() + self.GRIP_MARGIN * 2))
+        self._place_grip()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._place_grip()
+
+    def _place_grip(self) -> None:
+        if self._grip is None:
+            return
+        self._grip.move(
+            self.width() - self._grip.width() - self.GRIP_MARGIN,
+            self.height() - self._grip.height() - self.GRIP_MARGIN)
+
+
 def _settings_card(title: str = "") -> tuple:
     """Tarjeta con el aspecto de los ajustes y su layout vertical.
 
@@ -211,7 +277,7 @@ def _settings_card(title: str = "") -> tuple:
     evita que las tarjetas de esta vista se vayan separando con el tiempo.
     Devuelve ``(tarjeta, layout)`` y, si hay ``title``, ya lo añade.
     """
-    card = QFrame()
+    card = _GripCard()
     card.setObjectName("SettingsCard")
     # Sombra abajo a la derecha (la misma que las tarjetas de la tienda): las
     # tarjetas van sobre el fondo oscuro de la pestaña y así se despegan de él.
@@ -513,12 +579,11 @@ class _CornerGrip(QWidget):
 
 
 def _make_scroll(object_name: str, cap: int, minimum: int) -> QScrollArea:
-    """``QScrollArea`` que se ajusta a su contenido, con tope y mínimo.
+    """Área de lista, con su alto de partida entre ``minimum`` y ``cap``.
 
-    ``setSizeAdjustPolicy(AdjustToContents)`` hace que el scroll pida el alto
-    de su contenido (hasta ``cap``); así no hay que medir filas a mano (que se
-    quedaba corto y las últimas se metían debajo de los botones). Si la ventana
-    es baja, el layout lo encoge hasta ``minimum`` y aparece la barra.
+    El alto definitivo lo fija ``MigrateView._fit_scroll`` cuando hay filas:
+    se pone **fijo** a propósito (ver allí el porqué), así que estos dos valores
+    solo valen mientras el área está vacía.
     """
     scroll = QScrollArea()
     scroll.setObjectName(object_name)
@@ -528,7 +593,34 @@ def _make_scroll(object_name: str, cap: int, minimum: int) -> QScrollArea:
     scroll.setSizeAdjustPolicy(QScrollArea.AdjustToContents)
     scroll.setMinimumHeight(minimum)
     scroll.setMaximumHeight(cap)
+    _sunken_when_scrolling(scroll)
     return scroll
+
+
+def _sunken_when_scrolling(scroll: QScrollArea) -> None:
+    """Hunde el fondo del lienzo mientras la lista no quepa entera.
+
+    Con barra de scroll, el área tiene que leerse como una ventana a algo más
+    largo; con el mismo gris de la tarjeta la barra parecía salir de la nada y
+    no se veía dónde empieza y acaba lo que se desplaza. El color lo pone el
+    QSS (propiedad dinámica ``scrolling``); aquí solo se sigue el rango de la
+    barra, que es lo que cambia al llenar la lista, al estirarla con el asa y
+    al encoger la ventana, así que no hay que enganchar los tres casos.
+    """
+    bar = scroll.verticalScrollBar()
+
+    def sync(*_args) -> None:
+        value = "true" if bar.maximum() > 0 else "false"
+        for widget in (scroll, scroll.widget()):
+            if widget is None or widget.property("scrolling") == value:
+                continue
+            widget.setProperty("scrolling", value)
+            # Una propiedad dinámica no repinta sola: hay que repolir.
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
+    bar.rangeChanged.connect(sync)
+    sync()
 
 
 class _BoardRow(QFrame):
@@ -726,8 +818,7 @@ class MigrateView(QWidget):
         self.tabs.setObjectName("MigrateTabs")
         self.tabs.addTab(self._build_addons_tab(), tr("Add-ons"))
         self.tabs.addTab(self._build_preferences_page(), tr("User prefs"))
-        self.factory_page = self._build_factory_page()
-        self.tabs.addTab(self.factory_page, tr("Factory settings"))
+        self.tabs.addTab(self._build_factory_page(), tr("Factory settings"))
         # Las pestañas se alinean por **arriba** con la barra lateral y con los
         # tags de canal (``TABS_TOP``): las tres filas no miden lo mismo, así
         # que alinear por abajo las dejaba a distinta altura.
@@ -825,7 +916,7 @@ class MigrateView(QWidget):
         propio selector de una versión (``_build_factory_header``). La que no se
         usa se desparenta y se oculta, para que no quede por debajo.
         """
-        page = self.tabs.widget(index)
+        page = self._page_of(self.tabs.widget(index))
         is_factory = page is self.factory_page
         header = self.factory_header if is_factory else self.header
         other = self.header if is_factory else self.factory_header
@@ -859,6 +950,27 @@ class MigrateView(QWidget):
         lay.setContentsMargins(24, 20, 24, 20)
         lay.setSpacing(16)
         return page, lay
+
+    @staticmethod
+    def _scrollable(page: QWidget) -> QScrollArea:
+        """Mete la página en su propio scroll vertical.
+
+        Las tarjetas con asa crecen a voluntad del usuario, y sin scroll el
+        layout no tenía dónde poner lo que sobraba: las de abajo se quedaban en
+        su sitio y la que crecía se metía por detrás. Con esto, estirar una
+        empuja a las demás hacia abajo y la página se desplaza.
+        """
+        scroll = QScrollArea()
+        scroll.setObjectName("MigrateScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(page)
+        return scroll
+
+    def _page_of(self, host) -> QWidget:
+        """Página real de una pestaña (las que van en scroll son el de dentro)."""
+        return host.widget() if isinstance(host, QScrollArea) else host
 
     def _build_version_bar(self) -> QFrame:
         """Tarjeta superior: de qué versión a qué versión (común a las pestañas).
@@ -1015,7 +1127,7 @@ class MigrateView(QWidget):
         side.addWidget(self._build_preferences_file(), 1)
         lay.addLayout(side)
         lay.addStretch()
-        return page
+        return self._scrollable(page)
 
     def _build_style(self) -> QFrame:
         """Tarjeta para llevar el tema y el mapa de teclas como presets.
@@ -1126,7 +1238,9 @@ class MigrateView(QWidget):
         page, lay = self._new_page()
         lay.addWidget(self._build_factory_card())
         lay.addStretch()
-        return page
+        # ``factory_page`` es la página de dentro: es quien recibe la cabecera.
+        self.factory_page = page
+        return self._scrollable(page)
 
     def _version_combo(self, tooltip: str) -> QComboBox:
         """Desplegable de versión instalada (en la barra superior)."""
@@ -1287,13 +1401,14 @@ class MigrateView(QWidget):
             tr("Write the selected settings in the destination version."),
             self.apply_detail_prefs)
         row.addWidget(self.detail_apply_btn)
-        # Asa de la tarjeta: en su esquina inferior derecha, estira la lista.
+        lay.addLayout(row)
+        # Asa en la esquina inferior derecha de la **tarjeta** (no de la fila).
         self.detail_grip = _CornerGrip(
             self._resize_detail,
             tooltip=tr("Drag the corner to make the settings list taller or "
                        "shorter."))
-        row.addWidget(self.detail_grip)
-        lay.addLayout(row)
+        card.set_grip(self.detail_grip)
+        self.detail_card = card
         self._show_detail_buttons(False)
         return card
 
@@ -1311,28 +1426,62 @@ class MigrateView(QWidget):
         if hasattr(self, "detail_scroll"):
             self.detail_scroll.setVisible(False)
 
-    def _clamp_height(self, height: int, minimum: int) -> int:
-        """Alto de un panel: ni por debajo del mínimo ni más alto que la ventana."""
-        maximum = max(minimum, self.height() - 220)
+    @staticmethod
+    def _content_height(scroll) -> int:
+        """Alto que pediría el contenido del área, sin topes.
+
+        Se suman las filas una a una en vez de preguntar al cuerpo: su
+        ``sizeHint`` es 0 hasta que el layout se asienta (y eso pasa un ciclo de
+        eventos después de llenar la lista), así que medirlo ahí daba siempre
+        el suelo y el panel abría aplastado. Las filas, en cambio, ya saben lo
+        que miden en cuanto existen.
+        """
+        body = scroll.widget()
+        layout = body.layout() if body is not None else None
+        if layout is None:
+            return 0
+        margins = layout.contentsMargins()
+        total = margins.top() + margins.bottom()
+        for index in range(layout.count()):
+            item = layout.itemAt(index)
+            widget = item.widget()
+            total += (widget.sizeHint().height() if widget is not None
+                      else item.sizeHint().height())
+        return total + layout.spacing() * max(0, layout.count() - 1)
+
+    def _fit_scroll(self, scroll, minimum: int, cap: int, chosen) -> None:
+        """Fija el alto del área: el que eligió el usuario o el del contenido.
+
+        Va **fijo** a propósito. Dejándoselo negociar al layout, cuando la
+        ventana se queda corta Qt reparte a la baja y encoge la lista hasta su
+        mínimo (y con ella la tarjeta): quedaba media fila cortada justo encima
+        de los botones, que es lo que parecía que se metían dentro del listado.
+        Con el alto fijo la tarjeta mide lo que tiene que medir y lo que no cabe
+        lo resuelve el scroll de la página.
+        """
+        height = chosen or min(self._content_height(scroll), cap)
+        scroll.setFixedHeight(max(minimum, int(height)))
+
+    def _clamp_scroll(self, height: int, minimum: int) -> int:
+        """Alto de una lista estirada con el asa: ni bajo el suelo ni fuera de la ventana."""
+        maximum = max(minimum, self.height() - 200)
         return max(minimum, min(int(height), maximum))
 
-    @staticmethod
-    def _auto_height(scroll, minimum: int, cap: int) -> None:
-        """Devuelve el scroll a "alto del contenido" tras haberlo fijado el asa."""
-        scroll.setMinimumHeight(minimum)
-        scroll.setMaximumHeight(cap)
-        scroll.updateGeometry()
-
     def _resize_detail(self, delta: int) -> None:
-        """Arrastró el asa de la lista de claves: fija el alto elegido."""
-        self._detail_height = self._clamp_height(
-            self.detail_scroll.height() + delta, DETAIL_MIN_HEIGHT)
+        """Arrastró el asa: estira la lista y, con ella, la tarjeta.
+
+        La tarjeta no tiene alto propio, así que crece exactamente lo que crece
+        la lista: mover la esquina mueve el panel gris entero.
+        """
+        minimum = self._min_rows_height()
+        self._detail_height = self._clamp_scroll(
+            self.detail_scroll.height() + delta, minimum)
         self.detail_scroll.setFixedHeight(self._detail_height)
 
     def _resize_snapshots(self, delta: int) -> None:
-        """Arrastró el asa de la lista de guardados: fija el alto elegido."""
-        self._snapshot_height = self._clamp_height(
-            self.snapshot_scroll.height() + delta, SNAPSHOT_MIN_HEIGHT)
+        """Lo mismo para la lista de guardados."""
+        self._snapshot_height = self._clamp_scroll(
+            self.snapshot_scroll.height() + delta, self._min_snapshot_height())
         self.snapshot_scroll.setFixedHeight(self._snapshot_height)
 
     def _source_usable(self) -> bool:
@@ -1493,15 +1642,45 @@ class MigrateView(QWidget):
                 self.detail_rows.addWidget(check)
                 self.detail_checks.append(check)
         # Alto: el que el usuario haya elegido con el asa o, si no, el del
-        # contenido (``_make_scroll`` lo pide solo). Antes se medía fila a fila
-        # y se quedaba corto: las últimas se metían debajo de los botones.
-        if self._detail_height:
-            self.detail_scroll.setFixedHeight(self._detail_height)
-        else:
-            self._auto_height(self.detail_scroll, DETAIL_MIN_HEIGHT,
-                              DETAIL_SCROLL_HEIGHT)
+        # contenido; nunca por debajo de las filas enteras que exige el suelo.
+        self._fit_scroll(self.detail_scroll, self._min_rows_height(),
+                         DETAIL_SCROLL_HEIGHT, self._detail_height)
         # Con una lista nueva, al principio (si no, hereda la posición anterior).
         self.detail_scroll.verticalScrollBar().setValue(0)
+
+    @staticmethod
+    def _rows_floor(layout, rows: int, fallback: int) -> int:
+        """Suelo de una lista: ``rows`` filas enteras, medidas sobre una real.
+
+        Se mide una fila de verdad en vez de usar una constante para que el
+        suelo siga valiendo si cambia la fuente o el contenido de las filas.
+        Sin filas todavía no hay nada que medir, y vale ``fallback``.
+        """
+        for index in range(layout.count()):
+            widget = layout.itemAt(index).widget()
+            if widget is None:      # el hueco final (``addStretch``)
+                continue
+            widget.ensurePolished()
+            row = widget.sizeHint().height() + layout.spacing()
+            return max(fallback, rows * row)
+        return fallback
+
+    def _min_rows_height(self) -> int:
+        """Suelo de la lista de claves: sus filas más el título de sección.
+
+        La fila de más es el título ("Interfaz", "Input"...), que siempre
+        encabeza la lista: sin contarlo, el suelo dejaba la última fila cortada
+        justo encima de los botones.
+        """
+        if not getattr(self, "detail_checks", []):
+            return DETAIL_MIN_HEIGHT
+        return self._rows_floor(self.detail_rows, DETAIL_MIN_ROWS + 1,
+                                DETAIL_MIN_HEIGHT)
+
+    def _min_snapshot_height(self) -> int:
+        """Suelo de la lista de guardados: una tarjeta entera."""
+        return self._rows_floor(self.snapshot_rows, SNAPSHOT_MIN_ROWS,
+                                SNAPSHOT_MIN_HEIGHT)
 
     def _select_detail(self, checked: bool) -> None:
         for pref in self.detail_prefs:
@@ -1641,13 +1820,14 @@ class MigrateView(QWidget):
         self.snapshot_keep_combo.currentIndexChanged.connect(
             self._on_snapshot_keep_changed)
         keep_row.addWidget(self.snapshot_keep_combo)
-        # Asa de la tarjeta, en su esquina inferior derecha.
+        lay.addLayout(keep_row)
+        # Asa en la esquina inferior derecha de la **tarjeta** (no de la fila).
         self.snapshot_grip = _CornerGrip(
             self._resize_snapshots,
             tooltip=tr("Drag the corner to make the saved copies list taller "
                        "or shorter."))
-        keep_row.addWidget(self.snapshot_grip)
-        lay.addLayout(keep_row)
+        card.set_grip(self.snapshot_grip)
+        self.snapshot_card = card
 
         self._refresh_factory()
         return card
@@ -1731,11 +1911,8 @@ class MigrateView(QWidget):
 
     def _fit_snapshot_scroll(self) -> None:
         """Alto de la lista de guardados: el elegido con el asa o el del contenido."""
-        if self._snapshot_height:
-            self.snapshot_scroll.setFixedHeight(self._snapshot_height)
-        else:
-            self._auto_height(self.snapshot_scroll, SNAPSHOT_MIN_HEIGHT,
-                              SNAPSHOT_SCROLL_HEIGHT)
+        self._fit_scroll(self.snapshot_scroll, self._min_snapshot_height(),
+                         SNAPSHOT_SCROLL_HEIGHT, self._snapshot_height)
 
     def _refresh_factory(self) -> None:
         """Repinta la tarjeta de fábrica: estado, lista de guardados y análisis."""
@@ -1783,7 +1960,7 @@ class MigrateView(QWidget):
         """
         if not hasattr(self, "_snapshot_widgets"):
             return
-        if self.tabs.currentWidget() is not self.factory_page:
+        if self._page_of(self.tabs.currentWidget()) is not self.factory_page:
             return
         if self._snapshots_waiting or self._analyzed_for:
             return
