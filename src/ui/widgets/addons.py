@@ -88,7 +88,7 @@ class _AddonRow(QFrame):
         self._menu_btn = IconFlatButton(icons.ELLIPSIS,
                                         tr("More options"))
         self._menu_btn.setFont(icon_font(16))
-        self._menu_btn.clicked.connect(self._show_menu)
+        self._menu_btn.clicked.connect(self._show_menu_at_button)
         lay.addWidget(self._menu_btn)
 
     @staticmethod
@@ -110,7 +110,21 @@ class _AddonRow(QFrame):
     def contextMenuEvent(self, event) -> None:
         self._show_menu(event.globalPos())
 
-    def _show_menu(self, position=None) -> None:
+    def _show_menu_at_button(self) -> None:
+        """Abre el menú justo debajo del botón de los tres puntos.
+
+        Tiene método propio y **no** se conecta ``clicked`` a ``_show_menu``:
+        ``clicked`` emite su estado ``checked`` (un bool), que llegaba como
+        ``position`` y acababa en ``menu.exec(False)`` -> ``TypeError``. Por
+        eso el menú salía con el clic derecho (ahí llega un ``QPoint`` de
+        verdad) y fallaba con el botón. ``_show_menu`` exige ahora la posición
+        para que no pueda volver a pasar.
+        """
+        self._show_menu(self._menu_btn.mapToGlobal(
+            QPoint(0, self._menu_btn.height())))
+
+    def _show_menu(self, position) -> None:
+        """Menú de acciones del addon en esa posición de pantalla."""
         menu = card_menu(self)
         open_action = menu.addAction(tr("Open file location"))
         open_action.setToolTip(tr("Show the file in your file manager."))
@@ -118,9 +132,6 @@ class _AddonRow(QFrame):
         delete_action = menu.addAction(tr("Delete add-on"))
         delete_action.setToolTip(tr("Remove it from this Blender version."))
         delete_action.triggered.connect(lambda: self._on_delete(self.state))
-        if position is None:
-            position = self._menu_btn.mapToGlobal(
-                QPoint(0, self._menu_btn.height()))
         menu.exec(position)
 
 
