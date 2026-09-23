@@ -40,11 +40,11 @@ ZOOM_STEP = 0.1
 
 # Tamaño con el que se abre la ventana la primera vez y al restablecerla, y el
 # mínimo por debajo del cual la interfaz se recorta.
-# El alto (760) no es redondo por gusto: con el zoom al 80 % y 3 columnas
-# (1060 px de ancho), 3 filas de tarjetas miden 585 px de contenido y hacen
+# El alto (800) no es redondo por gusto: con el zoom al 80 % y 3 columnas
+# (1120 px de ancho), 3 filas de tarjetas miden 585 px de contenido y hacen
 # falta ~741 de ventana (72+44+40 de cabecera/filtros/pie). Con los 680 de antes
 # la tercera fila quedaba cortada. Medido con `_grid_height(0.8) == 179`.
-DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT = 1060, 760
+DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT = 1120, 800
 MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT = 880, 540
 
 # Tooltips de los filtros de canal. Se explican para quien no sabe qué es una
