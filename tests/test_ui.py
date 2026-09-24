@@ -4251,5 +4251,61 @@ class RecentViewTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(view.refresh_btn.toolTip())
 
 
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class SingleInstanceTests(SettingsIsolated, unittest.TestCase):
+    """Abrir la app dos veces no crea una segunda ventana.
+
+    El nombre del socket depende de la carpeta de configuración, y el mixin la
+    pone en un temporal por test, así que cada test usa un socket distinto y no
+    se pisan entre ellos.
+    """
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        super().setUp()
+        from ui.single_instance import SingleInstance
+
+        self._servers = []
+        self.addCleanup(self._close_servers)
+        self._SingleInstance = SingleInstance
+
+    def _close_servers(self):
+        for single in self._servers:
+            single.close()
+
+    def _single(self):
+        single = self._SingleInstance()
+        self._servers.append(single)
+        return single
+
+    def test_sin_otra_instancia_no_avisa(self):
+        self.assertFalse(self._single().notify_existing())
+
+    def test_la_segunda_apertura_trae_la_ventana_al_frente(self):
+        from PySide6.QtTest import QTest
+
+        primera = self._single()
+        traida = []
+        self.assertTrue(primera.listen(lambda: traida.append(True)))
+        # La segunda instancia detecta a la primera y se va (aquí solo importa
+        # que el aviso llegue y dispare el callback).
+        self.assertTrue(self._single().notify_existing())
+        for _ in range(50):
+            QTest.qWait(10)
+            if traida:
+                break
+        self.assertEqual(traida, [True])
+
+    def test_escuchar_sobre_un_socket_ya_existente(self):
+        """Un socket huérfano de un cierre brusco no bloquea el arranque."""
+        self.assertTrue(self._single().listen(lambda: None))
+        self.assertTrue(self._single().listen(lambda: None))
+
+
 if __name__ == "__main__":
     unittest.main()

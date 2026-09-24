@@ -180,6 +180,23 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     # nombre; sin el, la barra de tareas no encuentra el icono.
     app.setDesktopFileName("blendermanager")
 
+    # Una sola instancia por usuario: si ya hay una abierta, se le pide que
+    # vuelva al frente y esta se va sin crear ventana. Se salta en los modos que
+    # no abren la interfaz normal (``--screenshot``) y cuando nos relanza el
+    # auto-update: el proceso nuevo arranca antes de que cierre el viejo, así
+    # que pedirle el turno al viejo dejaría la app sin ninguna instancia viva.
+    from ui.single_instance import SingleInstance
+
+    single = SingleInstance(app)
+    if not screenshot and not os.environ.get(updater.RELAUNCH_ENV):
+        if single.notify_existing():
+            return 0
+    # Se escucha ANTES de construir la ventana: así una segunda apertura muy
+    # seguida no se cuela en el hueco entre "no había nadie" y "ya escucho". El
+    # callback mira la lista porque la ventana todavía no existe.
+    window_ref: list = []
+    single.listen(lambda: window_ref and window_ref[0]._restore_from_tray())
+
     # Icono de la ventana y de la barra de tareas. Sin esto, el marco y el dock
     # ensenan el icono generico de Qt.
     from paths import ASSETS_DIR
@@ -193,6 +210,9 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     app.setStyleSheet(qss.build_qss())
 
     window = MainWindow()
+    # A partir de aquí, una segunda apertura ya puede traer esta ventana al
+    # frente (el callback de ``single.listen`` mira esta lista).
+    window_ref.append(window)
     window.resize(max(MIN_WINDOW_WIDTH, settings.window_width or DEFAULT_WINDOW_WIDTH),
                   max(MIN_WINDOW_HEIGHT, settings.window_height or DEFAULT_WINDOW_HEIGHT))
     _start_window(window, settings.start_minimized)

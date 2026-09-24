@@ -58,6 +58,21 @@ _CREATE_NO_WINDOW = 0x08000000
 _DETACHED_PROCESS = 0x00000008
 _CREATE_NEW_PROCESS_GROUP = 0x00000200
 
+#: Marca que este proceso es un relanzamiento tras aplicar una actualización.
+#: El binario nuevo arranca **antes** de que el viejo termine de cerrarse, así
+#: que no debe pedirle el turno por el socket de instancia única: le pediría al
+#: viejo que salga al frente, el viejo se cerraría y la app se quedaría sin
+#: ninguna instancia. Con esta marca el proceso nuevo toma el relevo directo.
+RELAUNCH_ENV = "BLENDERMANAGER_RELAUNCH"
+
+
+def _relaunch_env() -> dict:
+    """Entorno para relanzar la app, con la marca de relevo y sin el
+    ``LD_LIBRARY_PATH`` del bundle (ver ``opener.clean_env``)."""
+    env = opener.clean_env()
+    env[RELAUNCH_ENV] = "1"
+    return env
+
 
 def updates_dir() -> Path:
     """Carpeta donde se descargan y preparan las actualizaciones."""
@@ -228,7 +243,7 @@ def relaunch_source() -> bool:
     # ``clean_env`` en todos los relanzamientos: el proceso nuevo heredaría el
     # LD_LIBRARY_PATH del bootloader viejo y, peor, lo guardaría como el
     # "original" que después pasa a Blender y al navegador (ver opener).
-    kwargs = {"env": opener.clean_env()}
+    kwargs = {"env": _relaunch_env()}
     if sys.platform.startswith("win"):
         kwargs["creationflags"] = _DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP
     else:
@@ -386,7 +401,7 @@ def _apply_appimage(archive: Path) -> bool:
         return False
     try:
         subprocess.Popen([str(target)], start_new_session=True, close_fds=True,
-                         env=opener.clean_env())
+                         env=_relaunch_env())
     except OSError as error:
         log(f"appimage relaunch failed: {error}")
         _make_executable(archive)
@@ -618,7 +633,7 @@ def apply_update(app_dir, pid) -> None:
     _copy_tree(source, target)
     exe = target / EXE_NAME
     try:
-        subprocess.Popen([str(exe)], close_fds=True, env=opener.clean_env())
+        subprocess.Popen([str(exe)], close_fds=True, env=_relaunch_env())
     except OSError as error:
         log(f"update relaunch failed: {error}")
 
