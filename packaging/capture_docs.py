@@ -83,15 +83,6 @@ def main() -> None:
         def save_store_grid():
             window.grab().save(str(OUT / "store_grid.png"))
             print("guardada store_grid.png")
-            QTimer.singleShot(300, capture_store_list)
-
-        def capture_store_list():
-            window.set_layout_mode("list")
-            QTimer.singleShot(600, save_store_list)
-
-        def save_store_list():
-            window.grab().save(str(OUT / "store_list.png"))
-            print("guardada store_list.png")
             QTimer.singleShot(300, capture_installed_grid)
 
         def capture_installed_grid():
@@ -102,15 +93,17 @@ def main() -> None:
         def save_installed_grid():
             window.grab().save(str(OUT / "installed_grid.png"))
             print("guardada installed_grid.png")
-            QTimer.singleShot(300, capture_installed_list)
+            QTimer.singleShot(300, capture_migrate)
 
-        def capture_installed_list():
-            window.set_layout_mode("list")
-            QTimer.singleShot(600, save_installed_list)
+        def capture_migrate():
+            # El tablero de migración necesita saber qué versiones hay
+            # instaladas para ofrecerlas como origen.
+            window.set_view("migrate")
+            QTimer.singleShot(700, save_migrate)
 
-        def save_installed_list():
-            window.grab().save(str(OUT / "installed_list.png"))
-            print("guardada installed_list.png")
+        def save_migrate():
+            window.grab().save(str(OUT / "migrate.png"))
+            print("guardada migrate.png")
             QTimer.singleShot(300, capture_update)
 
         def capture_update():

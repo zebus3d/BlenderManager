@@ -220,6 +220,29 @@ En modo fuente la app **no** comprueba actualizaciones (solo si `sys.frozen`).
 Para verificar la UI sin pantalla se usa el plugin *offscreen* de Qt (ver más
 abajo).
 
+## Commits: la IA no firma como colaboradora
+
+**Nunca añadas un trailer que nombre a una IA en el mensaje de commit.** Nada de
+`Co-Authored-By: Claude <noreply@anthropic.com>`, `Claude-Session:`, `Generated
+with Claude Code`, `Assisted-by:` ni variantes. GitHub interpreta esos trailers y
+lista a la IA como **colaboradora del repo**; el autor real (`zebus3d`) no cambia,
+pero aparece `@claude` en Insights → Contributors y en el sidebar de la home.
+
+El problema no es cosmético: quitarlo después obliga a **reescribir el historial
+completo y forzar push de `main` y de los 44 tags** (tags y releases incluidos),
+y el sidebar de GitHub se cachea aparte y hay que vaciarlo con un toggle de la
+rama por defecto. Se hizo una vez (2026-09-24) y no queremos repetirlo: cuesta un
+force-push de todo el repo y arriesga las releases publicadas.
+
+Por eso **el trailer no debe llegar al commit**: el autor de cada commit es la
+cuenta de GitHub de siempre y el cuerpo del mensaje cuenta el cambio, sin firmas
+de herramientas.
+
+Para que no vuelva a colarse, desactiva el trailer en la herramienta (en Claude
+Code es `"includeCoAuthoredBy": false` en `~/.claude/settings.json`). Y si un
+commit ya lleva trailer, se limpia con la skill `github-remove-ai-contributor`
+(que además vacía el sidebar). No lo dejes «para luego»: reescribir es caro.
+
 ## Releases (lo importante)
 
 Todo lo gestiona `.github/workflows/build.yml` (y `promote.yml` para publicar).
@@ -737,6 +760,24 @@ El AppImage resultante pesa ~70 MB.
   SmartScreen; ver "Avisos falsos de antivirus en Windows"). Para quitarlo de
   verdad, valorar SignPath (gratis para OSS), una CA real o Azure Trusted
   Signing, y enviar los falsos positivos a WDSI.
+
+### Una sola instancia (`ui/single_instance.py`)
+
+Abrir Blender Manager dos veces no crea una segunda ventana: la primera instancia
+escucha en un `QLocalServer` con nombre (derivado del usuario y de la carpeta de
+config, así el modo portable no choca con la app instalada) y la segunda solo le
+pide que salga al frente y se va. `_restore_from_tray` trae la ventana al frente
+también cuando estaba escondida en la bandeja.
+
+- **El relanzamiento del updater lleva `BLENDERMANAGER_RELAUNCH`** en el entorno
+  (`updater._relaunch_env`). El binario nuevo arranca **antes** de que el viejo
+  acabe de cerrarse (el AppImage relanza y sale 1 s después); sin esa marca el
+  nuevo le pediría el turno al viejo, el viejo cerraría y la app se quedaría sin
+  ninguna instancia. No quitar la marca de los `Popen` de `relaunch_source`,
+  `_apply_appimage` ni `apply_update`.
+- `--screenshot` no pasa por la comprobación (arranca su propia ventana).
+  `removeServer()` antes de `listen()` limpia el socket huérfano que deja un
+  cierre brusco.
 
 ## Verificación de UI sin pantalla
 
