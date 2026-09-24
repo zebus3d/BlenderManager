@@ -27,6 +27,33 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 
+def _prepare_folder_library(window) -> None:
+    """Monta dos carpetas para que Ajustes ▸ Carpetas enseñe la biblioteca.
+
+    La pestaña solo enseña la lista de carpetas con **más de una**; con una sola
+    muestra el campo de siempre. Para la captura se parte en dos la carpeta por
+    defecto: la de siempre se queda con LTS y Stable, y una subcarpeta
+    ``Diarias`` con Daily y Experimental. La subcarpeta se crea vacía si falta y
+    se deja ahí; los ajustes de verdad no se tocan (la captura usa una config
+    temporal).
+    """
+    from services import channels
+    from services.settings import Folder, default_destination
+
+    base = Path(window.settings.folders[0].path) if window.settings.folders \
+        else default_destination()
+    second = base / "Diarias"
+    second.mkdir(parents=True, exist_ok=True)
+    window.settings.folders = [
+        Folder(path=str(base),
+               types=[channels.TYPE_LTS, channels.TYPE_STABLE], writable=True),
+        Folder(path=str(second),
+               types=[channels.TYPE_DAILY, channels.TYPE_EXPERIMENTAL],
+               writable=True),
+    ]
+    window._rebuild_folder_rows()
+
+
 def main() -> None:
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
@@ -104,6 +131,18 @@ def main() -> None:
         def save_migrate():
             window.grab().save(str(OUT / "migrate.png"))
             print("guardada migrate.png")
+            QTimer.singleShot(300, capture_settings)
+
+        def capture_settings():
+            window.set_view("settings")
+            # La pestaña "Carpetas" es la que enseña la biblioteca por tipos.
+            window.settings_tabs.setCurrentIndex(1)
+            _prepare_folder_library(window)
+            QTimer.singleShot(600, save_settings)
+
+        def save_settings():
+            window.grab().save(str(OUT / "settings.png"))
+            print("guardada settings.png")
             QTimer.singleShot(300, capture_update)
 
         def capture_update():

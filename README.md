@@ -40,10 +40,23 @@ starts Blender detached, so closing the manager leaves it running.</sub>
 
 - **Keep versions in more than one folder.** Each folder is set to receive a
   kind of build (LTS on a fast disk, dailies on a big one) and every kind has a
-  single owner, so a download is never ambiguous. A folder can be locked to
-  read-only for versions you installed by hand, and moving what you have to a
-  different folder is safe: files are copied first and removed only once the
-  copy is complete.
+  single owner, so a download is never ambiguous.
+  - A folder can be **locked** to read-only: its versions are still listed,
+    launched and used to migrate add-ons, but the app never downloads, deletes
+    or renames anything there. That is how you point it at versions you
+    installed by hand.
+  - Moving what you have to a different folder is safe: files are copied first
+    and the source is removed only once the copy is complete.
+  - You can also remove every folder; the app warns when a kind of build has
+    nowhere to go instead of quietly picking a destination for you.
+
+<p align="center">
+  <img width="80%" alt="Settings, folder library" src="docs/img/settings.png">
+</p>
+
+<sub>Settings → Folders: each folder receives the kinds of build you tick, and a
+locked folder is only scanned.</sub>
+
 - **Migrate your setup to another version.** A transfer board shows the add-ons
   of one installed version and where each one lands, with a compatibility check
   (Blender version and Python wheels) before anything is copied. The enabled
@@ -149,7 +162,9 @@ The details worth knowing before touching the build (the Ubuntu 22.04 choice,
 the Qt `xcb` plugin, the macOS `.dmg`, the Windows code-signing situation) are
 in [`AGENTS.md`](AGENTS.md).
 
-## How it relates to Blender Launcher V2
+## Related projects
+
+### Blender Launcher V2
 
 [Blender Launcher V2](https://github.com/Victor-IX/Blender-Launcher-V2) is the
 mature reference for this job, and this project borrows from it: the idea of
@@ -165,6 +180,15 @@ Linux it is a single AppImage instead of a choice between several downloads.
 The *experimental branches* channel is usually empty: both apps read the same
 endpoint, and Blender stopped publishing branch builds years ago. It is still
 implemented and will light up if a branch ever appears.
+
+### Blenderbase
+
+[Blenderbase](https://github.com/PhysicalAddons/blenderbase-public) (by
+Physical Addons) covers similar ground from a different angle: installed
+versions, add-ons and recent files in one window, launching with the console,
+SHA-256 checks and self-updating, built with Tauri instead of Qt. It is a good
+reference point and adds a feature of its own (syncing your setup across
+computers), so it is worth a look.
 
 ## Project layout
 
