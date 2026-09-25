@@ -49,7 +49,6 @@ def build_qss() -> str:
     QWidget {{
         background-color: {t.BG};
         color: {t.TEXT};
-        font-family: {t.FONT_FAMILY};
         font-size: {t.FONT_SIZE}px;
     }}
     QLabel {{ background: transparent; }}

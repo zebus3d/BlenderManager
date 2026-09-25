@@ -1238,6 +1238,28 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         consola = next(b for b in cards if b.text() == icons.TERMINAL)
         self.assertEqual(consola.property("variant"), "accent")
 
+    def test_la_familia_del_texto_no_pisa_la_fuente_de_iconos(self):
+        """El QSS no puede fijar ``font-family``: dejaría a los iconos sin glifo.
+
+        Los iconos se pintan con la fuente de Font Awesome puesta a mano en
+        cada widget (``setFont``). Una regla global ``font-family`` en el QSS
+        gana a ese ``setFont``, así que todos los glifos salían como cuadraditos
+        sin que fallara ningún test. La familia del texto va como fuente de la
+        aplicación (``fonts.apply_ui_font``), que sí respeta lo de cada widget.
+        """
+        from PySide6.QtGui import QFontInfo
+        from PySide6.QtWidgets import QLabel
+
+        from ui import fonts, qss
+        from ui import icons
+
+        self.assertNotIn("font-family", qss.build_qss())
+
+        fonts.apply_ui_font(self.app)
+        label = QLabel(icons.SETTINGS)
+        label.setFont(fonts.icon_font(18))
+        self.assertIn("Font Awesome", QFontInfo(label.font()).family())
+
     def test_los_iconos_de_tarjeta_se_realzan_con_su_color(self):
         """Estrella en ámbar, consola en gris oscuro, "i" en azul al pasar."""
         from ui import qss

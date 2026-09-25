@@ -2,6 +2,11 @@
 
 Sustituye a ``LabelBase.register`` de Kivy. Se carga una sola vez y se
 devuelve un ``QFont`` con la familia resultante para pintar los glifos.
+
+Aquí vive también la **familia del texto** (``ui.theme.FONT_FAMILY``): se aplica
+como fuente de la aplicación, **nunca** como regla ``font-family`` del QSS. Un
+``font-family`` global pisa el ``setFont`` de cada widget y dejaría a los iconos
+sin su glifo (la razón por la que los iconos "no salían").
 """
 
 from PySide6.QtGui import QFont, QFontDatabase
@@ -36,6 +41,27 @@ def icon_font(size: int | None = None) -> QFont:
     if size:
         font.setPixelSize(size)
     return font
+
+
+def apply_ui_font(app) -> None:
+    """Fija la familia del texto de la aplicación (con su cadena de preferencia).
+
+    Se hace con ``QApplication.setFont`` y **no** con el QSS a propósito: una
+    regla ``font-family`` global gana al ``setFont`` de cada widget, así que los
+    iconos (que se pintan con la fuente de Font Awesome puesta a mano) perdían
+    su glifo. Como fuente de la aplicación, en cambio, Qt la usa de base y
+    respeta lo que cada widget fije por encima.
+
+    ``theme.FONT_FAMILY`` es una lista separada por comas (``Inter, Noto Sans,
+    ...``); Qt se queda con la primera familia instalada y resuelve con su
+    *fallback* los glifos que le falten (CJK, cirílico).
+    """
+    from ui import theme as t
+
+    families = [name.strip() for name in t.FONT_FAMILY.split(",") if name.strip()]
+    font = app.font()
+    font.setFamilies(families)
+    app.setFont(font)
 
 
 def glyph_icon(glyph: str, size: int = 16, color: str = "#989898"):

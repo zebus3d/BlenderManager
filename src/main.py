@@ -207,6 +207,9 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
         app.setWindowIcon(icon)
 
     fonts.load()
+    # La familia del texto va como fuente de la aplicación, no en el QSS: una
+    # regla global ``font-family`` pisaría el ``setFont`` de los iconos.
+    fonts.apply_ui_font(app)
     app.setStyleSheet(qss.build_qss())
 
     window = MainWindow()
