@@ -102,10 +102,12 @@ CHANNEL_TOOLTIPS = {
     "experimental": "Branches with new features still in development.\nThey are "
                     "not ready for production and the list is usually empty.",
     "bforartists": "Bforartists is a fork of Blender with a redesigned, "
-                   "easier-to-read interface.\nTurn it on in Settings > "
-                   "Downloads.",
+                   "easier-to-read interface.\nIts versions live here, on their "
+                   "own tab (they do not mix with Blender's in All).\n"
+                   "Turn it on in Settings > Downloads.",
     "upbge": "UPBGE is the fork that keeps the Blender game engine alive.\n"
-             "Turn it on in Settings > Downloads.",
+             "Its versions live here, on their own tab (they do not mix with "
+             "Blender's in All).\nTurn it on in Settings > Downloads.",
     "favorites": "Only the versions you marked with the star.",
 }
 
