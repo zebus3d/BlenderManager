@@ -1448,9 +1448,10 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
     def test_el_tamano_por_defecto_muestra_tres_filas_al_zoom_de_fabrica(self):
         """Con el zoom de fábrica (50 %) y 3 columnas, 3 filas caben enteras.
 
-        El alto por defecto (650) está medido para eso: con el anterior (680 y
+        El alto por defecto (670) está medido para eso: con el anterior (680 y
         zoom al 80 %, de cuando la rejilla venía más grande) la tercera fila
-        quedaba cortada.
+        quedaba cortada. Y 670 —y no 650— deja además entrar el canal Favoritos
+        entero junto al botón de refrescar.
         """
         from model.build import Build
         from services.settings import DEFAULT_ZOOM
