@@ -15,7 +15,8 @@ import re
 from collections import namedtuple
 from pathlib import Path
 
-from model.build import InstalledBuild, minor_of, version_tuple
+from model.build import (FORK_BFORARTISTS, FORK_BLENDER, FORK_UPBGE,
+                         InstalledBuild, fork_label, minor_of, version_tuple)
 from services import channels
 
 # Actualización disponible para una versión instalada.
@@ -23,8 +24,14 @@ from services import channels
 #   kind == "series": serie estable superior (5.2.x -> 5.3.0).
 Update = namedtuple("Update", "entry build kind")
 
-# Captura la versión del nombre de la carpeta, por ejemplo 4.5.13.
+# Captura la versión del nombre de la carpeta, por ejemplo 4.5.13. Solo Blender
+# oficial: los forks llevan su propio prefijo y se reconocen aparte.
 VERSION_RE = re.compile(r"blender[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
+# Bforartists extrae una carpeta tipo ``Bforartists-5.2.0-Linux`` y UPBGE
+# ``upbge-0.53-alpha-linux-x86_64-...``. Sin esto, una instalación de un fork
+# (que no lleva "blender" en el nombre) se ignoraba por completo.
+BFA_VERSION_RE = re.compile(r"bforartists[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
+UPBGE_VERSION_RE = re.compile(r"upbge[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
 
 # Marcador que escribimos al instalar para recordar qué compilación es.
 MARKER_NAME = ".blendermanager.json"
@@ -51,6 +58,7 @@ def write_marker(folder, build) -> None:
         "branch": build.branch,
         "hash": build.build_hash,
         "filename": build.filename,
+        "fork": getattr(build, "fork", FORK_BLENDER),
     })
 
 
@@ -119,7 +127,7 @@ def rename_failure(folder, new_name: str) -> str:
 
 
 def rename(folder, new_name: str, version: str = "", branch: str = "",
-           build_hash: str = "") -> Path:
+           build_hash: str = "", fork: str = "") -> Path:
     """Renombra la carpeta de una instalación y devuelve la ruta nueva.
 
     Si la instalación no tenía marcador (de antes de que existiera) se le
@@ -134,32 +142,54 @@ def rename(folder, new_name: str, version: str = "", branch: str = "",
             "version": version,
             "branch": branch,
             "hash": build_hash,
+            "fork": fork,
         })
     origin.rename(target)
     return target
 
 
-def _executable_for(directory: Path, platform: str, depth: int = 1):
-    """Busca el ejecutable de Blender dentro de una carpeta.
+# Rutas del ejecutable dentro de la carpeta extraída, por fork. Bforartists usa
+# su propio nombre (``bforartists``/``bforartists.exe``/``Bforartists.app``);
+# UPBGE, como es un Blender por dentro, usa los mismos que el oficial.
+_EXECUTABLES = {
+    FORK_BLENDER: {
+        "windows": ("blender.exe",),
+        "darwin": ("Blender.app/Contents/MacOS/Blender", "blender"),
+        "linux": ("blender",),
+    },
+    FORK_BFORARTISTS: {
+        "windows": ("bforartists.exe", "blender.exe"),
+        "darwin": ("Bforartists.app/Contents/MacOS/Bforartists",
+                   "Blender.app/Contents/MacOS/Blender", "bforartists"),
+        "linux": ("bforartists", "blender"),
+    },
+    FORK_UPBGE: {
+        "windows": ("blender.exe",),
+        "darwin": ("Blender.app/Contents/MacOS/Blender", "blender"),
+        "linux": ("blender",),
+    },
+}
+
+
+def _executable_for(directory: Path, platform: str, depth: int = 1,
+                    fork: str = FORK_BLENDER):
+    """Busca el ejecutable de esa versión dentro de una carpeta.
 
     ``depth`` limita cuántos niveles descendemos: el ejecutable está en la
     raíz de la carpeta (o un nivel más adentro si la build viene anidada), y
     sin tope acabaríamos recorriendo el árbol entero de Blender —miles de
     archivos— desde el hilo de la interfaz.
+
+    ``fork`` decide los nombres que se prueban: una carpeta de Bforartists no
+    lleva ``blender`` como ejecutable, sino ``bforartists``.
     """
     if not _is_dir(directory):
         return None
-    if platform == "windows":
-        candidate = directory / "blender.exe"
-    elif platform == "darwin":
-        # En macOS el binario va dentro del bundle .app.
-        candidate = directory / "Blender.app" / "Contents" / "MacOS" / "Blender"
-        if not _is_file(candidate):
-            candidate = directory / "blender"
-    else:
-        candidate = directory / "blender"
-    if _is_file(candidate):
-        return candidate
+    options = _EXECUTABLES.get(fork or FORK_BLENDER, _EXECUTABLES[FORK_BLENDER])
+    for relative in options.get(platform, options["linux"]):
+        candidate = directory / relative
+        if _is_file(candidate):
+            return candidate
     if depth <= 0:
         return None
     # Algunas builds anidan la carpeta, así que descendemos un nivel.
@@ -169,10 +199,35 @@ def _executable_for(directory: Path, platform: str, depth: int = 1):
         return None
     for child in children:
         if _is_dir(child):
-            found = _executable_for(child, platform, depth - 1)
+            found = _executable_for(child, platform, depth - 1, fork)
             if found is not None:
                 return found
     return None
+
+
+def _fork_and_match(name: str, marker: dict):
+    """Fork y versión de una carpeta, por el marcador o por su nombre.
+
+    El marcador manda (lo escribimos nosotros al instalar). Sin él —carpetas
+    que no bajó la app, o instaladas antes del marcador— se reconoce el fork
+    por el prefijo del nombre y se saca la versión de ahí.
+    """
+    fork = str(marker.get("fork") or "")
+    version = str(marker.get("version") or "")
+    match = VERSION_RE.search(name)
+    bfa = BFA_VERSION_RE.search(name)
+    upbge = UPBGE_VERSION_RE.search(name)
+    if not fork:
+        if bfa:
+            fork = FORK_BFORARTISTS
+        elif upbge:
+            fork = FORK_UPBGE
+    if not version:
+        for candidate in (bfa, upbge, match):
+            if candidate:
+                version = candidate.group(1)
+                break
+    return fork, version
 
 
 def _scan_root(root: Path, platform: str):
@@ -188,16 +243,15 @@ def _scan_root(root: Path, platform: str):
     for entry in entries:
         if not _is_dir(entry):
             continue
-        match = VERSION_RE.search(entry.name)
         marker = read_marker(entry)
+        fork, version = _fork_and_match(entry.name, marker)
         # Sirve si el nombre lleva la versión (lo normal) o si tiene marcador
         # propio: al renombrar una instalación el nombre puede dejar de llevar
         # la versión, pero el marcador sigue diciendo qué es.
-        if not match and not marker:
+        if not version and not marker:
             # Ignoramos carpetas que no son de Blender (archivos temporales, etc.).
             continue
-        version = str(marker.get("version") or (match.group(1) if match else ""))
-        executable = _executable_for(entry, platform)
+        executable = _executable_for(entry, platform, fork=fork)
         results.append(
             InstalledBuild(
                 name=entry.name,
@@ -211,6 +265,7 @@ def _scan_root(root: Path, platform: str):
                 # una LTS deja de ser una heurística sobre el nombre.
                 risk=str(marker.get("risk") or ""),
                 root=root,
+                fork=fork,
             )
         )
     return results
@@ -260,9 +315,15 @@ def find_installed(installed, build):
     que solo cuentan como instaladas si además coincide el hash anotado en su
     marcador. Una carpeta sin marcador (instalada antes de que existiera) se
     compara solo por versión, como se hacía siempre.
+
+    El fork también cuenta: Blender 5.2.0 y Bforartists 5.2.0 comparten número
+    de versión, pero no son la misma instalación (ni el mismo programa).
     """
     target = version_tuple(build.version)
+    target_fork = getattr(build, "fork", FORK_BLENDER)
     for entry in installed:
+        if getattr(entry, "fork", FORK_BLENDER) != target_fork:
+            continue
         if version_tuple(entry.version) != target:
             continue
         if build.risk != "stable" and entry.build_hash and build.build_hash:
@@ -305,15 +366,25 @@ def filter_installed(entries, channel: str, search: str = "", favorites=()):
     if channel == "favorites":
         marked = set(favorites or ())
         selected = [entry for entry in entries if entry.favorite_key in marked]
-    elif channel == "experimental":
-        selected = [entry for entry in entries if is_experimental(entry)]
     else:
-        selected = [entry for entry in entries if not is_experimental(entry)]
-        if channel in (channels.TYPE_LTS, channels.TYPE_STABLE,
-                       channels.TYPE_DAILY):
-            selected = [entry for entry in selected
-                        if channels.type_of_installed(entry) == channel]
-    # "all" y "lts_stable" muestran todas las que no son experimentales.
+        fork_channel = next(
+            (fork for fork, build_type in channels.FORK_TYPES.items()
+             if build_type == channel), None)
+        if fork_channel:
+            selected = [entry for entry in entries
+                        if entry.fork == fork_channel]
+        elif channel == "experimental":
+            selected = [entry for entry in entries
+                        if is_experimental(entry) and not entry.fork]
+        else:
+            selected = [entry for entry in entries
+                        if not entry.fork and not is_experimental(entry)]
+            if channel in (channels.TYPE_LTS, channels.TYPE_STABLE,
+                           channels.TYPE_DAILY):
+                selected = [entry for entry in selected
+                            if channels.type_of_installed(entry) == channel]
+    # "all" y "lts_stable" muestran todas las que no son experimentales (ni de
+    # un fork, que tienen su propia pestaña).
     text = (search or "").strip().lower()
     if text:
         selected = [
@@ -357,7 +428,8 @@ def available_updates(installed, builds):
     misma instalada puede salir dos veces si hay parche *y* salto de serie; son
     dos avisos distintos (el botón de la tarjeta y el diálogo de salto).
     """
-    stable_builds = [build for build in builds if build.risk == "stable"]
+    stable_builds = [build for build in builds
+                     if build.risk == "stable" and not build.fork]
     entries = [entry for entry in installed if _is_stable_install(entry)]
     installed_versions = {version_tuple(entry.version) for entry in entries}
 

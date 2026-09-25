@@ -145,7 +145,8 @@ class FolderLibraryMixin:
         self.folder_rows = {}
         for index, folder in enumerate(self.settings.folders):
             row = FolderRow(folder, zebra=bool(index % 2),
-                            missing=not self._folder_exists(folder.path))
+                            missing=not self._folder_exists(folder.path),
+                            types=self.settings.active_build_types())
             row.type_toggled.connect(self._on_folder_type_toggled)
             row.writable_toggled.connect(self._on_folder_writable_toggled)
             row.remove_requested.connect(self._on_folder_remove_requested)
@@ -163,7 +164,10 @@ class FolderLibraryMixin:
             return False
 
     def _refresh_folder_warning(self) -> None:
-        orphans = channels.orphan_types(self.settings.folders)
+        # Solo se avisa de los tipos activos: los forks apagados no se pueden
+        # descargar, así que no pueden quedar huérfanos todavía.
+        orphans = channels.orphan_types(self.settings.folders,
+                                        self.settings.active_build_types())
         if not orphans:
             self.folders_warning.setText("")
             self.folders_warning.setVisible(False)
@@ -368,7 +372,9 @@ class FolderLibraryMixin:
             return
 
         writable = not write_problem(folder)
-        types = channels.orphan_types(self.settings.folders) if writable else []
+        types = (channels.orphan_types(self.settings.folders,
+                                       self.settings.active_build_types())
+                 if writable else [])
         self.settings.folders.append(
             settings_service.Folder(path=folder, types=types, writable=writable))
         self._save_folders()
@@ -458,7 +464,8 @@ class FolderLibraryMixin:
             # carpeta sin recibir nada --y si era la única, la aplicación sin
             # sitio donde descargar-- sin que el usuario hubiera tocado ninguna
             # casilla. Es la misma regla que al añadir una carpeta nueva.
-            folder.types = channels.orphan_types(self.settings.folders)
+            folder.types = channels.orphan_types(
+                self.settings.folders, self.settings.active_build_types())
         self._save_folders()
         row = self.folder_rows.get(channels.normalize_path(path))
         if row is not None:

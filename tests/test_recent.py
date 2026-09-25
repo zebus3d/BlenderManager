@@ -75,6 +75,42 @@ class RecentServiceTest(unittest.TestCase):
             groups = rp.grouped([_entry("5.2.2", base)], "linux", env)
             self.assertEqual(groups, [])
 
+    def test_upbge_usa_la_serie_de_blender(self):
+        """UPBGE 0.53 guarda su config en la carpeta 5.3, no en la 0.53."""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            folder = base / "upbge" / "5.3" / "config"
+            folder.mkdir(parents=True)
+            recent = base / "up.blend"
+            recent.write_text("", encoding="utf-8")
+            (folder / rp.RECENT_FILE).write_text(str(recent) + "\n",
+                                                 encoding="utf-8")
+            entry = InstalledBuild(
+                name="upbge-0.53", path=base / "upbge-0.53", version="0.53",
+                fork="upbge")
+            groups = rp.grouped([entry], "linux", {"XDG_CONFIG_HOME": str(base)})
+            self.assertEqual(len(groups), 1)
+            self.assertEqual(groups[0].series, "5.3")
+            self.assertEqual(groups[0].fork, "upbge")
+
+    def test_blender_y_bforartists_de_la_misma_serie_no_se_mezclan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            for name in ("blender", "bforartists"):
+                folder = base / name / "5.2" / "config"
+                folder.mkdir(parents=True)
+                recent = base / f"{name}.blend"
+                recent.write_text("", encoding="utf-8")
+                (folder / rp.RECENT_FILE).write_text(str(recent) + "\n",
+                                                     encoding="utf-8")
+            env = {"XDG_CONFIG_HOME": str(base)}
+            plain = _entry("5.2.2", base)
+            bfa = InstalledBuild(name="Bforartists-5.2.0", path=base / "bfa",
+                                 version="5.2.0", fork="bforartists")
+            groups = rp.grouped([plain, bfa], "linux", env)
+            self.assertEqual({(g.fork, g.series) for g in groups},
+                             {("", "5.2"), ("bforartists", "5.2")})
+
 
 if __name__ == "__main__":
     unittest.main()

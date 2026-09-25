@@ -11,7 +11,7 @@ Es un módulo de ``services/``: no importa Qt.
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from model.build import minor_of
+from model.build import FORK_BLENDER, fork_series
 from services import blender_config as bc
 
 RECENT_FILE = "recent-files.txt"
@@ -32,15 +32,18 @@ class RecentFile:
 
 @dataclass
 class RecentGroup:
-    """Los recientes de una serie de Blender.
+    """Los recientes de una serie de Blender (o de un fork).
 
     ``version`` es la más nueva instalada de esa serie (las versiones de una
     serie comparten carpeta de configuración, así que la lista es la misma).
+    ``fork`` distingue a quién pertenecen: una serie 5.2 de Bforartists y otra
+    de Blender son programas distintos y no comparten recientes.
     """
 
     series: str
     version: str
     files: list = field(default_factory=list)   # de ``RecentFile``
+    fork: str = FORK_BLENDER
 
 
 def recent_files(config) -> list:
@@ -74,13 +77,15 @@ def grouped(installed, platform: str, env=None) -> list:
     seen = set()
     groups = []
     for entry in installed or []:
-        series = minor_of(getattr(entry, "version", "") or "")
-        if not series or series in seen:
+        fork = getattr(entry, "fork", FORK_BLENDER) or FORK_BLENDER
+        series = fork_series(fork, getattr(entry, "version", "") or "")
+        key = (fork, series)
+        if not series or key in seen:
             continue
-        seen.add(series)
-        config = bc.config_for(entry.version, platform, env)
+        seen.add(key)
+        config = bc.config_for(entry.version, platform, env, fork=fork)
         files = recent_files(config)
         if files:
             groups.append(RecentGroup(series=series, version=entry.version,
-                                      files=files))
+                                      files=files, fork=fork))
     return groups

@@ -27,6 +27,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from model.build import FORK_BFORARTISTS
 from services.downloader import log
 from services.opener import clean_env
 
@@ -99,8 +100,13 @@ def _unique(folder: Path) -> Path:
 
 
 def install(dmg_path, dest_folder, version_hint: str = "",
-            arch_hint: str = "") -> Path:
-    """Monta el ``.dmg``, copia el ``Blender.app`` a ``dest_folder`` y devuelve su carpeta.
+            arch_hint: str = "", fork: str = "") -> Path:
+    """Monta el ``.dmg``, copia el ``.app`` a ``dest_folder`` y devuelve su carpeta.
+
+    ``fork`` decide el nombre del bundle que se busca (``Blender.app`` o
+    ``Bforartists.app``) y el prefijo de la carpeta, para que una Bforartists
+    5.2 en macOS no acabe en una carpeta llamada ``blender-5.2.0`` y se
+    confunda con un Blender de verdad.
 
     Lanza ``DmgError`` si algo falla (dmg corrupto, sin ``.app``, sin permisos);
     quien llama decide entonces el plan B (revelar el fichero y avisar).
@@ -108,6 +114,8 @@ def install(dmg_path, dest_folder, version_hint: str = "",
     dmg = Path(dmg_path)
     dest = Path(dest_folder).expanduser()
     dest.mkdir(parents=True, exist_ok=True)
+    prefix = "bforartists" if fork == FORK_BFORARTISTS else "blender"
+    bundle_name = "Bforartists.app" if fork == FORK_BFORARTISTS else "Blender.app"
     mount = Path(tempfile.mkdtemp(prefix="blendermanager-dmg-"))
     try:
         _run(["/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly",
@@ -115,12 +123,12 @@ def install(dmg_path, dest_folder, version_hint: str = "",
         apps = sorted(mount.glob("*.app"))
         if not apps:
             raise DmgError("el .dmg no contiene ningún .app")
-        # El bundle de Blender para la versión; puede haber más de uno (p. ej.
+        # El bundle del programa; puede haber más de uno (p. ej.
         # BlenderPlayer.app), así que se copian todos y se lanza el que toca.
-        main_app = next((a for a in apps if a.name == "Blender.app"), apps[0])
+        main_app = next((a for a in apps if a.name == bundle_name), apps[0])
         version = _app_version(main_app, version_hint or "unknown")
         arch = arch_hint or platform.machine() or "arm64"
-        folder = _unique(dest / f"blender-{version}-macos-{arch}")
+        folder = _unique(dest / f"{prefix}-{version}-macos-{arch}")
         folder.mkdir(parents=True)
         for bundle in apps:
             target_app = folder / bundle.name

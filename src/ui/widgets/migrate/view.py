@@ -471,8 +471,10 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
 
         self.source_entry = source
         self.target_entry = target
-        self.source_cfg = bc.config_for(source.version, self.platform)
-        self.target_cfg = bc.config_for(target.version, self.platform)
+        self.source_cfg = bc.config_for(source.version, self.platform,
+                                        fork=getattr(source, "fork", ""))
+        self.target_cfg = bc.config_for(target.version, self.platform,
+                                        fork=getattr(target, "fork", ""))
         self._fill_preference_files()
         self._refresh_undo()
         self._fill_factory()

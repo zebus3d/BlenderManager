@@ -396,6 +396,12 @@ class Settings:
     # de Migración, que sigue en desarrollo: así se puede publicar como release
     # estable y quien la quiera la activa a mano.
     experimental_features: bool = False
+    # Forks de Blender que el usuario quiere ver en la tienda. Van apagados por
+    # defecto: son otros programas y hay que activarlos a propósito (Ajustes >
+    # Descargas). Al encenderlos aparecen sus pestañas, sus tipos de carpeta y
+    # sus fuentes de descarga.
+    enable_bforartists: bool = False
+    enable_upbge: bool = False
     # Cuántos ajustes guardados (instantáneas) se conservan por versión. Al
     # crear uno nuevo se borran los más viejos. 0 = sin límite.
     snapshot_keep: int = 5
@@ -454,6 +460,8 @@ class Settings:
             folders_hint_shown=bool(data.get("folders_hint_shown", True)),
             experimental_features=bool(data.get("experimental_features",
                                                 False)),
+            enable_bforartists=bool(data.get("enable_bforartists", False)),
+            enable_upbge=bool(data.get("enable_upbge", False)),
             snapshot_keep=_clean_snapshot_keep(data.get("snapshot_keep")),
         )
         # La biblioteca de carpetas: o se lee, o se convierte la del esquema
@@ -479,6 +487,13 @@ class Settings:
         if settings.channel not in CHANNELS:
             # Ajustes editados a mano (o de una versión con otros filtros).
             settings.channel = "all"
+        elif settings.channel in channels.FORK_TYPES.values():
+            # Un canal de fork apagado no puede quedar seleccionado: al arrancar
+            # su pestaña no existe y la lista saldría vacía sin explicación.
+            fork = next((key for key, value in channels.FORK_TYPES.items()
+                         if value == settings.channel), None)
+            if fork and fork not in settings.enabled_forks():
+                settings.channel = "all"
         if settings.update_interval_min not in UPDATE_INTERVALS:
             # Un valor raro (editado a mano) no puede dejar el temporizador con
             # un intervalo absurdo o negativo.
@@ -507,6 +522,25 @@ class Settings:
         ``.part`` solo puede aparecer donde se descarga.
         """
         return [folder for folder in self.folders if folder.types]
+
+    def enabled_forks(self) -> list:
+        """Identificadores de los forks activados en Ajustes.
+
+        Es lo que se pasa a ``api.get_builds`` para descargar solo sus listados
+        y a la interfaz para enseñar solo sus pestañas y casillas.
+        """
+        from model.build import FORK_BFORARTISTS, FORK_UPBGE
+
+        forks = []
+        if self.enable_bforartists:
+            forks.append(FORK_BFORARTISTS)
+        if self.enable_upbge:
+            forks.append(FORK_UPBGE)
+        return forks
+
+    def active_build_types(self) -> tuple:
+        """Tipos de carpeta con sentido con los forks que hay activados."""
+        return channels.active_types(self.enabled_forks())
 
     def folder_for(self, path) -> "Folder | None":
         """La carpeta de la biblioteca que contiene esa ruta, o ``None``.

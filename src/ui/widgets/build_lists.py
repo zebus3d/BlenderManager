@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFrame,
 
 from i18n import tr
 from model.build import minor_of
-from services import api, opener
+from services import api, channels, opener
 from services import installed as installed_service
 from services.downloader import log as download_log
 from ui import icons
@@ -146,6 +146,10 @@ class BuildListsMixin:
             elif self.channel == "favorites":
                 text = tr("No favorites yet")
                 hint = tr("Tap the star on a card to keep it here.")
+            elif self.channel in self._fork_channels():
+                text = tr("No {name} versions right now",
+                          name=self._channel_label(self.channel))
+                hint = tr("They come from the project's own download page.")
             else:
                 text = tr("No versions found")
                 hint = tr("Try clearing the search or another channel filter.")
@@ -156,7 +160,8 @@ class BuildListsMixin:
         cards = []
         for index, build in enumerate(builds):
             entry = next((e for e in self.installed
-                          if e.version == build.version), None)
+                          if e.version == build.version
+                          and getattr(e, "fork", "") == build.fork), None)
             installed = entry is not None
             # La cebra es para la lista (filas contiguas); en rejilla las
             # tarjetas van sueltas sobre el fondo y alternar el gris solo
@@ -191,6 +196,10 @@ class BuildListsMixin:
             if self.channel == "favorites":
                 text = tr("No favorites yet")
                 hint = tr("Tap the star on a card to keep it here.")
+            elif self.channel in self._fork_channels():
+                text = tr("No {name} versions installed",
+                          name=self._channel_label(self.channel))
+                hint = tr("Download one from the cloud to see it here.")
             else:
                 text = tr("No local versions found")
                 hint = tr("Download one from the cloud to see it here.")
@@ -267,7 +276,7 @@ class BuildListsMixin:
         install.triggered.connect(lambda: self.install_build(build))
         notes = menu.addAction(tr("Release notes"))
         notes.setToolTip(tr("Read the release notes for this version"))
-        notes.triggered.connect(lambda: self.open_release_notes(build.version))
+        notes.triggered.connect(lambda: self.open_release_notes(build))
         menu.addSeparator()
         copy = menu.addAction(tr("Copy download link"))
         copy.setToolTip(tr("Copy the download link to the clipboard."))
@@ -277,6 +286,45 @@ class BuildListsMixin:
 
     def _show_store_menu(self, build, card, pos) -> None:
         self._store_menu(build).exec(card.mapToGlobal(pos))
+
+    # ------------------------------------------------- forks
+    @staticmethod
+    def _fork_channels() -> tuple:
+        """Canales que son un fork (tienen su propia pestaña, ocultable)."""
+        return tuple(channels.FORK_TYPES.values())
+
+    @staticmethod
+    def _channel_label(channel: str) -> str:
+        """Etiqueta traducida de un canal, para los textos de lista vacía."""
+        return tr(next((label for key, label in CHANNELS if key == channel),
+                       channel))
+
+    def _update_fork_tabs(self) -> None:
+        """Enseña solo las pestañas de los forks que el usuario activó.
+
+        Las pestañas de los forks apagados se ocultan (no se quitan), así los
+        índices de ``CHANNELS`` no bailan y el canal guardado sigue apuntando a
+        lo mismo cuando el fork está encendido.
+        """
+        if not hasattr(self, "channel_tabs"):
+            return
+        enabled = set(self.settings.enabled_forks())
+        for index, (key, _label) in enumerate(CHANNELS):
+            if key in self._fork_channels():
+                self.channel_tabs.setTabVisible(index, key in enabled)
+
+    def apply_enabled_forks(self) -> None:
+        """Reacciona al interruptor de un fork (Ajustes > Descargas).
+
+        Si el canal puesto era el de un fork que se acaba de apagar, se vuelve
+        a "Todas" (su pestaña desaparece). Y se vuelve a pedir el listado: al
+        encender un fork, sus versiones todavía no están en memoria.
+        """
+        self._update_fork_tabs()
+        if (self.channel in self._fork_channels()
+                and self.channel not in self.settings.enabled_forks()):
+            self.set_channel("all")
+        self.refresh(force=True)
 
     def refresh_installed(self) -> None:
         """Vuelve a escanear las carpetas y repinta las instaladas."""
@@ -315,7 +363,8 @@ class BuildListsMixin:
 
         def worker():
             try:
-                builds = api.get_builds(force=force)
+                builds = api.get_builds(force=force,
+                                        forks=self.settings.enabled_forks())
             except Exception as error:  # red, JSON roto...
                 download_log(f"refresh failed: {error}")
                 builds = []
@@ -543,6 +592,8 @@ class BuildListsMixin:
                         if key == self.channel), 0)
         self.channel_tabs.setCurrentIndex(current)
         self.channel_tabs.currentChanged.connect(self._on_channel_tab_changed)
+        # Las pestañas de los forks nacen ocultas si no están activados.
+        self._update_fork_tabs()
         lay.addWidget(self.channel_tabs, 0, Qt.AlignBottom)
         lay.addStretch()
 

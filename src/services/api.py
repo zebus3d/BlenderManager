@@ -17,9 +17,9 @@ import urllib.error
 import urllib.request
 from dataclasses import asdict, fields
 
-from model.build import Build
+from model.build import FORK_BFORARTISTS, FORK_UPBGE, Build
 from services.downloader import log
-from services import channels, tls
+from services import channels, forks as forks_service, tls
 from services.settings import cache_dir, write_json_atomic
 
 API_URL = "https://builder.blender.org/download/daily/?format=json&v=2"
@@ -120,14 +120,17 @@ def _fetch_builds_from(url: str, timeout: int, experimental: bool,
 
 
 def fetch_builds(timeout: int = 20, etags: dict | None = None,
-                 cached=None):
-    """Descarga el listado completo: diarias + ramas experimentales.
+                 cached=None, forks=()):
+    """Descarga el listado completo: diarias + experimentales + forks.
 
     ``etags``/``cached`` son de la última vez: si un listado responde 304, se
     reutilizan las builds de la caché en vez de volver a bajarlo. El listado
-    experimental va en su propio try: casi siempre está vacío y eso no debe
-    impedir que se vean las compilaciones normales. Devuelve
+    experimental y **cada fork** van en su propio try: un fallo de cualquiera de
+    ellos no debe impedir que se vean las compilaciones normales. Devuelve
     ``(builds, etags)``.
+
+    ``forks`` son los identificadores activados (``settings.enabled_forks()``);
+    con la lista vacía no se hace ninguna petición extra.
     """
     etags = etags or {}
     cached = list(cached or [])
@@ -136,7 +139,8 @@ def fetch_builds(timeout: int = 20, etags: dict | None = None,
     daily, daily_etag = _fetch_builds_from(API_URL, timeout, experimental=False,
                                            etag=etags.get(API_URL))
     if daily is None:
-        daily = [build for build in cached if not build.experimental]
+        daily = [build for build in cached if not build.experimental
+                 and not build.fork]
     if daily_etag:
         new_etags[API_URL] = daily_etag
     builds = list(daily)
@@ -146,12 +150,21 @@ def fetch_builds(timeout: int = 20, etags: dict | None = None,
             EXPERIMENTAL_URL, timeout, experimental=True,
             etag=etags.get(EXPERIMENTAL_URL))
         if experimental is None:
-            experimental = [build for build in cached if build.experimental]
+            experimental = [build for build in cached
+                            if build.experimental and not build.fork]
         if exp_etag:
             new_etags[EXPERIMENTAL_URL] = exp_etag
         builds += experimental
     except Exception as error:
         log(f"experimental builds unavailable: {error}")
+
+    for fork in forks or ():
+        try:
+            # ``forks.fetch`` ya trae su propia caché y, si falla la red, cae a
+            # lo guardado; un fork desconocido devuelve [].
+            builds += forks_service.fetch(fork, timeout=timeout)
+        except Exception as error:
+            log(f"{fork} builds unavailable: {error}")
     return builds, new_etags
 
 
@@ -209,7 +222,7 @@ def load_cache(max_age=CACHE_MAX_AGE):
     return builds
 
 
-def get_builds(force: bool = False):
+def get_builds(force: bool = False, forks=()):
     """Listado de compilaciones: usa caché y, si falla la red, cae al caché antiguo."""
     if not force:
         cached = load_cache()
@@ -219,7 +232,8 @@ def get_builds(force: bool = False):
     # builds de un listado que responda 304 y tener algo que enseñar sin red.
     stale = load_cache(max_age=None)
     try:
-        builds, etags = fetch_builds(etags=load_etags(), cached=stale)
+        builds, etags = fetch_builds(etags=load_etags(), cached=stale,
+                                     forks=forks)
         save_cache(builds, etags)
         return builds
     except Exception:
@@ -231,14 +245,25 @@ def available_for(builds, platform: str, arch: str):
     """Filtra por plataforma y arquitectura, quedándose con un archivo por versión."""
     preferred = PREFERRED_EXTENSION.get(platform)
     filtered = [build for build in builds if build.platform == platform and build.arch == arch]
+    # La preferencia de formato (tar.xz en Linux, zip en Windows, dmg en macOS)
+    # se aplica **por fork**: UPBGE en Linux solo publica .tar.gz, y si se
+    # aplicara al conjunto entero, la presencia de un .tar.xz de Blender dejaría
+    # fuera todas sus versiones. Un fork que no tenga el formato preferido se
+    # queda con lo que publique.
     if preferred:
-        matching = [build for build in filtered if build.filename.endswith("." + preferred)]
-        if matching:
-            filtered = matching
-    # Puede haber varias entradas de la misma versión/rama; nos quedamos con la más reciente.
+        kept = []
+        for fork in {build.fork for build in filtered}:
+            group = [build for build in filtered if build.fork == fork]
+            matching = [build for build in group
+                        if build.filename.endswith("." + preferred)]
+            kept.extend(matching or group)
+        filtered = kept
+    # Puede haber varias entradas de la misma versión/rama, y Blender y un fork
+    # pueden compartir número (Bforartists 5.2.0 y Blender 5.2.0): el fork
+    # entra en la clave o se pisarían. Nos quedamos con la más reciente.
     best = {}
     for build in filtered:
-        key = (build.version, build.branch, build.risk)
+        key = (build.fork, build.version, build.branch, build.risk)
         current = best.get(key)
         if current is None or build.mtime > current.mtime:
             best[key] = build
@@ -248,21 +273,29 @@ def available_for(builds, platform: str, arch: str):
 def filter_builds(builds, channel: str, search: str = "", favorites=()):
     """Aplica el filtro de canal y la búsqueda a las compilaciones de la tienda.
 
-    Las ramas experimentales solo se ven en su propio canal ("experimental"):
-    así no se cuelan entre las estables o las diarias y no confunden a quien
-    solo quiere una versión normal de Blender.
+    Las ramas experimentales solo se ven en su propio canal ("experimental") y
+    cada fork en el suyo ("bforartists"/"upbge"): así no se cuelan entre las
+    estables o las diarias y no confunden a quien solo quiere Blender. El canal
+    "all" tampoco mezcla forks: son otros programas.
 
     ``favorites`` es la lista de claves marcadas por el usuario
     (``model.build.favorite_key``). Con el canal "favorites" se muestran solo
-    esas, sin excluir las experimentales: ahí manda lo que haya marcado.
+    esas, sin excluir las experimentales ni los forks: ahí manda lo que haya
+    marcado.
     """
+    fork_channel = next((fork for fork, build_type in channels.FORK_TYPES.items()
+                         if build_type == channel), None)
     if channel == "favorites":
         marked = set(favorites or ())
         selected = [build for build in builds if build.favorite_key in marked]
+    elif fork_channel:
+        selected = [build for build in builds if build.fork == fork_channel]
     elif channel == "experimental":
-        selected = [build for build in builds if build.experimental]
+        selected = [build for build in builds
+                    if build.experimental and not build.fork]
     else:
-        selected = [build for build in builds if not build.experimental]
+        selected = [build for build in builds
+                    if not build.fork and not build.experimental]
         # La clasificación vive en ``services.channels`` porque de ella depende
         # también a qué carpeta se descarga cada compilación: si aquí dijera
         # una cosa y allí otra, una build podría salir en la pestaña "Diarias"
@@ -292,13 +325,22 @@ RELEASE_NOTES_URL = "https://developer.blender.org/docs/release_notes/"
 OLDEST_RELEASE_NOTES = (2, 79)
 
 
-def release_notes_url(version: str) -> str:
+def release_notes_url(version: str, fork: str = "", notes_url: str = "") -> str:
     """Devuelve la URL de las notas de versión de una compilación.
 
-    Las páginas van por serie (mayor.menor), así que de "4.2.1" o de
-    "5.2.0-alpha" nos quedamos con "4.2" y "5.2". Si la versión no se entiende
-    o es anterior a las notas publicadas, abrimos el índice general.
+    Los forks traen su propia página: Bforartists publica sus notas en su web
+    y UPBGE en la release de GitHub (que la fuente ya nos da en
+    ``notes_url``). Para Blender las páginas van por serie (mayor.menor), así
+    que de "4.2.1" o de "5.2.0-alpha" nos quedamos con "4.2" y "5.2". Si la
+    versión no se entiende o es anterior a las notas publicadas, abrimos el
+    índice general.
     """
+    if notes_url:
+        return notes_url
+    if fork == FORK_BFORARTISTS:
+        return "https://www.bforartists.de/download/"
+    if fork == FORK_UPBGE:
+        return "https://upbge.org/#/download"
     match = re.search(r"(\d+)\.(\d+)", version or "")
     if not match:
         return RELEASE_NOTES_URL

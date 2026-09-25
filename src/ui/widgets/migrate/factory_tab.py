@@ -414,7 +414,8 @@ class FactoryTabMixin:
         entry = self._factory_entry()
         if entry is None:
             return None
-        return bc.config_for(entry.version, self.platform)
+        return bc.config_for(entry.version, self.platform,
+                             fork=getattr(entry, "fork", ""))
 
     def _clear_snapshot_rows(self) -> None:
         """Vacía la lista de guardados (deja el hueco del final)."""

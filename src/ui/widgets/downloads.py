@@ -31,7 +31,7 @@ class DownloadFlowMixin:
     # ----------------------------------------------------- descarga / instalación
     def install_build(self, build) -> None:
         """Descarga e instala una compilación (progreso y SHA-256)."""
-        installed = next((e for e in self.installed if e.version == build.version), None)
+        installed = installed_service.find_installed(self.installed, build)
         if installed is not None:
             self.launch_installed(installed)
             return
@@ -86,6 +86,7 @@ class DownloadFlowMixin:
             on_progress=lambda done, total: self._bridge.progress.emit(done, total),
             on_done=lambda path: self._bridge.done.emit(str(path)),
             on_error=lambda msg: self._bridge.error.emit(msg),
+            headers=source.headers,
         )
 
     def _set_progress(self, downloaded: int, total: int) -> None:
@@ -167,7 +168,8 @@ class DownloadFlowMixin:
         def worker():
             try:
                 target = macos_dmg.install(archive, destination,
-                                           build.version, build.arch)
+                                           build.version, build.arch,
+                                           fork=build.fork)
                 installed_service.write_marker(target, build)
                 if self.delete_archive:
                     try:
@@ -298,7 +300,7 @@ class DownloadFlowMixin:
         if self.downloader.running:
             self._show_message(tr("A download is already in progress"), 4)
             return
-        if installed_service.is_version_installed(self.installed, build.version):
+        if installed_service.find_installed(self.installed, build) is not None:
             # Ya la tienes (quizá la bajaste antes como copia): no hay parche
             # que aplicar ni nada que reemplazar.
             self._show_message(tr("This version is already installed"), 4)
@@ -428,7 +430,7 @@ class DownloadFlowMixin:
             return
         try:
             installed_service.rename(entry.path, new_name, entry.version,
-                                     entry.branch, entry.build_hash)
+                                     entry.branch, entry.build_hash, entry.fork)
         except OSError as error:
             download_log(f"rename failed ({entry.path}): {error}")
             show_error(self, tr("Rename folder"), str(error))
@@ -477,18 +479,23 @@ class DownloadFlowMixin:
         self.refresh_installed()
 
     # -------------------------------------------------------------- acciones
-    def open_release_notes(self, version_text: str) -> None:
-        """Abre en el navegador las notas de esa serie de Blender.
+    def open_release_notes(self, item) -> None:
+        """Abre en el navegador las notas de esa versión.
 
-        La URL la construye ``api.release_notes_url`` (va por serie, no por
-        versión exacta: de "5.2.1" sale .../release_notes/5.2/). El port la
-        sustituyó por una URL a mano que no existe, y por eso el icono dejó de
+        Acepta la compilación entera (lo que emiten las tarjetas) o una versión
+        suelta. La URL la construye ``api.release_notes_url``, que para Blender
+        va por serie (de "5.2.1" sale .../release_notes/5.2/) y para los forks
+        usa su propia página (la release de GitHub en UPBGE). El port la había
+        sustituido por una URL a mano que no existe, y por eso el icono dejó de
         abrir nada útil.
 
         ``opener.open_url`` puede tardar (arranca el navegador), así que corre
         en un hilo y el resultado vuelve por señal.
         """
-        url = api.release_notes_url(version_text)
+        version = getattr(item, "version", item)
+        fork = getattr(item, "fork", "")
+        notes_url = getattr(item, "notes_url", "")
+        url = api.release_notes_url(version, fork, notes_url)
         self._show_message(tr("Opening the release notes..."))
 
         def worker():

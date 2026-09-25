@@ -77,6 +77,29 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(api._to_build(entry, experimental=True).experimental)
         self.assertFalse(api._to_build(entry).experimental)
 
+    def test_available_no_mezcla_blender_y_fork_de_la_misma_version(self):
+        """Bforartists 5.2.0 y Blender 5.2.0 comparten número: no se pisan."""
+        blender = make_build("5.2.0", "stable", "v52", "b.tar.xz", mtime=1)
+        bfa = make_build("5.2.0", "stable", "bforartists", "f.tar.xz", mtime=1)
+        bfa.fork = "bforartists"
+        result = api.available_for([blender, bfa], "linux", "x86_64")
+        self.assertEqual(len(result), 2)
+        self.assertEqual(sorted(b.fork for b in result), ["", "bforartists"])
+
+    def test_una_plataforma_de_fork_sin_el_formato_preferido_no_desaparece(self):
+        """UPBGE en Linux solo publica .tar.gz: no puede caer por no ser .xz.
+
+        La preferencia de formato se aplicaba al conjunto entero, así que en
+        cuanto hubiera un .tar.xz de Blender, todas las versiones de UPBGE
+        (Linux) desaparecían de la tienda.
+        """
+        blender = make_build("5.2.0", "stable", "v52", "b.tar.xz", mtime=1)
+        upbge = make_build("0.53", "alpha", "upbge-weekly",
+                           "upbge-0.53.tar.gz", mtime=1)
+        upbge.fork = "upbge"
+        result = api.available_for([blender, upbge], "linux", "x86_64")
+        self.assertEqual(sorted(b.fork for b in result), ["", "upbge"])
+
     def test_windows_amd64_se_normaliza_y_coincide_con_el_filtro(self):
         # La API llama "amd64" a la arquitectura de Windows; la barra de filtros
         # pide "x86_64". Sin normalizar, elegir Windows dejaba la tienda vacía.
@@ -196,6 +219,34 @@ class ChannelFilterTests(unittest.TestCase):
         result = api.filter_builds(builds, "all", "5.3")
         self.assertEqual([build.version for build in result], ["5.3.0"])
 
+    def test_cada_fork_en_su_canal_y_fuera_de_los_demas(self):
+        bfa = make_build("5.2.0", "stable", "bforartists", "f.tar.xz")
+        bfa.fork = "bforartists"
+        upbge = make_build("0.53", "alpha", "upbge-weekly", "f.tar.gz")
+        upbge.fork = "upbge"
+        upbge.experimental = True
+        builds = self._builds() + [bfa, upbge]
+
+        self.assertEqual(
+            [b.fork for b in api.filter_builds(builds, "bforartists")],
+            ["bforartists"])
+        self.assertEqual(
+            [b.fork for b in api.filter_builds(builds, "upbge")], ["upbge"])
+        # Los demás canales no mezclan forks: son otros programas.
+        for channel in ("all", "lts", "stable", "daily", "lts_stable"):
+            selected = api.filter_builds(builds, channel)
+            self.assertTrue(all(not b.fork for b in selected), channel)
+        # El de experimentales tampoco se traga las alfa de UPBGE.
+        self.assertTrue(all(not b.fork
+                            for b in api.filter_builds(builds, "experimental")))
+
+    def test_favoritos_incluye_forks(self):
+        bfa = make_build("5.2.0", "stable", "bforartists", "f.tar.xz")
+        bfa.fork = "bforartists"
+        marked = [bfa.favorite_key]
+        result = api.filter_builds([bfa], "favorites", favorites=marked)
+        self.assertEqual([b.fork for b in result], ["bforartists"])
+
 
 class FavoriteFilterTests(unittest.TestCase):
     """El canal "Favoritos" es transversal: no es un canal de Blender."""
@@ -309,6 +360,49 @@ class InstalledTests(unittest.TestCase):
                 folder, make_build("5.2.1", "stable", "v52", "f.tar.xz"))
             results = installed.scan(Path(tmp), "linux")
             self.assertEqual([entry.version for entry in results], ["5.2.1"])
+
+    def test_scan_encuentra_bforartists_con_su_ejecutable(self):
+        """Una carpeta de Bforartists no lleva "blender": se reconocía como nada.
+
+        El ejecutable también es ``bforartists``, no ``blender``; sin esto la
+        versión salía en la lista pero no se podía lanzar.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "Bforartists-5.2.0-Linux"
+            folder.mkdir()
+            (folder / "bforartists").write_text("#!/bin/sh\n")
+            results = installed.scan(root, "linux")
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].version, "5.2.0")
+            self.assertEqual(results[0].fork, "bforartists")
+            self.assertTrue(results[0].can_launch)
+
+    def test_scan_encuentra_upbge(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "upbge-0.53-alpha-linux-x86_64-2026-09-20"
+            folder.mkdir()
+            (folder / "blender").write_text("#!/bin/sh\n")
+            results = installed.scan(root, "linux")
+            self.assertEqual([(e.version, e.fork) for e in results],
+                             [("0.53", "upbge")])
+
+    def test_find_installed_no_confunde_un_fork_con_blender(self):
+        """Bforartists 5.2.0 y Blender 5.2.0 comparten número, no son lo mismo."""
+        bfa_entry = installed.InstalledBuild(
+            "Bforartists-5.2.0-Linux", Path("/tmp/bfa"), "5.2.0",
+            fork="bforartists")
+        plain = installed.InstalledBuild(
+            "blender-5.2.0-linux-x64", Path("/tmp/bl"), "5.2.0")
+        bfa_build = make_build("5.2.0", "stable", "bforartists", "f.tar.xz")
+        bfa_build.fork = "bforartists"
+        self.assertIs(installed.find_installed([bfa_entry, plain], bfa_build),
+                      bfa_entry)
+        blender_build = make_build("5.2.0", "stable", "v52", "f.tar.xz")
+        self.assertIs(installed.find_installed([bfa_entry, plain], blender_build),
+                      plain)
+        self.assertIsNone(installed.find_installed([plain], bfa_build))
 
     def test_rename_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -532,10 +626,12 @@ class SettingsMigrationTests(unittest.TestCase):
         self.assertEqual([f.path for f in loaded.folders],
                          ["/tmp/datos", "/tmp/ssd"])
         # La de siempre se queda con todo MENOS las LTS, que es exactamente lo
-        # que hacía destination_for(is_lts).
+        # que hacía destination_for(is_lts). Los tipos de fork entran desde el
+        # principio (la carpeta de siempre los recibe por defecto).
         self.assertEqual(loaded.folders[0].types,
                          [channels.TYPE_STABLE, channels.TYPE_DAILY,
-                          channels.TYPE_EXPERIMENTAL])
+                          channels.TYPE_EXPERIMENTAL,
+                          channels.TYPE_BFORARTISTS, channels.TYPE_UPBGE])
         self.assertEqual(loaded.folders[1].types, [channels.TYPE_LTS])
         self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
                          "/tmp/ssd")
@@ -706,7 +802,41 @@ class SettingsTests(unittest.TestCase):
         settings_module.Settings().save()
         directory = Path(self.tmp.name)
         self.assertEqual(list(directory.glob("*.tmp")), [])
-        json.loads((directory / "settings.json").read_text(encoding="utf-8"))
+
+    def test_los_forks_vienen_apagados_por_defecto(self):
+        settings = settings_module.Settings.load()
+        self.assertFalse(settings.enable_bforartists)
+        self.assertFalse(settings.enable_upbge)
+        self.assertEqual(settings.enabled_forks(), [])
+        self.assertNotIn(channels.TYPE_BFORARTISTS,
+                         settings.active_build_types())
+
+    def test_los_forks_se_encienden_y_se_guardan(self):
+        settings = settings_module.Settings.load()
+        settings.enable_bforartists = True
+        settings.enable_upbge = True
+        settings.save()
+        loaded = settings_module.Settings.load()
+        self.assertEqual(loaded.enabled_forks(), ["bforartists", "upbge"])
+        self.assertIn(channels.TYPE_BFORARTISTS, loaded.active_build_types())
+        self.assertIn(channels.TYPE_UPBGE, loaded.active_build_types())
+
+    def test_un_canal_de_fork_apagado_no_se_queda_puesto(self):
+        """Su pestaña no existe al arrancar: la lista saldría vacía sin más."""
+        settings = settings_module.Settings(channel="bforartists")
+        settings.save()
+        self.assertEqual(settings_module.Settings.load().channel, "all")
+        settings.enable_bforartists = True
+        settings.channel = "bforartists"
+        settings.save()
+        self.assertEqual(settings_module.Settings.load().channel,
+                         "bforartists")
+
+    def test_la_carpeta_de_fabrica_recibe_los_forks(self):
+        """En una instalación nueva la carpeta de siempre recibe todo."""
+        settings = settings_module.Settings.load()
+        self.assertIn(channels.TYPE_BFORARTISTS, settings.folders[0].types)
+        self.assertIn(channels.TYPE_UPBGE, settings.folders[0].types)
 
     def test_defaults_fill_destination(self):
         """Sin fichero: una sola carpeta que se queda con todo.

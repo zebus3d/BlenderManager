@@ -81,28 +81,37 @@ class Downloader:
         return self._thread is not None and self._thread.is_alive()
 
     def start(self, url, dest_folder, filename, expected_sha256=None,
-              on_progress=None, on_done=None, on_error=None) -> None:
-        """Lanza la descarga en un hilo aparte y va avisando por callbacks."""
+              on_progress=None, on_done=None, on_error=None, headers=None) -> None:
+        """Lanza la descarga en un hilo aparte y va avisando por callbacks.
+
+        ``headers`` son cabeceras extra para la petición; las fuentes que piden
+        autenticación (el WebDAV público de Bforartists) las usan. No se guardan
+        en el log ni en los ajustes.
+        """
         if self.running:
             return
         self._cancel.clear()
         self._thread = threading.Thread(
             target=self._run,
-            args=(url, dest_folder, filename, expected_sha256, on_progress, on_done, on_error),
+            args=(url, dest_folder, filename, expected_sha256, on_progress,
+                  on_done, on_error, headers),
             daemon=True,
         )
         self._thread.start()
 
-    def _connect(self, url):
+    def _connect(self, url, headers=None):
         """Abre la conexión, reintentando los fallos de red transitorios.
 
         Solo se reintenta la **conexión** (incluye el handshake TLS): si el
         fallo llega a mitad de la descarga, mejor no empezar de cero. Un
         ``HTTPError`` (404, 500...) no se reintenta: no va a cambiar.
         """
+        extra = dict(headers or {})
         for attempt in range(1, CONNECT_ATTEMPTS + 1):
             try:
-                request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+                base = {"User-Agent": USER_AGENT}
+                base.update(extra)
+                request = urllib.request.Request(url, headers=base)
                 # Con contexto explicito: si no, en Arch no encuentra las CAs y
                 # no se puede descargar nada (ver services/tls.py).
                 return urllib.request.urlopen(request, timeout=CONNECT_TIMEOUT,
@@ -125,7 +134,8 @@ class Downloader:
                     f"{attempt}/{CONNECT_ATTEMPTS}: {error}")
                 time.sleep(RETRY_DELAY)
 
-    def _run(self, url, dest_folder, filename, expected_sha256, on_progress, on_done, on_error):
+    def _run(self, url, dest_folder, filename, expected_sha256, on_progress,
+             on_done, on_error, headers=None):
         # Descargamos primero a un .part y solo al final renombramos,
         # así una descarga a medias no se confunde con una completa.
         part_path = Path(dest_folder).expanduser() / (filename + ".part")
@@ -136,7 +146,7 @@ class Downloader:
             # La URL va al log: un fallo de red (handshake TLS, host bloqueado)
             # es indistinguible de otro sin saber a qué host iba.
             log(f"downloading {url} -> {final_path}")
-            with self._connect(url) as response:
+            with self._connect(url, headers) as response:
                 total = int(response.headers.get("Content-Length") or 0)
                 digest = hashlib.sha256()
                 downloaded = 0

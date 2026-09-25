@@ -17,7 +17,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from model.build import minor_of, version_tuple
+from model.build import (FORK_BFORARTISTS, FORK_BLENDER, FORK_UPBGE,
+                         fork_series, version_tuple)
 
 # Variables de entorno con las que Blender permite reubicar sus carpetas. Son
 # la forma estándar de decirle a Blender "usa esta config" y hay que respetarlas
@@ -98,21 +99,56 @@ def python_for_version(version: str) -> str:
 
 # --------------------------------------------------------------- ubicaciones
 
-def config_base(platform: str, env: dict | None = None) -> Path:
-    """Carpeta que contiene una subcarpeta por versión de Blender.
+def config_base(platform: str, env: dict | None = None,
+                fork: str = FORK_BLENDER) -> Path:
+    """Carpeta que contiene una subcarpeta por versión de Blender (o del fork).
 
-    * **Linux**: ``~/.config/blender`` (o ``$XDG_CONFIG_HOME``).
-    * **Windows**: ``%APPDATA%\\Blender Foundation\\Blender``.
-    * **macOS**: ``~/Library/Application Support/Blender``.
+    Cada fork escribe su configuración en su propio sitio, con su propio
+    nombre (comprobado en su ``getUserDir``):
+
+    * **Bforartists**: ``~/.config/bforartists`` en Linux,
+      ``%APPDATA%\\Bforartists\\Bforartists`` en Windows y
+      ``~/Library/Application Support/Bforartists`` en macOS.
+    * **UPBGE**: ``~/.config/upbge``, ``%APPDATA%\\UPBGE\\Blender`` y
+      ``~/Library/Application Support/UPBGE``.
+
+    * **Blender**: ``~/.config/blender`` (o ``$XDG_CONFIG_HOME``),
+      ``%APPDATA%\\Blender Foundation\\Blender`` y
+      ``~/Library/Application Support/Blender``.
     """
     env = os.environ if env is None else env
+    if fork == FORK_BFORARTISTS:
+        return _fork_base(platform, env, linux="bforartists",
+                          macos="Bforartists",
+                          windows=("Bforartists", "Bforartists"))
+    if fork == FORK_UPBGE:
+        return _fork_base(platform, env, linux="upbge", macos="UPBGE",
+                          windows=("UPBGE", "Blender"))
+    base = env.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     if platform == "windows":
-        base = env.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-        return Path(base) / "Blender Foundation" / "Blender"
+        appdata = env.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+        return Path(appdata) / "Blender Foundation" / "Blender"
     if platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "Blender"
-    base = env.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     return Path(base) / "blender"
+
+
+def _fork_base(platform: str, env: dict, linux: str, macos: str,
+               windows: tuple) -> Path:
+    """Carpeta base de un fork, con el nombre que usa en cada sistema.
+
+    En Windows la configuración cuelga de ``%APPDATA%\\<organización>`` y, en
+    los dos forks, de una segunda carpeta con el nombre del programa
+    (``Bforartists\\Bforartists`` o ``UPBGE\\Blender``).
+    """
+    if platform == "windows":
+        appdata = env.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+        organization, subfolder = windows
+        return Path(appdata) / organization / subfolder
+    if platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / macos
+    base = env.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(base) / linux
 
 
 @dataclass
@@ -130,6 +166,9 @@ class BlenderConfig:
     config_dir: Path
     scripts_dir: Path
     extensions_dir: Path
+    # Fork del que es esta configuración ('' = Blender). Se usa sobre todo para
+    # saber a quién pertenece al migrar entre versiones.
+    fork: str = FORK_BLENDER
 
     @property
     def addons_dir(self) -> Path:
@@ -146,22 +185,26 @@ class BlenderConfig:
         return self.root.is_dir()
 
 
-def config_for(version: str, platform: str, env: dict | None = None) -> BlenderConfig:
+def config_for(version: str, platform: str, env: dict | None = None,
+               fork: str = FORK_BLENDER) -> BlenderConfig:
     """Ubica la carpeta de una versión, respetando los ``BLENDER_USER_*``.
 
     Blender usa ``mayor.menor`` como nombre de carpeta (``4.5`` para 4.5.13),
-    así que se normaliza la versión antes de construir la ruta. Cuando el
-    usuario fija una carpeta con una variable de entorno, esa ruta sustituye a
-    la subcarpeta correspondiente (no se le añade la versión).
+    así que se normaliza la versión antes de construir la ruta. Los forks usan
+    su propia base (``~/.config/bforartists``, ``~/.config/upbge``) y, en el
+    caso de UPBGE, la serie de Blender a la que equivale su versión (0.53 ->
+    5.3, ver ``model.build.fork_series``). Cuando el usuario fija una carpeta
+    con una variable de entorno, esa ruta sustituye a la subcarpeta
+    correspondiente (no se le añade la versión).
 
     ``BLENDER_USER_RESOURCES`` reemplaza la carpeta de la versión entera; si
     está definida, ``config``/``scripts``/``extensions`` cuelgan de ella.
     """
     env = os.environ if env is None else env
-    minor = minor_of(version) or version
+    minor = fork_series(fork, version) or version
     resources = (env.get(RESOURCES_ENV) or "").strip()
     root = Path(resources).expanduser() if resources else \
-        config_base(platform, env) / minor
+        config_base(platform, env, fork) / minor
 
     def _override(name: str, fallback: Path) -> Path:
         value = (env.get(name) or "").strip()
@@ -174,6 +217,7 @@ def config_for(version: str, platform: str, env: dict | None = None) -> BlenderC
         config_dir=_override(CONFIG_ENV, root / CONFIG_SUBDIR),
         scripts_dir=_override(SCRIPTS_ENV, root / SCRIPTS_SUBDIR),
         extensions_dir=_override(EXTENSIONS_ENV, root / EXTENSIONS_SUBDIR),
+        fork=fork,
     )
 
 

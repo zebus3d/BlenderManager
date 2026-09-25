@@ -17,31 +17,47 @@ funciones puras que se prueban con datos de mentira.
 import os
 from pathlib import Path
 
-from model.build import LTS_MINORS, minor_of
+from model.build import (FORK_BFORARTISTS, FORK_UPBGE, LTS_MINORS,
+                         fork_series, minor_of)
 
-# Los cuatro tipos que puede recibir una carpeta. Son los canales de Blender
-# menos los dos que no describen una compilación: "all" (no filtra) y
-# "favorites" (es transversal, lo marca el usuario a mano).
+# Los tipos que puede recibir una carpeta. Son los canales de Blender menos los
+# dos que no describen una compilación: "all" (no filtra) y "favorites" (es
+# transversal, lo marca el usuario a mano). Los dos últimos son forks: aunque
+# compartan número de versión con Blender, van a su propia carpeta y se ven en
+# su propia pestaña.
 TYPE_LTS = "lts"
 TYPE_STABLE = "stable"
 TYPE_DAILY = "daily"
 TYPE_EXPERIMENTAL = "experimental"
-BUILD_TYPES = (TYPE_LTS, TYPE_STABLE, TYPE_DAILY, TYPE_EXPERIMENTAL)
+TYPE_BFORARTISTS = "bforartists"
+TYPE_UPBGE = "upbge"
+BUILD_TYPES = (TYPE_LTS, TYPE_STABLE, TYPE_DAILY, TYPE_EXPERIMENTAL,
+               TYPE_BFORARTISTS, TYPE_UPBGE)
+
+# Tipos que solo existen para los forks. La interfaz los enseña únicamente
+# cuando el fork está activado (si no, ofrecería casillas para algo que no se
+# puede descargar).
+FORK_TYPES = {FORK_BFORARTISTS: TYPE_BFORARTISTS, FORK_UPBGE: TYPE_UPBGE}
 
 # Canales de la barra de pestañas. Viven aquí para que no se dupliquen; las
 # etiquetas traducidas son cosa de la interfaz.
-CHANNELS = ("all", "lts", "stable", "daily", "experimental", "favorites")
+CHANNELS = ("all", "lts", "stable", "daily", "experimental", "bforartists",
+            "upbge", "favorites")
 
 
 def type_of_build(build) -> str:
     """Tipo de una compilación de la tienda.
 
     El orden de las preguntas importa y es el mismo que tenía
-    ``api.filter_builds``: una rama experimental es experimental aunque su
-    número de versión sea el de una LTS, y una alfa de una serie LTS es una
-    diaria, no una LTS. Es decir, manda de dónde viene la compilación por
-    encima de cómo se llama.
+    ``api.filter_builds``: un fork es su propio tipo aunque se llame como una
+    LTS (Bforartists 5.2.0 es Bforartists, no la LTS de Blender 5.2), una rama
+    experimental es experimental aunque su número de versión sea el de una LTS,
+    y una alfa de una serie LTS es una diaria, no una LTS. Es decir, manda de
+    dónde viene la compilación por encima de cómo se llama.
     """
+    fork_type = FORK_TYPES.get(getattr(build, "fork", ""))
+    if fork_type:
+        return fork_type
     if getattr(build, "experimental", False):
         return TYPE_EXPERIMENTAL
     if getattr(build, "risk", "") != "stable":
@@ -52,7 +68,7 @@ def type_of_build(build) -> str:
 
 
 def type_from_marker(branch: str, version: str, name: str = "",
-                     risk: str = "") -> str:
+                     risk: str = "", fork: str = "") -> str:
     """Tipo de una instalación, a partir de lo que sepamos de ella.
 
     ``risk`` es el que anotamos en el marcador al instalarla, y cuando está es
@@ -65,9 +81,16 @@ def type_from_marker(branch: str, version: str, name: str = "",
     * sin rama anotada nos queda el nombre de la carpeta, donde las diarias
       llevan ``alpha``, ``beta`` o ``daily``.
 
+    ``fork`` manda sobre todo lo demás: una carpeta de Bforartists o UPBGE es
+    de ese fork aunque su ``risk`` sea ``stable`` y su versión sea la de una
+    LTS, porque va a su propia carpeta.
+
     Sin nada de eso se da por estable, que es lo que era antes de existir el
     marcador y lo menos sorprendente.
     """
+    fork_type = FORK_TYPES.get(fork)
+    if fork_type:
+        return fork_type
     branch = (branch or "").strip()
     if branch and branch != "main" and not branch.startswith("v"):
         return TYPE_EXPERIMENTAL
@@ -89,6 +112,7 @@ def type_of_installed(entry) -> str:
         getattr(entry, "version", ""),
         getattr(entry, "name", ""),
         getattr(entry, "risk", ""),
+        getattr(entry, "fork", ""),
     )
 
 
@@ -134,11 +158,33 @@ def resolve_destination(folders, build_type: str) -> str:
     return owner.path if owner is not None else ""
 
 
-def orphan_types(folders) -> list:
-    """Tipos que no recibe ninguna carpeta, en el orden de ``BUILD_TYPES``.
+def orphan_types(folders, types=None) -> list:
+    """Tipos que no recibe ninguna carpeta, en el orden de ``types``.
 
     La interfaz los avisa **antes** de que el usuario intente descargar uno:
-    es la contrapartida de no tener cadena de reservas.
+    es la contrapartida de no tener cadena de reservas. ``types`` permite
+    mirar solo los tipos activos (los de los forks apagados no deben salir
+    como huérfanos: nadie puede descargarlos todavía).
     """
-    return [build_type for build_type in BUILD_TYPES
+    candidate = BUILD_TYPES if types is None else types
+    return [build_type for build_type in candidate
             if owner_of(folders, build_type) is None]
+
+
+def active_types(forks=()) -> tuple:
+    """Tipos de carpeta que tienen sentido con esos forks activados.
+
+    Los de Blender están siempre; los de un fork solo cuando el usuario lo
+    enciende en Ajustes. La usa la biblioteca de carpetas para no ofrecer una
+    casilla de algo que no se puede descargar.
+    """
+    enabled = set(forks or ())
+    return tuple(build_type for build_type in BUILD_TYPES
+                 if build_type not in FORK_TYPES.values()
+                 or build_type in {FORK_TYPES[f] for f in enabled
+                                   if f in FORK_TYPES})
+
+
+def config_series(fork: str, version: str) -> str:
+    """Serie de la carpeta de configuración de un fork (ver ``fork_series``)."""
+    return fork_series(fork, version)

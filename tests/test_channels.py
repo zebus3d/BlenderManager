@@ -28,10 +28,11 @@ class _Carpeta:
         return self.writable and build_type in self.types
 
 
-def _build(version="5.2.1", branch="v52", risk="stable", experimental=False):
+def _build(version="5.2.1", branch="v52", risk="stable", experimental=False,
+           fork=""):
     return Build(version=version, branch=branch, risk=risk, platform="linux",
                  arch="x86_64", url="", filename="x.tar.xz",
-                 experimental=experimental)
+                 experimental=experimental, fork=fork)
 
 
 class TipoDeCompilacionTest(unittest.TestCase):
@@ -55,6 +56,14 @@ class TipoDeCompilacionTest(unittest.TestCase):
         build = _build("5.2.0", "geometry-nodes", risk="stable",
                        experimental=True)
         self.assertEqual(ch.type_of_build(build), ch.TYPE_EXPERIMENTAL)
+
+    def test_un_fork_tiene_su_propio_tipo(self):
+        """Bforartists 5.2.0 no es la LTS de Blender 5.2, aunque se llame igual."""
+        self.assertEqual(ch.type_of_build(_build("5.2.0", fork="bforartists")),
+                         ch.TYPE_BFORARTISTS)
+        self.assertEqual(ch.type_of_build(_build("0.53", "upbge-weekly",
+                                                 risk="alpha", fork="upbge")),
+                         ch.TYPE_UPBGE)
 
 
 class TipoDeInstalacionTest(unittest.TestCase):
@@ -87,6 +96,15 @@ class TipoDeInstalacionTest(unittest.TestCase):
 
     def test_sin_nada_se_da_por_estable(self):
         self.assertEqual(ch.type_from_marker("", "5.1.2", ""), ch.TYPE_STABLE)
+
+    def test_una_instalacion_de_fork_es_de_su_tipo(self):
+        self.assertEqual(ch.type_from_marker("bforartists", "5.2.0",
+                                             "Bforartists-5.2.0-Linux",
+                                             "stable", "bforartists"),
+                         ch.TYPE_BFORARTISTS)
+        self.assertEqual(ch.type_from_marker("upbge-weekly", "0.53", "x",
+                                             "alpha", "upbge"),
+                         ch.TYPE_UPBGE)
 
 
 class DestinoTest(unittest.TestCase):
@@ -123,7 +141,18 @@ class DestinoTest(unittest.TestCase):
     def test_tipos_huerfanos_en_orden(self):
         carpetas = [_Carpeta("/ssd", [ch.TYPE_STABLE])]
         self.assertEqual(ch.orphan_types(carpetas),
+                         [ch.TYPE_LTS, ch.TYPE_DAILY, ch.TYPE_EXPERIMENTAL,
+                          ch.TYPE_BFORARTISTS, ch.TYPE_UPBGE])
+
+    def test_los_forks_apagados_no_salen_como_huerfanos(self):
+        """Sin forks activados no hay que avisar de que no tienen carpeta."""
+        carpetas = [_Carpeta("/ssd", [ch.TYPE_STABLE])]
+        self.assertEqual(ch.orphan_types(carpetas, ch.active_types([])),
                          [ch.TYPE_LTS, ch.TYPE_DAILY, ch.TYPE_EXPERIMENTAL])
+        self.assertEqual(
+            ch.orphan_types(carpetas, ch.active_types(["bforartists"])),
+            [ch.TYPE_LTS, ch.TYPE_DAILY, ch.TYPE_EXPERIMENTAL,
+             ch.TYPE_BFORARTISTS])
 
     def test_sin_huerfanos_cuando_una_carpeta_lo_coge_todo(self):
         """Es lo que hereda la carpeta de siempre al actualizar la app."""

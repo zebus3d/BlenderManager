@@ -28,7 +28,7 @@ import urllib.request
 from typing import NamedTuple, Optional
 
 from model.build import minor_of
-from services import tls
+from services import forks, tls
 from services.downloader import log
 
 RELEASE_BASE = "https://download.blender.org/release"
@@ -61,6 +61,9 @@ class Source(NamedTuple):
     label: str
     url: str
     checksum: Optional[str] = None
+    # Cabeceras extra que exige la fuente (el WebDAV público de Bforartists,
+    # por ejemplo). El resto van con el User-Agent de siempre.
+    headers: Optional[dict] = None
 
 
 def release_url(build) -> Optional[str]:
@@ -132,7 +135,8 @@ def _speed(url: str, timeout: int = PROBE_TIMEOUT) -> Optional[float]:
 
 def candidates(build) -> list:
     """Las fuentes posibles, la del CDN primero (es la de siempre)."""
-    opciones = [Source(cdn_label(), build.url, build.checksum)]
+    opciones = [Source(cdn_label(), build.url, build.checksum,
+                       forks.download_headers(build.url))]
     url = release_url(build)
     if url:
         opciones.append(Source("Blender release (Cloudflare)", url, None))

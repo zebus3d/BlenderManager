@@ -160,13 +160,14 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         pestana (que es la que se abre por defecto si hay versiones).
         """
         class _Entry:
-            def __init__(self, name, version, branch, lts):
+            def __init__(self, name, version, branch, lts, fork=""):
                 self.name = name
                 self.version = version
                 self.branch = branch
                 self.path = "/tmp/" + name
                 self.is_lts = lts
                 self.can_launch = True
+                self.fork = fork
                 self.favorite_key = f"{branch}|{version}"
 
         window = self._window()
@@ -196,6 +197,28 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         window.channel = "all"
         window.search = "5.2"
         self.assertEqual([b.version for b in window._filtered()], ["5.2.1"])
+
+    def test_el_selector_de_idioma_guarda_codigo_no_texto(self):
+        """Elegir idioma tenía que guardar su código, no buscar por la etiqueta.
+
+        Las etiquetas se traducen y cambian según el idioma activo, así que
+        comparar por el texto dejaba el ajuste en "auto" en cuanto el idioma no
+        era inglés. El identificador tiene que viajar como dato del combo.
+        """
+        import i18n
+        from ui.widgets.main_window import MainWindow
+        from ui.widgets.shell import LANGUAGE_IDS
+
+        window = MainWindow()
+        self.assertEqual(window.language_combo.currentData(),
+                         window.settings.language)
+        for lang_id in i18n.SUPPORTED:
+            index = window.language_combo.findData(lang_id)
+            self.assertGreaterEqual(index, 0, lang_id)
+            window.language_combo.setCurrentIndex(index)
+            self.assertEqual(window.settings.language, lang_id)
+        self.assertEqual(set(LANGUAGE_IDS),
+                         {"auto", *i18n.SUPPORTED})
 
     def test_la_arquitectura_del_filtro_es_la_normalizada(self):
         # La API llama "amd64" a la arquitectura de Windows, pero las builds se
@@ -272,6 +295,122 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
 
         self.assertEqual(window.status_label.text(),
                          tr("Could not open the browser"))
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class ForkUiTests(SettingsIsolated, unittest.TestCase):
+    """Las pestañas, casillas y tarjetas de Bforartists y UPBGE."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def setUp(self):
+        super().setUp()
+        import i18n
+
+        i18n.set_language("en")
+        self.addCleanup(i18n.set_language, "en")
+
+    def _window(self):
+        from PySide6.QtTest import QTest
+
+        from ui.widgets.main_window import MainWindow
+
+        with mock.patch("ui.widgets.downloads.api.get_builds", return_value=[]):
+            window = MainWindow()
+            QTest.qWait(150)
+        return window
+
+    def _fork_builds(self):
+        from model.build import Build
+
+        return [
+            Build("5.2.0", "bforartists", "stable", "linux", "x86_64", "u",
+                  "Bforartists-5.2.0-Linux.tar.xz", fork="bforartists"),
+            Build("0.53", "upbge-weekly", "alpha", "linux", "x86_64", "u",
+                  "upbge-0.53-alpha-linux-x86_64.tar.gz", experimental=True,
+                  fork="upbge"),
+        ]
+
+    def test_las_pestanas_de_fork_nacen_ocultas(self):
+        from ui.widgets.shell import CHANNELS
+
+        window = self._window()
+        for index, (key, _) in enumerate(CHANNELS):
+            if key in ("bforartists", "upbge"):
+                self.assertFalse(window.channel_tabs.isTabVisible(index), key)
+
+    def test_encender_un_fork_ensena_su_pestana(self):
+        from ui.widgets.shell import CHANNELS
+
+        window = self._window()
+        window.bforartists_switch.setChecked(True)
+        index = next(i for i, (key, _) in enumerate(CHANNELS)
+                     if key == "bforartists")
+        self.assertTrue(window.channel_tabs.isTabVisible(index))
+
+    def test_los_filtros_separan_los_forks(self):
+        window = self._window()
+        window.builds = self._fork_builds()
+        window.channel = "bforartists"
+        self.assertEqual([b.fork for b in window._filtered()], ["bforartists"])
+        window.channel = "all"
+        self.assertEqual(window._filtered(), [])
+        window.channel = "upbge"
+        self.assertEqual([b.fork for b in window._filtered()], ["upbge"])
+
+    def test_apagar_el_fork_saca_su_canal_puesto(self):
+        window = self._window()
+        window.bforartists_switch.setChecked(True)
+        window.channel = "bforartists"
+        window.bforartists_switch.setChecked(False)
+        self.assertEqual(window.channel, "all")
+
+    def test_las_casillas_de_fork_solo_salen_con_el_fork_activo(self):
+        from services import channels
+
+        window = self._window()
+        window.settings.folders[0].types = list(channels.BUILD_TYPES)
+        window._rebuild_folder_rows()
+        row = next(iter(window.folder_rows.values()))
+        self.assertNotIn(channels.TYPE_BFORARTISTS, row.checks)
+
+        window.bforartists_switch.setChecked(True)
+        row = next(iter(window.folder_rows.values()))
+        self.assertIn(channels.TYPE_BFORARTISTS, row.checks)
+        self.assertNotIn(channels.TYPE_UPBGE, row.checks)
+
+    def test_la_tarjeta_de_un_fork_lleva_su_logo_y_su_nombre(self):
+        from ui.widgets.cards import GridBuildCard
+
+        bfa = self._fork_builds()[0]
+        card = GridBuildCard(bfa, False, False, 1.0, marked=False)
+        self.assertEqual(card.title_text, "Bforartists 5.2.0")
+        self.assertEqual(card.channel_text, "Bforartists")
+
+    def test_las_notas_de_un_fork_usan_su_url(self):
+        from ui.widgets import downloads
+        from ui.widgets.cards import _info_button
+
+        class _Sig:
+            def __init__(self):
+                self.items = []
+
+            def emit(self, value):
+                self.items.append(value)
+
+        signal = _Sig()
+        bfa = self._fork_builds()[0]
+        button = _info_button(bfa, signal)
+        button.click()
+        self.assertEqual(signal.items, [bfa])
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
@@ -717,7 +856,8 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets.main_window import MIN_ZOOM
 
         entry = SimpleNamespace(name="blender-5.2.0", version="5.2.0",
-                                path="/tmp/blender-5.2.0")
+                                path="/tmp/blender-5.2.0", fork="",
+                                fork_name="Blender")
         card = GridInstalledCard(entry, False, MIN_ZOOM)
         card.show()
         delete = next(b for b in card.findChildren(CardButton)
@@ -1442,8 +1582,9 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(window.settings.folders[0].types, [])
         window._on_folder_writable_toggled("/tmp/datos", True)
         self.assertEqual(window.settings.folders[0].types,
-                         list(channels.BUILD_TYPES))
-        self.assertEqual(channels.orphan_types(window.settings.folders), [])
+                         list(window.settings.active_build_types()))
+        self.assertEqual(channels.orphan_types(
+            window.settings.folders, window.settings.active_build_types()), [])
 
     def test_reabrir_el_candado_no_roba_tipos_a_otra_carpeta(self):
         """Solo recupera los que no tenga nadie."""
@@ -3095,6 +3236,7 @@ def _fake_installed(version, name=None):
         path=Path("/tmp") / f"blender-{version}",
         version=version,
         executable=Path("/tmp") / f"blender-{version}" / "blender",
+        fork="",
     )
 
 
@@ -3162,7 +3304,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         from services import blender_addons as baddons
         from services import blender_snapshots as bsnap
 
-        def fake_config_for(version, platform, env=None):
+        def fake_config_for(version, platform, env=None, fork=""):
             series = minor_of(version)
             for key, value in configs.items():
                 if minor_of(key) == series:

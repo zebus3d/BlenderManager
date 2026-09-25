@@ -184,6 +184,47 @@ class SettingsViewMixin:
         self.archive_switch.toggled.connect(self._on_archive_toggled)
         row2.addWidget(self.archive_switch)
         lay.addLayout(row2)
+
+        # Forks de Blender: otros programas que la app puede descargar y
+        # lanzar igual que Blender. Van apagados por defecto (son otras apps) y
+        # al encenderlos aparecen su pestaña, su tipo de carpeta y su fuente.
+        lay.addSpacing(8)
+        forks_title = QLabel(tr("Other Blender-based apps"))
+        forks_title.setObjectName("Muted")
+        lay.addWidget(forks_title)
+
+        row_bfa = QHBoxLayout()
+        row_bfa.addWidget(QLabel(tr("Bforartists")))
+        row_bfa.addStretch()
+        self.bforartists_switch = SwitchPill(
+            self.settings.enable_bforartists,
+            tooltip=tr("Show Bforartists versions in the cloud.\n"
+                       "It is a fork of Blender with a redesigned interface."))
+        self.bforartists_switch.toggled.connect(self._on_bforartists_toggled)
+        row_bfa.addWidget(self.bforartists_switch)
+        lay.addLayout(row_bfa)
+
+        row_upbge = QHBoxLayout()
+        row_upbge.addWidget(QLabel(tr("UPBGE")))
+        row_upbge.addStretch()
+        self.upbge_switch = SwitchPill(
+            self.settings.enable_upbge,
+            tooltip=tr("Show UPBGE versions in the cloud.\n"
+                       "It is the fork that keeps the Blender game engine "
+                       "alive."))
+        self.upbge_switch.toggled.connect(self._on_upbge_toggled)
+        row_upbge.addWidget(self.upbge_switch)
+        lay.addLayout(row_upbge)
+
+        forks_hint = QLabel(tr(
+            "Bforartists and UPBGE are separate programs based on Blender.\n"
+            "When you turn one on, its tab appears in the cloud and it can be "
+            "downloaded, installed and launched like any other version.\n"
+            "Its files go to its own folder (Settings > Folders)."))
+        forks_hint.setObjectName("Muted")
+        forks_hint.setWordWrap(True)
+        lay.addWidget(forks_hint)
+
         self._refresh_dest_summary()
         return card
 
@@ -194,11 +235,17 @@ class SettingsViewMixin:
         row3.addWidget(QLabel(tr("Language")))
         row3.addStretch()
         self.language_combo = QComboBox()
-        self.language_combo.addItems([tr(v) for v in LANGUAGE_IDS.values()])
-        self.language_combo.setCurrentText(self.language_label)
+        # El identificador va como **dato** de cada elemento, no en el texto: el
+        # texto se traduce (y cambia según el idioma activo), así que buscar por
+        # la etiqueta era frágil y con más idiomas dejaba el ajuste en "auto".
+        for lang_id, english in LANGUAGE_IDS.items():
+            self.language_combo.addItem(tr(english), lang_id)
+        index = self.language_combo.findData(self.settings.language)
+        self.language_combo.setCurrentIndex(index if index >= 0 else 0)
         self.language_combo.setToolTip(tr(
             "Language of the interface.\nIt changes when you restart the app."))
-        self.language_combo.currentTextChanged.connect(self._on_language_changed)
+        self.language_combo.currentIndexChanged.connect(
+            self._on_language_changed)
         row3.addWidget(self.language_combo)
         lay.addLayout(row3)
 
@@ -500,6 +547,20 @@ class SettingsViewMixin:
         self.settings.delete_archive = value
         self.settings.save()
 
+    def _on_bforartists_toggled(self, value: bool) -> None:
+        """Enciende/apaga Bforartists y repinta pestañas y casillas."""
+        self.settings.enable_bforartists = value
+        self.settings.save()
+        self.apply_enabled_forks()
+        self._rebuild_folder_rows()
+
+    def _on_upbge_toggled(self, value: bool) -> None:
+        """Enciende/apaga UPBGE y repinta pestañas y casillas."""
+        self.settings.enable_upbge = value
+        self.settings.save()
+        self.apply_enabled_forks()
+        self._rebuild_folder_rows()
+
     def _on_close_to_tray_toggled(self, value: bool) -> None:
         self.close_to_tray = value
         self.settings.close_to_tray = value
@@ -548,12 +609,13 @@ class SettingsViewMixin:
         self.settings.launch_env = text
         self.settings.save()
 
-    def _on_language_changed(self, label: str) -> None:
-        for lang_id, english in LANGUAGE_IDS.items():
-            if tr(english) == label:
-                self.settings.language = lang_id
-                self.settings.save()
-                break
+    def _on_language_changed(self, index: int) -> None:
+        """Guarda el idioma elegido (el identificador viene como dato del combo)."""
+        lang_id = self.language_combo.itemData(index)
+        if not lang_id:
+            return
+        self.settings.language = lang_id
+        self.settings.save()
 
     def _on_reset_zoom_changed(self, percent: int) -> None:
         """Mueve el destino del reset: etiqueta en vivo, guardado al soltar.

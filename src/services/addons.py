@@ -74,7 +74,8 @@ def list_addons(entry, platform: str, env=None) -> list:
     y se cruza por ``addon_id_of``: el módulo puede llevar repositorio
     (``bl_ext.<repo>.<id>``) y no coincidir literalmente con el de la carpeta.
     """
-    config = bc.config_for(entry.version, platform, env)
+    config = bc.config_for(entry.version, platform, env,
+                          fork=getattr(entry, "fork", ""))
     enabled = set()
     executable = getattr(entry, "executable", None)
     if executable:
@@ -118,7 +119,8 @@ def install(entry, source, platform: str, env=None) -> dict:
     source = Path(source)
     if not source.is_file():
         raise AddonError("missing_file", str(source))
-    config = bc.config_for(entry.version, platform, env)
+    config = bc.config_for(entry.version, platform, env,
+                          fork=getattr(entry, "fork", ""))
     suffix = source.suffix.lower()
 
     if suffix == ".py":
@@ -170,7 +172,8 @@ def link(entry, folder, platform: str, env=None) -> dict:
     folder = Path(folder)
     if not folder.is_dir():
         raise AddonError("missing_folder", str(folder))
-    config = bc.config_for(entry.version, platform, env)
+    config = bc.config_for(entry.version, platform, env,
+                          fork=getattr(entry, "fork", ""))
     if (folder / bc.MANIFEST_NAME).is_file():
         manifest = baddons.read_manifest(folder)
         addon_id = str(manifest.get("id") or folder.name)

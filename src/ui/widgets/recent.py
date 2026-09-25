@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from i18n import tr
-from model.build import minor_of
+from model.build import fork_label, fork_series
 from services import opener
 from services import recent as recent_service
 from ui import icons
@@ -190,10 +190,19 @@ class RecentView(QWidget):
             self.body.addWidget(muted_note(tr("No recent files yet.")))
             return
         for group in groups:
+            # Las versiones de esa serie **y de ese fork**: una serie 5.2 de
+            # Bforartists no comparte recientes con la de Blender, aunque el
+            # número coincida. Se compara por la serie de configuración
+            # (``fork_series``), que es la que agrupó el servicio: en UPBGE
+            # 0.53 la serie es 5.3 y ``minor_of`` daría 0.53.
             versions = [entry for entry in self.installed
-                        if minor_of(getattr(entry, "version", "") or "")
-                        == group.series]
-            header = QLabel(tr("Blender {version}", version=group.version))
+                        if fork_series(getattr(entry, "fork", "") or "",
+                                       getattr(entry, "version", "") or "")
+                        == group.series
+                        and (getattr(entry, "fork", "") or "") == group.fork]
+            header = QLabel(tr("{name} {version}",
+                               name=fork_label(group.fork),
+                               version=group.version))
             header.setObjectName("Muted")
             self.body.addWidget(header)
             for item in group.files:

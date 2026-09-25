@@ -16,39 +16,46 @@ from PySide6.QtWidgets import (
 )
 
 from i18n import tr
+from model.build import FORK_BLENDER
 from paths import ASSETS_DIR
 from ui import icons
 from ui import theme as t
 from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
 from ui.widgets.labels import EditableLabel, ElidedLabel
 
-_LOGO = ASSETS_DIR / "images" / "blender_logo.png"
+# Un logo por fork. El de Blender está en el centro; Bforartists y UPBGE traen
+# el suyo, porque son programas distintos y la tarjeta tiene que decir cuál es
+# antes de leer el texto.
+_LOGOS = {
+    FORK_BLENDER: ASSETS_DIR / "images" / "blender_logo.png",
+    "bforartists": ASSETS_DIR / "images" / "bforartists_logo.png",
+    "upbge": ASSETS_DIR / "images" / "upbge_logo.png",
+}
 
-# Logo de Blender cacheado. Antes cada tarjeta hacía ``QPixmap(_LOGO)`` al
-# construirse: al mover el zoom se reconstruye la rejilla entera cada pocos
-# ticks, así que eran cientos de lecturas y decodificaciones del mismo PNG por
-# segundo (y en Windows cada lectura pasa por el antivirus). Con el origen
-# cargado una vez y las versiones escaladas/atenuadas guardadas por tamaño, cada
-# reconstrucción reutiliza el pixmap en vez de rehacerlo.
-_logo_source = None
+# Los PNG se cargan una vez por fork y las versiones escaladas/atenuadas se
+# guardan por (fork, tamaño, atenuado). Antes cada tarjeta hacía
+# ``QPixmap(_LOGO)`` al construirse: al mover el zoom se reconstruye la rejilla
+# entera cada pocos ticks, así que eran cientos de lecturas y decodificaciones
+# del mismo PNG por segundo (y en Windows cada lectura pasa por el antivirus).
+_logo_sources: dict = {}
 _logo_cache: dict = {}
 
 
-def _logo_source_pixmap() -> QPixmap:
-    """El PNG de Blender cargado una sola vez."""
-    global _logo_source
-    if _logo_source is None:
-        _logo_source = QPixmap(str(_LOGO))
-    return _logo_source
+def _logo_source_pixmap(fork: str) -> QPixmap:
+    """El PNG del fork cargado una sola vez."""
+    fork = fork or FORK_BLENDER
+    if fork not in _logo_sources:
+        _logo_sources[fork] = QPixmap(str(_LOGOS.get(fork, _LOGOS[FORK_BLENDER])))
+    return _logo_sources[fork]
 
 
-def _logo_pixmap(size: int, dim: bool) -> QPixmap:
-    """Logo escalado a ``size`` (y atenuado si ``dim``), desde la caché."""
-    key = (size, dim)
+def _logo_pixmap(size: int, dim: bool, fork: str = FORK_BLENDER) -> QPixmap:
+    """Logo del fork escalado a ``size`` (y atenuado si ``dim``), desde la caché."""
+    key = (fork or FORK_BLENDER, size, dim)
     cached = _logo_cache.get(key)
     if cached is not None:
         return cached
-    pix = _logo_source_pixmap()
+    pix = _logo_source_pixmap(fork)
     if pix.isNull():
         return pix
     scaled = pix.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -161,11 +168,16 @@ def _favorite_star(marked: bool, on_toggle) -> StarButton:
     return star
 
 
-def _info_button(version: str, signal) -> IconLinkButton:
-    """La "i" de las notas de la versión (misma diana que la estrella: 24x24)."""
+def _info_button(item, signal) -> IconLinkButton:
+    """La "i" de las notas de la versión (misma diana que la estrella: 24x24).
+
+    Emite el objeto entero (``Build`` o ``InstalledBuild``) y no solo la
+    versión: las notas de un fork no son las de Blender y la ventana necesita
+    saber de quién son (y, en UPBGE, la URL exacta de su release).
+    """
     info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
     info.setFont(_icon_font())
-    info.clicked.connect(lambda: signal.emit(version))
+    info.clicked.connect(lambda: signal.emit(item))
     return info
 
 
@@ -209,9 +221,9 @@ def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
     return result
 
 
-def _logo_label(size: int, dim: bool) -> QLabel:
+def _logo_label(size: int, dim: bool, fork: str = FORK_BLENDER) -> QLabel:
     label = QLabel()
-    pix = _logo_pixmap(size, dim)
+    pix = _logo_pixmap(size, dim, fork)
     if not pix.isNull():
         label.setPixmap(pix)
     logo_shadow(label, size)
@@ -244,7 +256,7 @@ class BaseBuildCard(_HoverCard, QFrame):
     """Base común de las tarjetas de compilaciones."""
 
     action_clicked = Signal(object)   # build
-    notes_clicked = Signal(str)       # version
+    notes_clicked = Signal(object)    # build
     favorite_toggled = Signal(object, bool)   # build, marcada
     console_toggled = Signal(object, bool)    # build, con consola
 
@@ -262,10 +274,17 @@ class BaseBuildCard(_HoverCard, QFrame):
         self.setAttribute(Qt.WA_Hover, True)
         card_shadow(self)
 
-        self.title_text = build.version
+        self.fork = getattr(build, "fork", FORK_BLENDER) or FORK_BLENDER
+        # Nombre visible del programa ("Blender", "Bforartists", "UPBGE"): el
+        # título y el meta lo usan para que una Bforartists 5.2 no se confunda
+        # con un Blender 5.2.
+        self.program = build.fork_name
+        self.title_text = f"{self.program} {build.version}"
         self.version = build.version
-        if build.experimental:
-            self.channel_text = build.branch
+        if self.fork or build.experimental:
+            # Los forks y las experimentales no tienen los canales de Blender:
+            # la insignia enseña de dónde vienen (el fork, o la rama).
+            self.channel_text = self.program if self.fork else build.branch
             self.is_lts = False
         else:
             if build.is_lts:
@@ -278,7 +297,7 @@ class BaseBuildCard(_HoverCard, QFrame):
             self.is_lts = build.is_lts
 
         details = [build.human_size]
-        if not build.experimental:
+        if not build.experimental and not self.fork:
             details.append(build.branch)
         details.append(build.arch)
         self.meta_text = "  ·  ".join(details)
@@ -289,7 +308,7 @@ class BaseBuildCard(_HoverCard, QFrame):
         return label
 
     def _info(self) -> IconLinkButton:
-        return _info_button(self.version, self.notes_clicked)
+        return _info_button(self.build, self.notes_clicked)
 
     def _star(self, marked: bool) -> StarButton:
         return _favorite_star(
@@ -317,13 +336,13 @@ class BuildCard(BaseBuildCard):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(16, 9, 12, 9)
         lay.setSpacing(12)
-        lay.addWidget(_logo_label(44, dim=not installed))
+        lay.addWidget(_logo_label(44, dim=not installed, fork=self.fork))
 
         text_col = QVBoxLayout()
         text_col.setSpacing(3)
         top = QHBoxLayout()
         top.setSpacing(10)
-        title = ElidedLabel(f"Blender {self.version}", Qt.ElideMiddle)
+        title = ElidedLabel(self.title_text, Qt.ElideMiddle)
         title.setObjectName("Title")
         if not installed:
             title.setStyleSheet("color: rgba(230,230,230,0.6);")
@@ -401,11 +420,11 @@ class GridBuildCard(BaseBuildCard):
         lay.setContentsMargins(m, m, m, m)
         lay.setSpacing(int(5 * zoom))
 
-        logo = _logo_label(int(60 * zoom), dim=not installed)
+        logo = _logo_label(int(60 * zoom), dim=not installed, fork=self.fork)
         logo.setAlignment(Qt.AlignHCenter)
         lay.addWidget(logo)
 
-        title = ElidedLabel(f"Blender {self.version}", Qt.ElideMiddle)
+        title = ElidedLabel(self.title_text, Qt.ElideMiddle)
         title.setObjectName("Title")
         title.setAlignment(Qt.AlignHCenter)
         if not installed:
@@ -452,7 +471,7 @@ class InstalledCard(_HoverCard, QFrame):
 
     launch_clicked = Signal(object)   # entry
     delete_clicked = Signal(object)   # entry
-    notes_clicked = Signal(str)       # version
+    notes_clicked = Signal(object)    # entry
     favorite_toggled = Signal(object, bool)   # entry, marcada
     update_clicked = Signal(object, object)   # entry, build nueva
     rename_requested = Signal(object, str)    # entry, nombre nuevo
@@ -463,6 +482,8 @@ class InstalledCard(_HoverCard, QFrame):
                  console: bool | None = None):
         super().__init__(parent)
         self.entry = entry
+        self.fork = getattr(entry, "fork", FORK_BLENDER) or FORK_BLENDER
+        self.program = entry.fork_name
         self.setObjectName("Card")
         self.setProperty("zebra", "true" if zebra else "false")
         self.setProperty("installed", "true")
@@ -475,7 +496,7 @@ class InstalledCard(_HoverCard, QFrame):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(16, 9, 12, 9)
         lay.setSpacing(12)
-        lay.addWidget(_logo_label(44, dim=False))
+        lay.addWidget(_logo_label(44, dim=False, fork=self.fork))
 
         text_col = QVBoxLayout()
         text_col.setSpacing(3)
@@ -487,7 +508,7 @@ class InstalledCard(_HoverCard, QFrame):
         # El "solo lectura" se cuela en la línea que YA existe, no en una fila
         # nueva: la tarjeta tiene que seguir midiendo 68 px como las de la
         # tienda (hay un test que lo vigila).
-        detail = f"Blender {entry.version}   ·   {entry.path}"
+        detail = f"{self.program} {entry.version}   ·   {entry.path}"
         if read_only:
             detail += "   ·   " + tr("Read-only")
         meta = ElidedLabel(detail, Qt.ElideRight)
@@ -505,7 +526,7 @@ class InstalledCard(_HoverCard, QFrame):
         # pestaña. Detrás, el grupo de acciones.
         lay.addWidget(_favorite_star(
             marked, lambda on: self.favorite_toggled.emit(entry, on)))
-        lay.addWidget(_info_button(entry.version, self.notes_clicked))
+        lay.addWidget(_info_button(entry, self.notes_clicked))
 
         if update is not None:
             update_btn = CardButton(
@@ -540,7 +561,7 @@ class GridInstalledCard(_HoverCard, QFrame):
 
     launch_clicked = Signal(object)
     delete_clicked = Signal(object)
-    notes_clicked = Signal(str)
+    notes_clicked = Signal(object)
     favorite_toggled = Signal(object, bool)   # entry, marcada
     update_clicked = Signal(object, object)   # entry, build nueva
     rename_requested = Signal(object, str)    # entry, nombre nuevo
@@ -551,6 +572,8 @@ class GridInstalledCard(_HoverCard, QFrame):
                  console: bool | None = None):
         super().__init__(parent)
         self.entry = entry
+        self.fork = getattr(entry, "fork", FORK_BLENDER) or FORK_BLENDER
+        self.program = entry.fork_name
         self.setObjectName("Card")
         self.setProperty("zebra", "true" if zebra else "false")
         self.setProperty("installed", "true")
@@ -567,7 +590,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         lay.setContentsMargins(m, m, m, m)
         lay.setSpacing(int(5 * zoom))
 
-        logo = _logo_label(int(60 * zoom), dim=False)
+        logo = _logo_label(int(60 * zoom), dim=False, fork=self.fork)
         logo.setAlignment(Qt.AlignHCenter)
         lay.addWidget(logo)
 
@@ -578,7 +601,7 @@ class GridInstalledCard(_HoverCard, QFrame):
             lambda name: self.rename_requested.emit(self.entry, name))
         lay.addWidget(title)
 
-        meta = ElidedLabel(f"Blender {entry.version}", Qt.ElideRight)
+        meta = ElidedLabel(f"{self.program} {entry.version}", Qt.ElideRight)
         meta.setObjectName("Muted")
         meta.setAlignment(Qt.AlignHCenter)
         lay.addWidget(meta)
@@ -598,7 +621,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         row.setSpacing(int(5 * zoom))
         row.addWidget(_favorite_star(
             marked, lambda on: self.favorite_toggled.emit(entry, on)))
-        row.addWidget(_info_button(entry.version, self.notes_clicked))
+        row.addWidget(_info_button(entry, self.notes_clicked))
         if update is not None:
             # En rejilla el aviso va sin texto: un botón ancho pediría más
             # ancho mínimo y ensancharía su columna (justo lo que arreglamos

@@ -16,14 +16,17 @@ from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, CheckPill
 from ui.widgets.labels import ElidedLabel
 
-# Etiqueta de cada tipo. Las cuatro ya existían traducidas para las pestañas de
-# canal, así que se reutilizan tal cual (mismo nombre en los dos sitios: lo que
-# el usuario ve en la pestaña "LTS" es lo que va a parar a la carpeta "LTS").
+# Etiqueta de cada tipo. Las cuatro de Blender ya existían traducidas para las
+# pestañas de canal, así que se reutilizan tal cual (mismo nombre en los dos
+# sitios: lo que el usuario ve en la pestaña "LTS" es lo que va a parar a la
+# carpeta "LTS"). Los forks usan su nombre propio, que no se traduce.
 TYPE_LABELS = {
     channels.TYPE_LTS: "LTS",
     channels.TYPE_STABLE: "Stable",
     channels.TYPE_DAILY: "Daily",
     channels.TYPE_EXPERIMENTAL: "Experimental",
+    channels.TYPE_BFORARTISTS: "Bforartists",
+    channels.TYPE_UPBGE: "UPBGE",
 }
 
 # Tooltips de las casillas. Cada uno dice qué son esas compilaciones y qué
@@ -47,6 +50,14 @@ TYPE_TOOLTIPS = {
     channels.TYPE_EXPERIMENTAL: (
         "Experimental: branches with features that are not in any release yet.\n"
         "Blender rarely publishes them, so this is usually empty.\n"
+        "Only one folder can take them."),
+    channels.TYPE_BFORARTISTS: (
+        "Bforartists: a fork of Blender with a redesigned interface.\n"
+        "Tick this and every Bforartists you download lands in this folder.\n"
+        "Only one folder can take them."),
+    channels.TYPE_UPBGE: (
+        "UPBGE: the fork that keeps the Blender game engine alive.\n"
+        "Tick this and every UPBGE you download lands in this folder.\n"
         "Only one folder can take them."),
 }
 
@@ -108,7 +119,7 @@ class FolderRow(QFrame):
     remove_requested = Signal(str)          # ruta
 
     def __init__(self, folder, zebra: bool = False, missing: bool = False,
-                 parent=None):
+                 types=None, parent=None):
         super().__init__(parent)
         self.setObjectName("FolderRow")
         # Sin esto el QSS no pinta el fondo de una **subclase** de QWidget
@@ -164,7 +175,10 @@ class FolderRow(QFrame):
         bottom.setSpacing(12)
         bottom.setContentsMargins(26, 0, 0, 0)
         self.checks = {}
-        for build_type in channels.BUILD_TYPES:
+        # ``types`` son los tipos activos: los de Blender siempre y los de los
+        # forks solo si el usuario los encendió. Sin eso, la carpeta pediría
+        # una decisión sobre algo que no se puede descargar.
+        for build_type in (types or channels.BUILD_TYPES):
             check = CheckPill(tr(TYPE_LABELS[build_type]))
             check.setToolTip(tr(TYPE_TOOLTIPS[build_type]))
             check.setChecked(build_type in folder.types)

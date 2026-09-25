@@ -82,6 +82,39 @@ class ConfigPathsTest(unittest.TestCase):
         self.assertEqual(config.root, Path("/res"))
         self.assertEqual(config.config_dir, Path("/res/config"))
 
+    def test_config_base_de_los_forks_en_cada_plataforma(self):
+        """Cada fork escribe su config en su propio sitio (lo dice su origen)."""
+        env = {"APPDATA": "/appdata", "XDG_CONFIG_HOME": "/xdg"}
+        home = Path.home()
+        # Bforartists: ~/.config/bforartists, %APPDATA%\Bforartists\Bforartists,
+        # ~/Library/Application Support/Bforartists.
+        self.assertEqual(bc.config_base("linux", env, "bforartists"),
+                         Path("/xdg/bforartists"))
+        self.assertEqual(bc.config_base("windows", env, "bforartists"),
+                         Path("/appdata/Bforartists/Bforartists"))
+        self.assertEqual(bc.config_base("darwin", env, "bforartists"),
+                         home / "Library/Application Support/Bforartists")
+        # UPBGE: ~/.config/upbge, %APPDATA%\UPBGE\Blender, ~/.../UPBGE.
+        self.assertEqual(bc.config_base("linux", env, "upbge"),
+                         Path("/xdg/upbge"))
+        self.assertEqual(bc.config_base("windows", env, "upbge"),
+                         Path("/appdata/UPBGE/Blender"))
+        self.assertEqual(bc.config_base("darwin", env, "upbge"),
+                         home / "Library/Application Support/UPBGE")
+
+    def test_config_for_de_upbge_usa_la_serie_de_blender(self):
+        """UPBGE 0.53 es un Blender 5.3 y guarda en la carpeta 5.3."""
+        env = {"XDG_CONFIG_HOME": "/xdg"}
+        config = bc.config_for("0.53", "linux", env, fork="upbge")
+        self.assertEqual(config.root, Path("/xdg/upbge/5.3"))
+        # La versión que se enseña sigue siendo la de UPBGE.
+        self.assertEqual(config.version, "5.3")
+
+    def test_config_for_de_bforartists_usa_su_serie(self):
+        env = {"XDG_CONFIG_HOME": "/xdg"}
+        config = bc.config_for("5.2.0", "linux", env, fork="bforartists")
+        self.assertEqual(config.root, Path("/xdg/bforartists/5.2"))
+
     def test_python_for_version_conocido_y_desconocido(self):
         self.assertEqual(bc.python_for_version("5.2.1"), "3.13")
         self.assertEqual(bc.python_for_version("4.5.3"), "3.11")
