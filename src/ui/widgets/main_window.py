@@ -99,7 +99,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.arch_label = (
             self.settings.arch if self.settings.arch in ARCH_LABELS else detected_arch
         )
-        self.language_label = tr(LANGUAGE_IDS.get(self.settings.language, "auto"))
         # Las carpetas NO se copian a atributos de la ventana: la lista de
         # ``settings.folders`` es la única fuente de verdad y las filas la leen
         # y la escriben directamente. Los espejos de antes (``dest_folder``,

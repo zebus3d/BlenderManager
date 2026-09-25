@@ -90,7 +90,16 @@ CONTROL_HEIGHT = 28
 
 # --- Tipografía ---
 FONT_SIZE = 13
-FONT_FAMILY = "sans-serif"
+# Cadena de familias, en orden de preferencia. **No se empaqueta ninguna
+# fuente**: se pide la que trae cada sistema y Qt resuelve los glifos que falten
+# con su propio *fallback* (así el chino, el ruso y el japonés se ven aunque la
+# primera familia no los tenga). "Inter" es la que usa Blender desde 3.x y la
+# que hace que la app se parezca a él cuando está instalada; detrás van las de
+# cada plataforma (Segoe UI en Windows, SF/Roboto en macOS) y, al final, las
+# libres que casi cualquier Linux trae (Noto Sans, DejaVu). El último
+# "sans-serif" es el comodín del propio Qt.
+FONT_FAMILY = ("Inter, Noto Sans, Segoe UI, SF Pro Text, Helvetica Neue, "
+               "Roboto, DejaVu Sans, sans-serif")
 
 # --- Fuente de iconos (Font Awesome Free) ---
 ICON_FONT_FILE = "fa-solid-900.ttf"

@@ -15,7 +15,7 @@ import os
 
 from paths import RESOURCE_DIR
 
-SUPPORTED = ("en", "es")
+SUPPORTED = ("en", "es", "zh", "ru", "ja", "pt_BR")
 DEFAULT = "en"
 
 # Carpeta con los ``<idioma>.json``. Va por ``RESOURCE_DIR`` para que también
@@ -71,7 +71,7 @@ def detect_language() -> str:
 
 
 def set_language(language) -> None:
-    """Fija el idioma de la interfaz: 'auto', 'en' o 'es'."""
+    """Fija el idioma de la interfaz: 'auto' o un código de ``SUPPORTED``."""
     global _current
     if language in (None, "", "auto"):
         _current = detect_language()

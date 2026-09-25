@@ -35,6 +35,15 @@ class I18nTests(unittest.TestCase):
         i18n.set_language("auto")
         self.assertIn(i18n.get_language(), ("en", "es"))
 
+    def test_cada_idioma_traduce_una_cadena_conocida(self):
+        """Un fichero de idioma que no se carga saldría en inglés y nadie se entera."""
+        for language in i18n.SUPPORTED:
+            if language == "en":
+                continue
+            i18n.set_language(language)
+            self.assertNotEqual(i18n.tr("Download"), "Download", language)
+            self.assertEqual(i18n.tr("Unknown key"), "Unknown key", language)
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -120,3 +129,51 @@ class CoberturaTests(unittest.TestCase):
                 if first.value not in spanish:
                     missing.append(f"{path.name}:{node.lineno} {first.value!r}")
         self.assertEqual(missing, [], "\n".join(missing))
+
+    def test_todos_los_idiomas_comparten_las_mismas_claves(self):
+        """Una clave que falta en un idioma sale en inglés sin avisar.
+
+        El español es la referencia (de él se extraen las cadenas usadas): cada
+        traducción tiene que traer **exactamente** las mismas claves, ni una de
+        menos (eso sería texto en inglés suelto) ni de más (texto huérfano que
+        alguien traducirá en balde).
+        """
+        import json
+
+        reference = json.loads(
+            (i18n.LOCALE_DIR / "es.json").read_text(encoding="utf-8"))
+        for language in i18n.SUPPORTED:
+            path = i18n.LOCALE_DIR / f"{language}.json"
+            if language == "en" or not path.exists():
+                continue
+            table = json.loads(path.read_text(encoding="utf-8"))
+            faltan = [key for key in reference if key not in table]
+            sobran = [key for key in table if key not in reference]
+            self.assertEqual(faltan, [], f"{language}: claves sin traducir")
+            self.assertEqual(sobran, [], f"{language}: claves que no existen")
+
+    def test_los_placeholders_sobreviven_a_la_traduccion(self):
+        """Un ``{version}`` perdido deja el texto sin el dato que lo hace útil.
+
+        Y uno **traducido** o con las llaves cambiadas saltaría en tiempo de
+        ejecución (``tr`` lo tolera, pero el usuario vería el texto sin
+        sustituir). Se comparan como conjuntos: el orden puede variar según el
+        idioma, las llaves no.
+        """
+        import json
+        import re
+
+        def marcas(text):
+            return sorted(re.findall(r"\{[^}]*\}", text))
+
+        reference = json.loads(
+            (i18n.LOCALE_DIR / "es.json").read_text(encoding="utf-8"))
+        for language in i18n.SUPPORTED:
+            path = i18n.LOCALE_DIR / f"{language}.json"
+            if language == "en" or not path.exists():
+                continue
+            table = json.loads(path.read_text(encoding="utf-8"))
+            malos = [f"{key!r} -> {table[key]!r}"
+                     for key in reference
+                     if key in table and marcas(key) != marcas(table[key])]
+            self.assertEqual(malos, [], f"{language}: placeholders rotos")

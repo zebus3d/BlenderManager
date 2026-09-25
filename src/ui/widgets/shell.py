@@ -18,7 +18,15 @@ from ui import theme as t
 PLATFORMS = {"GNU/Linux": "linux", "Windows": "windows", "macOS": "darwin"}
 PLATFORM_LABELS = {value: key for key, value in PLATFORMS.items()}
 ARCH_LABELS = ["x86_64", "arm64"]
-LANGUAGE_IDS = {"auto": "Automatic", "en": "English", "es": "Spanish"}
+LANGUAGE_IDS = {
+    "auto": "Automatic",
+    "en": "English",
+    "es": "Spanish",
+    "zh": "Simplified Chinese",
+    "ru": "Russian",
+    "ja": "Japanese",
+    "pt_BR": "Portuguese (Brazil)",
+}
 # El mínimo (40 %) se midió: a ese nivel el contenido de una tarjeta de rejilla
 # (logo, textos y fila de botones) sigue cabiendo en el alto fijo con 6+ px de
 # holgura, así que caben más filas sin que nada se recorte ni se solape. Por
@@ -66,6 +74,8 @@ CHANNELS = (
     ("stable", "Stable"),
     ("daily", "Daily"),
     ("experimental", "Experimental"),
+    ("bforartists", "Bforartists"),
+    ("upbge", "UPBGE"),
     ("favorites", "Favorites"),
 )
 
@@ -90,6 +100,11 @@ CHANNEL_TOOLTIPS = {
              "for testing, not for work.",
     "experimental": "Branches with new features still in development.\nThey are "
                     "not ready for production and the list is usually empty.",
+    "bforartists": "Bforartists is a fork of Blender with a redesigned, "
+                   "easier-to-read interface.\nTurn it on in Settings > "
+                   "Downloads.",
+    "upbge": "UPBGE is the fork that keeps the Blender game engine alive.\n"
+             "Turn it on in Settings > Downloads.",
     "favorites": "Only the versions you marked with the star.",
 }
 
