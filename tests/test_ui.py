@@ -3654,6 +3654,35 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             view.detail_apply_btn.geometry().top(),
             view.detail_scroll.geometry().bottom())
 
+    def test_la_tarjeta_de_detalle_encoge_con_la_ventana(self):
+        """Preferencias en detalle no empuja su texto fuera de la ventana.
+
+        Con la casilla larga de addons metida en la fila de botones, el ancho
+        mínimo de la tarjeta superaba el de la ventana y el panel se salía por
+        la derecha (textos y botón "Apply" recortados). La casilla va en su
+        propia línea, así que la página no puede pedir más que su vista.
+        """
+        from services import blender_prefs as bprefs
+
+        view = self._view()
+        view.resize(820, 700)
+        view.tabs.setCurrentIndex(1)
+        view.show()
+        self.app.processEvents()
+        view.detail_prefs = [
+            bprefs.Preference("addons.miaddon.clave", "x", name="Un ajuste",
+                              description="Un ajuste del addon.")]
+        view._fill_detail_rows()
+        view._show_detail_buttons(True)
+        # La casilla se ve (hay ajustes de addons): es el caso más ancho.
+        self.assertFalse(view.enable_addons_check.isHidden())
+        self._settle(view)
+        host = view.tabs.currentWidget()
+        page = view._page_of(host)
+        # Sin scroll horizontal, si la página pidiera más que su vista se
+        # recortaría por la derecha.
+        self.assertLessEqual(page.width(), host.viewport().width())
+
     def test_la_lista_de_guardados_mide_igual_sea_cual_sea_la_ventana(self):
         """Valores de fábrica sigue las mismas reglas que Preferencias.
 
@@ -3851,10 +3880,12 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                               view.factory_page)
                 self.assertIsNot(view.header.parentWidget(),
                                  view.factory_page)
-                # …y las pestañas de migración sí llevan la de dos.
+                # …y las pestañas de migración sí llevan la de dos. La de
+                # add-ons va dentro de un scroll, así que la cabecera cuelga
+                # de la página de dentro (``_page_of``), no del área.
                 view.tabs.setCurrentIndex(0)
                 self.assertIs(view.header.parentWidget(),
-                              view.tabs.widget(0))
+                              view._page_of(view.tabs.widget(0)))
                 # Funciona con una sola versión instalada (no exige dos): hay
                 # una fila de guardado y su botón de restaurar está activo.
                 row = next(iter(view._snapshot_widgets.values()))

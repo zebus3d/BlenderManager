@@ -201,7 +201,11 @@ class AddonsTabMixin:
         # El estirón al final deja la página más alta que las tarjetas: es el
         # hueco donde cae su sombra (y evita que se estiren a lo alto).
         lay.addStretch()
-        return page
+        # La página va dentro de un scroll, como Preferences y Factory: sin él,
+        # con la ventana baja el layout aprieta las tarjetas por debajo de su
+        # mínimo y los textos de Origen y Destino se solapan y se recortan. Con
+        # el scroll, las tarjetas miden lo que miden y lo que no cabe se baja.
+        return self._scrollable(page)
 
     def _board_column(self, title: str, tooltip: str = ""):
         """Una columna del tablero: título y hueco de filas.

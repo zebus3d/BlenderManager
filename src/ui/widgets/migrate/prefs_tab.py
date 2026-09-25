@@ -406,12 +406,11 @@ class PrefsTabMixin:
         self.detail_scroll.setVisible(False)
         lay.addWidget(self.detail_scroll)
 
-        row = QHBoxLayout()
-        self.detail_load_btn = CardButton(
-            tr("Read again"),
-            tooltip=tr("Read the settings from the source version again."))
-        self.detail_load_btn.clicked.connect(lambda: self._read_source_blender(force=True))
-        row.addWidget(self.detail_load_btn)
+        # La casilla de addons va en **su propia línea**: su texto es una frase
+        # larga (y en español todavía más) que, metida en la fila de botones,
+        # fijaba el ancho mínimo de la tarjeta por encima del de la ventana y el
+        # panel se salía por la derecha. En su línea, el mínimo es el del botón
+        # más ancho y la tarjeta encoge con la ventana sin recortar el texto.
         # Las preferencias de un addon solo existen si el addon está activado
         # en el destino: con esto se activa en el mismo arranque en que se
         # escriben. Solo se ve cuando hay ajustes de addons en la lista.
@@ -424,7 +423,17 @@ class PrefsTabMixin:
             "add-on must already be installed in the destination (copy it from "
             "the Add-ons tab if it is not)."))
         self.enable_addons_check.setVisible(False)
-        row.addWidget(self.enable_addons_check)
+        lay.addWidget(self.enable_addons_check)
+
+        # Fila de acciones, con el mismo orden que el tablero de Add-ons:
+        # marcar a la izquierda y aplicar a la derecha. "Read again" reintenta
+        # la lectura, así que va con ellas.
+        row = QHBoxLayout()
+        self.detail_load_btn = CardButton(
+            tr("Read again"),
+            tooltip=tr("Read the settings from the source version again."))
+        self.detail_load_btn.clicked.connect(lambda: self._read_source_blender(force=True))
+        row.addWidget(self.detail_load_btn)
         row.addStretch()
         self.detail_select_all = CardButton(
             tr("Select all"),
