@@ -142,11 +142,11 @@ def _start_window(window, start_minimized: bool) -> None:
     from ui.widgets.tray import TrayIcon
 
     if start_minimized and TrayIcon.available():
-        window.center_on_screen()
+        window.restore_window_geometry()
         QTimer.singleShot(0, window._hide_to_tray)
     else:
         window.show()
-        window.center_on_screen()
+        window.restore_window_geometry()
 
 
 def run_ui(screenshot: str | None = None, debug: bool = False) -> int:

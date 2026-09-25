@@ -383,6 +383,64 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual((saved.window_width, saved.window_height),
                          (1234, 777))
 
+    def test_guarda_la_posicion_de_la_ventana(self):
+        """Al cerrar se guarda también dónde estaba, para reabrir en el mismo
+        monitor (con dos monitores y autoarranque, antes siempre se centraba)."""
+        from services.settings import Settings
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.move(180, 120)
+        self.app.processEvents()
+        window.close()
+
+        saved = Settings.load()
+        self.assertTrue(saved.window_pos_saved)
+        # El gestor de ventanas puede añadir un par de píxeles de marco (en
+        # offscreen son 2), así que se compara con holgura.
+        self.assertLessEqual(abs(saved.window_x - 180), 2)
+        self.assertLessEqual(abs(saved.window_y - 120), 2)
+
+    def test_restaura_la_posicion_guardada(self):
+        from PySide6.QtCore import QPoint
+        from PySide6.QtWidgets import QApplication
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        destino = QApplication.primaryScreen().availableGeometry().topLeft() \
+            + QPoint(160, 90)
+        window.settings.window_pos_saved = True
+        window.settings.window_x = destino.x()
+        window.settings.window_y = destino.y()
+
+        window.restore_window_geometry()
+        arriba_izquierda = window.frameGeometry().topLeft()
+        self.assertLessEqual(abs(arriba_izquierda.x() - destino.x()), 2)
+        self.assertLessEqual(abs(arriba_izquierda.y() - destino.y()), 2)
+
+    def test_una_posicion_fuera_de_toda_pantalla_se_centra(self):
+        """Si el monitor donde estaba ya no existe, no se abre fuera de la
+        pantalla: se centra en la principal."""
+        from PySide6.QtWidgets import QApplication
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.settings.window_pos_saved = True
+        window.settings.window_x = 999999
+        window.settings.window_y = 999999
+
+        window.restore_window_geometry()
+        screen = window.screen() or QApplication.primaryScreen()
+        centro = screen.availableGeometry().center()
+        marco = window.frameGeometry().center()
+        self.assertLessEqual(abs(marco.x() - centro.x()), 2)
+        self.assertLessEqual(abs(marco.y() - centro.y()), 2)
+
     def test_atajos_registrados(self):
         from PySide6.QtGui import QShortcut
 

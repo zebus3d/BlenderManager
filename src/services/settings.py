@@ -353,6 +353,14 @@ class Settings:
     ignored_blender_series: list[str] = field(default_factory=list)
     window_width: int = 0
     window_height: int = 0
+    # Esquina superior izquierda donde el usuario dejó la ventana, y si hay una
+    # guardada. El booleano va aparte de las coordenadas porque ``(0, 0)`` es
+    # una posición legítima y no sirve de centinela. Al arrancar se restaura esa
+    # posición —y con ella el monitor— si el monitor sigue existiendo; si no, se
+    # centra (ver ``MainWindow.restore_window_geometry``).
+    window_x: int = 0
+    window_y: int = 0
+    window_pos_saved: bool = False
     # Bandeja del sistema. Son dos decisiones independientes: cerrar la ventana
     # (la X) es lo que más molesta si la app se cierra sin querer, así que viene
     # activado; minimizar a la bandeja es más agresivo y viene apagado (muchos
@@ -436,6 +444,9 @@ class Settings:
             start_minimized=bool(data.get("start_minimized", False)),
             window_width=int(data.get("window_width") or 0),
             window_height=int(data.get("window_height") or 0),
+            window_x=int(data.get("window_x") or 0),
+            window_y=int(data.get("window_y") or 0),
+            window_pos_saved=bool(data.get("window_pos_saved", False)),
             platform=str(data.get("platform") or ""),
             arch=str(data.get("arch") or ""),
             channel=str(data.get("channel") or "all"),

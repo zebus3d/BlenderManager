@@ -19,7 +19,7 @@ fichero se pueda leer entero; lo que de verdad no depende de la interfaz ya
 está en ``services/``.
 """
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame,
                                QHBoxLayout, QLabel,
@@ -730,12 +730,13 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         QApplication.quit()
 
     def closeEvent(self, event):
-        """Vuelca el zoom pendiente y el tamaño de la ventana.
+        """Vuelca el zoom pendiente y la geometría de la ventana.
 
         El zoom va con retardo, así que si se cierra mientras el slider se mueve
-        el guardado aún no ha corrido. El tamaño de la ventana se guarda aquí
-        (y no en cada ``resizeEvent``) para no escribir el JSON a cada tirón del
-        borde; la próxima vez ``main.py`` arranca con estas medidas.
+        el guardado aún no ha corrido. El tamaño y la **posición** se guardan
+        aquí (y no en cada ``resizeEvent``/arrastre) para no escribir el JSON a
+        cada tirón; la próxima vez ``main.py`` arranca con estas medidas y en el
+        mismo monitor.
 
         Si el usuario activó "cerrar a la bandeja", la X **no** cierra: se
         ignora el evento y la ventana se oculta (los ajustes ya se han guardado
@@ -743,15 +744,22 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         """
         self._zoom_settle.stop()
         self._zoom_tick.stop()
+        geometry = self._normal_geometry()
         changed = False
         if self.zoom != self.settings.zoom:
             self.settings.zoom = self.zoom
             changed = True
-        width, height = self._normal_size()
-        if (width, height) != (self.settings.window_width,
-                               self.settings.window_height):
-            self.settings.window_width = width
-            self.settings.window_height = height
+        if (geometry.width(), geometry.height()) != (self.settings.window_width,
+                                                      self.settings.window_height):
+            self.settings.window_width = geometry.width()
+            self.settings.window_height = geometry.height()
+            changed = True
+        if (not self.settings.window_pos_saved
+                or (geometry.x(), geometry.y()) != (self.settings.window_x,
+                                                    self.settings.window_y)):
+            self.settings.window_x = geometry.x()
+            self.settings.window_y = geometry.y()
+            self.settings.window_pos_saved = True
             changed = True
         if changed:
             self.settings.save()
@@ -762,18 +770,43 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             return
         super().closeEvent(event)
 
-    def _normal_size(self):
-        """Tamaño con el que reabrir: el de la ventana, no el de maximizada.
+    def _normal_geometry(self):
+        """Geometría con la que reabrir: la normal, no la de maximizada.
 
-        Si se cierra maximizada (o a pantalla completa) se guarda el tamaño
-        "normal" anterior, para no arrancar siempre con la ventana a pantalla
-        completa sin estarlo de verdad.
+        Si se cierra maximizada (o a pantalla completa) se guarda la posición y
+        el tamaño "normales" anteriores, para no arrancar siempre maximizada sin
+        estarlo de verdad ni perder el monitor en el que estaba.
         """
         if self.isMaximized() or self.isFullScreen():
-            geometry = self.normalGeometry()
+            return self.normalGeometry()
+        return self.geometry()
+
+    def restore_window_geometry(self) -> None:
+        """Reabre la ventana donde el usuario la dejó la última vez.
+
+        La posición se guarda al cerrar (``closeEvent``); aquí se restaura, y
+        con ella el monitor. Si la pantalla ya no está o la posición quedó fuera
+        de todo monitor (cambio de resolución, monitor desconectado), se centra
+        en vez de abrir en un sitio inalcanzable.
+        """
+        if self._saved_position_is_visible():
+            self.move(self.settings.window_x, self.settings.window_y)
         else:
-            geometry = self.geometry()
-        return geometry.width(), geometry.height()
+            self.center_on_screen()
+
+    def _saved_position_is_visible(self) -> bool:
+        """True si la posición guardada deja la ventana en algún monitor.
+
+        Se comprueba un trozo de la barra de título (esquina superior
+        izquierda), no el rectángulo entero: una ventana que sobresale un poco
+        del borde sigue siendo arrastrable y debe respetarse.
+        """
+        if not self.settings.window_pos_saved:
+            return False
+        anchor = QRect(self.settings.window_x, self.settings.window_y,
+                       min(self.width(), 200), min(self.height(), 60))
+        return any(screen.availableGeometry().intersects(anchor)
+                   for screen in QApplication.screens())
 
     def center_on_screen(self) -> None:
         """Centra la ventana en el monitor, sea cual sea su tamaño.
@@ -793,10 +826,15 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         """Devuelve la ventana al tamaño por defecto y la centra.
 
         Se pone a ``0`` en los ajustes para que, al volver a abrir, se use otra
-        vez el tamaño de fábrica (es lo mismo que hace ``main.py``).
+        vez el tamaño de fábrica (es lo mismo que hace ``main.py``). La posición
+        también se olvida: "restablecer" devuelve la ventana centrada, no a la
+        última esquina.
         """
         self.settings.window_width = 0
         self.settings.window_height = 0
+        self.settings.window_x = 0
+        self.settings.window_y = 0
+        self.settings.window_pos_saved = False
         self.settings.save()
         self.showNormal()
         self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)

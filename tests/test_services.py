@@ -668,6 +668,9 @@ class SettingsTests(unittest.TestCase):
             auto_update=False,
             window_width=1200,
             window_height=700,
+            window_x=-1920,
+            window_y=40,
+            window_pos_saved=True,
             platform="Windows",
             arch="arm64",
             experimental_features=True,
@@ -690,6 +693,8 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(loaded.auto_update)
         self.assertEqual(loaded.window_width, 1200)
         self.assertEqual(loaded.window_height, 700)
+        self.assertEqual((loaded.window_x, loaded.window_y), (-1920, 40))
+        self.assertTrue(loaded.window_pos_saved)
         self.assertEqual(loaded.platform, "Windows")
         self.assertEqual(loaded.arch, "arm64")
         self.assertTrue(loaded.experimental_features)
