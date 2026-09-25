@@ -361,8 +361,10 @@ class ForkUiTests(SettingsIsolated, unittest.TestCase):
         window.builds = self._fork_builds()
         window.channel = "bforartists"
         self.assertEqual([b.fork for b in window._filtered()], ["bforartists"])
+        # "Todas" los mezcla con Blender: es el catálogo entero.
         window.channel = "all"
-        self.assertEqual(window._filtered(), [])
+        self.assertEqual({b.fork for b in window._filtered()},
+                         {"bforartists", "upbge"})
         window.channel = "upbge"
         self.assertEqual([b.fork for b in window._filtered()], ["upbge"])
 
@@ -1329,28 +1331,41 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         ancho la última pestaña se recortaba contra el botón de refrescar
         ("Bforartists" salía como "Bfor...") y parecía no existir. O caben
         todas, o la barra ofrece botones para desplazarse a las que no.
+
+        No se comprueba contra el ancho real de la ventana: el servidor
+        *offscreen* de los tests tiene una pantalla virtual de 800x800 y Qt
+        recorta la ventana a ella, así que un ancho mayor nunca se materializa.
+        Lo que sí se puede comprobar es que la barra trae botones de scroll
+        (nada queda inalcanzable) y que el ancho de fábrica basta para las
+        ocho pestañas.
         """
         from ui.widgets.main_window import (
             DEFAULT_WINDOW_WIDTH,
             MainWindow,
         )
+        from ui.widgets.shell import CHANNELS
 
         window = MainWindow()
         window.settings.enable_bforartists = True
         window.settings.enable_upbge = True
         window._update_fork_tabs()
-        window.resize(DEFAULT_WINDOW_WIDTH, 670)
         window.show()
         self.app.processEvents()
 
         tabs = window.channel_tabs
         visibles = [i for i in range(tabs.count()) if tabs.isTabVisible(i)]
-        self.assertEqual(len(visibles), 8)
-        # Con el ancho de fábrica caben enteras, sin necesidad de scroll.
-        self.assertLessEqual(tabs.sizeHint().width(), tabs.width())
-        # Y todas se pueden alcanzar (caben o hay botones de scroll).
-        self.assertTrue(tabs.usesScrollButtons()
-                        or tabs.sizeHint().width() <= tabs.width())
+        self.assertEqual(len(visibles), len(CHANNELS))
+        # Red de seguridad: si no caben (ventana estrecha), se puede desplazar.
+        self.assertTrue(tabs.usesScrollButtons())
+        # Y el ancho de fábrica está medido para que quepan sin tener que
+        # desplazar: pestañas + refrescar + vista + los dos combos.
+        extra = (window.refresh_btn.sizeHint().width()
+                 + window.grid_btn.sizeHint().width()
+                 + window.list_btn.sizeHint().width()
+                 + window.platform_combo.sizeHint().width()
+                 + window.arch_combo.sizeHint().width())
+        self.assertGreaterEqual(DEFAULT_WINDOW_WIDTH,
+                                tabs.sizeHint().width() + extra + 140)
 
     def test_la_estrella_marca_y_desmarca(self):
         from ui.widgets.buttons import StarButton

@@ -337,7 +337,7 @@
   "Show the file in your file manager.": "在文件管理器中显示该文件。",
   "Could not launch Blender: {error}": "无法启动 Blender：{error}",
   "Filter by version, branch or file name as you type.": "输入时按版本、分支或文件名筛选。",
-  "Show every version: stable, LTS, daily and alpha.": "显示所有版本：稳定版、LTS、每日构建版和 Alpha 版。",
+  "Show everything, forks included: stable, LTS, daily and alpha.": "显示全部内容，包括分支：稳定版、LTS、每日构建版和 Alpha 版。",
   "LTS = Long Term Support.\nVersions maintained for years and the most stable.\nRecommended for everyday work.": "LTS = 长期支持（Long Term Support）。\n维护多年且最稳定的版本。\n推荐用于日常工作。",
   "Stable versions that are not LTS.\nThey are the latest official releases, supported until the next one.": "不是 LTS 的稳定版。\n它们是最新的官方发行版，支持到下一个版本发布为止。",
   "Daily and alpha builds with the newest changes.\nThey can fail: for testing, not for work.": "包含最新更改的每日构建版和 Alpha 版。\n它们可能出错：用于测试，而非工作。",

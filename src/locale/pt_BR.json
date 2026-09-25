@@ -337,7 +337,7 @@
   "Show the file in your file manager.": "Mostra o arquivo no seu gerenciador de arquivos.",
   "Could not launch Blender: {error}": "Não foi possível iniciar o Blender: {error}",
   "Filter by version, branch or file name as you type.": "Filtra por versão, ramificação ou nome de arquivo enquanto você digita.",
-  "Show every version: stable, LTS, daily and alpha.": "Mostra todas as versões: estáveis, LTS, diárias e alfa.",
+  "Show everything, forks included: stable, LTS, daily and alpha.": "Mostra tudo, forks incluídos: estáveis, LTS, diárias e alfa.",
   "LTS = Long Term Support.\nVersions maintained for years and the most stable.\nRecommended for everyday work.": "LTS = suporte de longo prazo (Long Term Support).\nVersões mantidas por anos e as mais estáveis.\nRecomendadas para o trabalho do dia a dia.",
   "Stable versions that are not LTS.\nThey are the latest official releases, supported until the next one.": "Versões estáveis que não são LTS.\nSão os últimos lançamentos oficiais, com suporte até o próximo.",
   "Daily and alpha builds with the newest changes.\nThey can fail: for testing, not for work.": "Compilações diárias e alfa com as mudanças mais recentes.\nPodem falhar: são para testar, não para trabalhar.",

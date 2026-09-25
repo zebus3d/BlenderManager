@@ -202,7 +202,10 @@ class ChannelFilterTests(unittest.TestCase):
         builds = self._builds()
         experimental = api.filter_builds(builds, "experimental")
         self.assertEqual([build.branch for build in experimental], ["geometry-nodes"])
-        for channel in ("all", "lts", "stable", "lts_stable", "daily"):
+        # "Todas" las incluye (es literalmente todas); los canales concretos no.
+        self.assertIn("geometry-nodes",
+                      [b.branch for b in api.filter_builds(builds, "all")])
+        for channel in ("lts", "stable", "lts_stable", "daily"):
             selected = api.filter_builds(builds, channel)
             self.assertNotIn("geometry-nodes", [build.branch for build in selected])
 
@@ -212,7 +215,8 @@ class ChannelFilterTests(unittest.TestCase):
         self.assertEqual(len(api.filter_builds(builds, "stable")), 0)
         self.assertEqual(len(api.filter_builds(builds, "lts_stable")), 2)
         self.assertEqual(len(api.filter_builds(builds, "daily")), 1)
-        self.assertEqual(len(api.filter_builds(builds, "all")), 3)
+        # "Todas" enseña el catálogo entero, experimentales incluidas.
+        self.assertEqual(len(api.filter_builds(builds, "all")), 4)
 
     def test_search(self):
         builds = self._builds()
@@ -232,8 +236,12 @@ class ChannelFilterTests(unittest.TestCase):
             ["bforartists"])
         self.assertEqual(
             [b.fork for b in api.filter_builds(builds, "upbge")], ["upbge"])
-        # Los demás canales no mezclan forks: son otros programas.
-        for channel in ("all", "lts", "stable", "daily", "lts_stable"):
+        # "Todas" mezcla los forks con Blender (es el catálogo entero).
+        self.assertEqual(
+            {b.fork for b in api.filter_builds(builds, "all")},
+            {"", "bforartists", "upbge"})
+        # Los canales concretos de Blender no mezclan forks: son otros programas.
+        for channel in ("lts", "stable", "daily", "lts_stable"):
             selected = api.filter_builds(builds, channel)
             self.assertTrue(all(not b.fork for b in selected), channel)
         # El de experimentales tampoco se traga las alfa de UPBGE.
@@ -475,7 +483,10 @@ class InstalledFilterTests(unittest.TestCase):
         entries = self._entries()
         experimental = installed.filter_installed(entries, "experimental")
         self.assertEqual([entry.branch for entry in experimental], ["geometry-nodes"])
-        for channel in ("all", "lts", "stable", "daily"):
+        # "Todas" las incluye; los canales concretos no.
+        self.assertIn("geometry-nodes",
+                      [e.branch for e in installed.filter_installed(entries, "all")])
+        for channel in ("lts", "stable", "daily"):
             selected = installed.filter_installed(entries, channel)
             self.assertNotIn("geometry-nodes", [entry.branch for entry in selected])
 

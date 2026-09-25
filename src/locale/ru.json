@@ -337,7 +337,7 @@
   "Show the file in your file manager.": "Показать файл в файловом менеджере.",
   "Could not launch Blender: {error}": "Не удалось запустить Blender: {error}",
   "Filter by version, branch or file name as you type.": "Фильтровать по версии, ветке или имени файла по мере ввода.",
-  "Show every version: stable, LTS, daily and alpha.": "Показывать все версии: стабильные, LTS, ежедневные и альфа.",
+  "Show everything, forks included: stable, LTS, daily and alpha.": "Показывать всё, включая форки: стабильные, LTS, ежедневные и альфа.",
   "LTS = Long Term Support.\nVersions maintained for years and the most stable.\nRecommended for everyday work.": "LTS = долгосрочная поддержка (Long Term Support).\nВерсии, поддерживаемые годами, и самые стабильные.\nРекомендуются для повседневной работы.",
   "Stable versions that are not LTS.\nThey are the latest official releases, supported until the next one.": "Стабильные версии, не относящиеся к LTS.\nЭто последние официальные выпуски, поддерживаемые до следующего.",
   "Daily and alpha builds with the newest changes.\nThey can fail: for testing, not for work.": "Ежедневные и альфа-сборки с новейшими изменениями.\nОни могут ломаться: для тестирования, а не для работы.",

@@ -154,6 +154,22 @@ Lo que **no hay que romper**:
 - **Las pestañas de los forks nacen ocultas** (`setTabVisible`, no se quitan para
   que los índices de `CHANNELS` no bailen) y al apagar un fork se sale de su
   canal si estaba puesto (`settings.load` y `apply_enabled_forks`).
+- **"Todas" mezcla los forks; los canales concretos no.** En "Todas" (canal
+  `all`) se enseña el catálogo entero, forks y experimentales incluidas: es lo
+  que promete el nombre y lo que espera quien la abre. Los canales de tipo
+  (`lts`/`stable`/`daily`), el `experimental` y cada fork son estrictos y no se
+  mezclan entre sí. Si esto se cambia, que sea en los dos lados a la vez
+  (`api.filter_builds` y `installed.filter_installed`), o tienda e instaladas
+  dirán cosas distintas del mismo canal.
+- **La barra de pestañas lleva botones de scroll y el ancho por defecto está
+  medido para las ocho pestañas.** Con los dos forks activos son ocho canales
+  (Todas, LTS, Estable, Diarias, Experimentales, Bforartists, UPBGE, Favoritos;
+  ~718 px solo las pestañas). Si el ancho no basta, Qt **recorta** la última
+  contra el botón de refrescar ("Bforartists" salía como "Bfor...") y parece que
+  el fork no existe: fue el fallo que hizo pensar que las builds no aparecían.
+  Por eso `DEFAULT_WINDOW_WIDTH` es 1160 y la barra usa
+  `setUsesScrollButtons(True)` como red de seguridad. Lo vigila
+  `test_todas_las_pestanas_de_canal_son_alcanzables`.
 - Los `try` de `api.fetch_builds` van **por separado**: un fork caído no tumba
   el listado de Blender. `forks.fetch` ya cae a su caché si falla la red.
 

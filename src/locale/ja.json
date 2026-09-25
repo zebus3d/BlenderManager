@@ -337,7 +337,7 @@
   "Show the file in your file manager.": "ファイルマネージャーでファイルを表示します。",
   "Could not launch Blender: {error}": "Blender を起動できませんでした: {error}",
   "Filter by version, branch or file name as you type.": "入力に合わせてバージョン、ブランチ、ファイル名で絞り込みます。",
-  "Show every version: stable, LTS, daily and alpha.": "安定版、LTS、デイリー、アルファなどすべてのバージョンを表示します。",
+  "Show everything, forks included: stable, LTS, daily and alpha.": "フォークを含むすべてを表示します：安定版、LTS、デイリー、アルファ。",
   "LTS = Long Term Support.\nVersions maintained for years and the most stable.\nRecommended for everyday work.": "LTS = 長期サポート (Long Term Support)。\n長年にわたり維持される最も安定したバージョン。\n日々の作業に推奨されます。",
   "Stable versions that are not LTS.\nThey are the latest official releases, supported until the next one.": "LTS ではない安定版。\n最新の公式リリースで、次回リリースまでサポートされます。",
   "Daily and alpha builds with the newest changes.\nThey can fail: for testing, not for work.": "最新の変更を含むデイリーおよびアルファビルド。\n壊れることもあるため、テスト用で、作業用ではありません。",

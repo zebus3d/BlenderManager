@@ -273,10 +273,12 @@ def available_for(builds, platform: str, arch: str):
 def filter_builds(builds, channel: str, search: str = "", favorites=()):
     """Aplica el filtro de canal y la búsqueda a las compilaciones de la tienda.
 
-    Las ramas experimentales solo se ven en su propio canal ("experimental") y
-    cada fork en el suyo ("bforartists"/"upbge"): así no se cuelan entre las
-    estables o las diarias y no confunden a quien solo quiere Blender. El canal
-    "all" tampoco mezcla forks: son otros programas.
+    "Todas" (*all*) enseña **todo**: Blender estable, LTS, diarias, ramas
+    experimentales y los forks (Bforartists, UPBGE), que es lo que promete el
+    nombre. El resto de canales son excluyentes y estrictos: "experimental" solo
+    las ramas de Blender, y cada fork el suyo (sus versiones no se mezclan con
+    las de Blender ni entre sí). Así quien quiere Blender no se topa con otros
+    programas en las pestañas concretas, pero en "Todas" ve el catálogo entero.
 
     ``favorites`` es la lista de claves marcadas por el usuario
     (``model.build.favorite_key``). Con el canal "favorites" se muestran solo
@@ -288,6 +290,9 @@ def filter_builds(builds, channel: str, search: str = "", favorites=()):
     if channel == "favorites":
         marked = set(favorites or ())
         selected = [build for build in builds if build.favorite_key in marked]
+    elif channel == "all":
+        # "Todas" es literalmente todas: también las experimentales y los forks.
+        selected = list(builds)
     elif fork_channel:
         selected = [build for build in builds if build.fork == fork_channel]
     elif channel == "experimental":

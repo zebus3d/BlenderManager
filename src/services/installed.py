@@ -366,6 +366,10 @@ def filter_installed(entries, channel: str, search: str = "", favorites=()):
     if channel == "favorites":
         marked = set(favorites or ())
         selected = [entry for entry in entries if entry.favorite_key in marked]
+    elif channel == "all":
+        # "Todas" es literalmente todas: también las de fork. Coincide con la
+        # tienda, donde "Todas" también mezcla los forks.
+        selected = list(entries)
     else:
         fork_channel = next(
             (fork for fork, build_type in channels.FORK_TYPES.items()
@@ -383,8 +387,8 @@ def filter_installed(entries, channel: str, search: str = "", favorites=()):
                            channels.TYPE_DAILY):
                 selected = [entry for entry in selected
                             if channels.type_of_installed(entry) == channel]
-    # "all" y "lts_stable" muestran todas las que no son experimentales (ni de
-    # un fork, que tienen su propia pestaña).
+    # "lts_stable" muestra las que no son experimentales ni de un fork (los
+    # forks tienen su propia pestaña).
     text = (search or "").strip().lower()
     if text:
         selected = [
