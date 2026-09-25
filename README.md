@@ -1,9 +1,10 @@
 # Blender Manager
 
 A desktop app for Linux, Windows and macOS that keeps your Blender versions in
-one place: browse the official builds, download the one you want and launch or
-remove it without going through a browser. It is written in Python with
-PySide6/Qt and ships as a single portable file, so there is nothing to install.
+one place: browse the official builds (and the Bforartists and UPBGE forks),
+download the one you want and launch or remove it without going through a
+browser. It is written in Python with PySide6/Qt and ships as a single portable
+file, so there is nothing to install.
 
 <p align="center">
   <img width="80%" alt="Blender Manager store, grid view" src="docs/img/store_grid.png">
@@ -19,6 +20,11 @@ channel tabs and search narrow the list down.</sub>
   grid or list view with a zoom slider (`Ctrl +` / `Ctrl -`, `Ctrl 0` for the
   default). Star the versions you use and they gather under Favorites; each
   card has a small **i** that opens that series' release notes.
+- **Or a Blender fork.** Bforartists and UPBGE are separate programs built on
+  Blender, and they have their own tabs once you turn them on in
+  **Settings → Downloads**. They download, install and launch like any other
+  version, with their own executable and config folder, so a Bforartists 5.2
+  never gets mixed up with a Blender 5.2.
 - **Download it.** The app detects your system and architecture, but you can
   also pick Windows, macOS or ARM64 to grab a build for another machine.
   Downloads show progress, are checked with SHA-256 and are unpacked for you
@@ -74,10 +80,11 @@ compatibility verdict shown before you copy anything.</sub>
 - **A few more things.** Factory-reset a version and restore your settings
   later; open recent `.blend` files with the newest version of their series;
   manage a version's add-ons without opening Blender (behind the experimental
-  toggle in Settings); tray icon and autostart; interface in English and
-  Spanish, detected from your locale; and a portable mode that keeps settings
-  next to the executable. Opening the app twice does not create a second
-  window: the one already running comes to the front.
+  toggle in Settings); tray icon and autostart; interface in English, Spanish,
+  Simplified Chinese, Russian, Japanese and Brazilian Portuguese, detected
+  from your locale; and a portable mode that keeps settings next to the
+  executable. Opening the app twice does not create a second window: the one
+  already running comes to the front.
 - **It updates itself.** Packaged builds replace themselves and restart (the
   Linux AppImage in place, Windows and macOS through a small helper); a source
   checkout runs `git pull --ff-only` and restarts. Checks run on start and at
@@ -168,8 +175,10 @@ in [`AGENTS.md`](AGENTS.md).
 
 [Blender Launcher V2](https://github.com/Victor-IX/Blender-Launcher-V2) is the
 mature reference for this job, and this project borrows from it: the idea of
-using Blender's official JSON API and the LTS version map comes from it. It also
-covers more ground (third-party forks, templates, `.blend` association).
+using Blender's official JSON API and the LTS version map comes from it, and so
+do the two fork sources (Bforartists' public WebDAV share and UPBGE's GitHub
+releases). It also covers more ground (templates, `.blend` association, more
+fork types).
 
 Blender Manager bets on the opposite: fewer features, but the common flow — find
 a build, download it, launch it — with as little friction as possible. That is
@@ -219,6 +228,9 @@ version worked, but its OpenGL/SDL2 requirement broke on newer Mesa releases, so
 the UI was ported to Qt Widgets.
 
 The Blender logo is a trademark of the [Blender Foundation](https://www.blender.org/).
+The Bforartists logo comes from the [Bforartists](https://github.com/Bforartists/Bforartists)
+project and the UPBGE logo from [UPBGE](https://github.com/UPBGE/upbge), both
+GPL-3.0; they identify those forks and all rights stay with their projects.
 Icons are from [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
 
 ## Privacy

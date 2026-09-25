@@ -101,6 +101,66 @@ ruido en la tienda. Es de nicho para quien verifica un PR concreto, y no merece
 el coste en la interfaz. Si alguna vez se replantea, que sea como algo oculto
 tras las opciones experimentales, nunca como pestaña normal.
 
+### Forks: Bforartists y UPBGE
+
+Son **programas aparte basados en Blender**, no canales suyos. Todo el soporte
+vive en `src/services/forks.py` (sin Qt, con `urllib`) y **se activa desde
+Ajustes > Descargas** (`enable_bforartists`/`enable_upbge`, apagados por
+defecto). El identificador viaja en `model.build.FORK_LABELS`
+(`""`=Blender, `bforartists`, `upbge`) y `Build.fork`/`InstalledBuild.fork` lo
+llevan; la interfaz pone el texto con `fork_label`/`fork_name`.
+
+Las dos fuentes, comprobadas en directo y con las mismas que usa Blender
+Launcher V2:
+
+- **Bforartists** (`fetch_bforartists`): NextCloud público, listado **WebDAV**
+  (`cloud.bforartists.de/public.php/webdav`, token `JxCjbyt2fFcHjy4`) con un
+  `PROPFIND` a la raíz y otro por versión. Se cachea por `getlastmodified` para
+  no repetir 30 y pico peticiones cada refresco. El ejecutable es
+  **`bforartists`** (no `blender`) y las descargas llevan la misma Basic auth
+  (`forks.download_headers`, que la UI pasa por `Source.headers` → el
+  `Downloader`). macOS publica dos `.dmg` por arquitectura desde 4.5.
+- **UPBGE** (`fetch_upbge`): API de releases de GitHub (`UPBGE/upbge`) con
+  `ETag`/`If-None-Match` (el 304 no gasta cuota). Hoy solo publica
+  `weekly-build-N` alfa (`branch="upbge-weekly"`, `risk="alpha"`,
+  `experimental=True`); un tag `v…` saldría como estable. El ejecutable es el de
+  Blender. Versiones < 0.30 se descartan.
+
+Lo que **no hay que romper**:
+
+- **Cada fork es su propio tipo de carpeta** (`channels.TYPE_BFORARTISTS`,
+  `TYPE_UPBGE` en `BUILD_TYPES`). Así cada uno puede ir a una carpeta distinta,
+  como las LTS o las diarias. Las casillas de la biblioteca solo se enseñan con
+  el fork activado (`FolderRow(types=settings.active_build_types())`) y
+  `orphan_types(folders, types)` avisa solo de los tipos activos.
+- **El fork entra en la clave de deduplicación de `available_for`**
+  (`(fork, version, branch, risk)`): sin él, Bforartists 5.2.0 y Blender 5.2.0
+  se pisarían (misma versión). Del mismo modo `installed.find_installed` empareja
+  por fork, o una BFA parecería el Blender 5.2 y viceversa.
+- **La preferencia de formato se aplica por fork**, no al conjunto: UPBGE en
+  Linux solo publica `.tar.gz` y, al haber un `.tar.xz` de Blender, todas sus
+  versiones desaparecían de la tienda.
+- **La configuración de cada fork está en su carpeta**:
+  `blender_config.config_base(platform, env, fork)` y `config_for(..., fork=)`.
+  Bforartists: `~/.config/bforartists`, `%APPDATA%\Bforartists\Bforartists`,
+  `~/Library/Application Support/Bforartists`. UPBGE: `~/.config/upbge`,
+  `%APPDATA%\UPBGE\Blender`, `~/Library/Application Support/UPBGE`. **UPBGE usa
+  la serie de Blender** (`fork_series`/`upbge_series`: 0.53 → 5.3). Migración,
+  add-ons, recientes y snapshots pasan el `fork` de la instalación; sin eso,
+  migrar addons de una BFA escribiría en `~/.config/blender`.
+- **El `.dmg` de macOS de una BFA extrae `Bforartists.app`** y nombra la carpeta
+  `bforartists-…` (`macos_dmg.install(fork=)`), para no confundirla con un
+  Blender de verdad.
+- **Las pestañas de los forks nacen ocultas** (`setTabVisible`, no se quitan para
+  que los índices de `CHANNELS` no bailen) y al apagar un fork se sale de su
+  canal si estaba puesto (`settings.load` y `apply_enabled_forks`).
+- Los `try` de `api.fetch_builds` van **por separado**: un fork caído no tumba
+  el listado de Blender. `forks.fetch` ya cae a su caché si falla la red.
+
+No se prueba la red en el CI: los parsers (`_parse_multistatus`, `_parse_upbge`,
+`_bfa_builds_from`) se prueban con XML/JSON de mentira en `tests/test_forks.py`.
+
+
 ### Favoritos
 
 No son un canal de Blender: son un filtro **transversal** que el usuario marca
@@ -164,14 +224,51 @@ Reglas que no hay que romper:
   enseña una vez (`folders_hint_shown`) y el fixture de los tests lo trae ya
   marcado: un modal durante `MainWindow()` cuelga la suite entera.
 
-## Idiomas: cuáles valdría la pena añadir
+## Idiomas
 
-Hoy hay **es/en** (522 claves en `src/locale/es.json`). Si algún día se amplía, esta es
-la lista razonada, para no elegir por intuición.
+Hoy hay **en/es/zh/ru/ja/pt_BR** (545 claves en `src/locale/es.json`). El inglés
+no tiene fichero: **es la clave**. El español es la referencia de la que se
+extraen las cadenas usadas por `src/`, y los demás idiomas tienen que traer
+**exactamente las mismas claves y los mismos `{placeholders}`** (lo vigilan
+`test_todos_los_idiomas_comparten_las_mismas_claves` y
+`test_los_placeholders_sobreviven_a_la_traduccion`).
 
-El mejor dato **no** es el número de usuarios sino el esfuerzo demostrado: la
-propia Blender lleva la cuenta de sus traducciones en `locale/languages` de su
-repo (`ID:Etiqueta:ISO:PORCENTAJE`). Una comunidad que sostiene el 100% de la
+Para **añadir o actualizar un idioma**:
+
+1. Copiar `src/locale/es.json` a `src/locale/<código>.json` (códigos de
+   `i18n.SUPPORTED`; los regionales con guion bajo, p. ej. `pt_BR`).
+2. Traducir los **valores** desde la clave en inglés (el español solo
+   desambigua). Dejar en latín los nombres propios y técnicos (`Blender`,
+   `Bforartists`, `UPBGE`, `LTS`, `x86_64`, extensiones, atajos `Ctrl+…`,
+   flags `--…`).
+3. Registrar el código en `i18n.SUPPORTED` y su etiqueta en
+   `ui.widgets.shell.LANGUAGE_IDS` (esa etiqueta también hay que traducirla en
+   **todos** los idiomas; su clave es el inglés, p. ej. `"Russian"`).
+4. `./.venv/bin/python -m unittest tests.test_i18n` (comprueba claves,
+   placeholders, duplicados y claves huérfanas).
+
+El `.spec` copia `src/locale` entera al binario, así que no hay que tocar nada
+más para el empaquetado.
+
+### Tipografía y glifos (chino, ruso, japonés)
+
+**No se empaqueta ninguna fuente de texto**: solo la de iconos
+(`assets/fonts/fa-solid-900.ttf`). La familia se elige con el token
+`theme.FONT_FAMILY`, que es una **cadena de preferencia**: `Inter` (la que usa
+Blender moderno), luego las del sistema (`Noto Sans`, `Segoe UI`, `SF Pro
+Text`, …) y `sans-serif` de comodín. Qt, al pintar, resuelve con su propio
+*fallback* los glifos que la primera familia no tenga, así que el **chino
+simplificado, el ruso y el japonés se ven sin meter una CJK en el binario**
+(Noto Sans CJK pesa ~16 MB por peso y no cabría en el AppImage). Si algún día
+una cadena sale con cuadraditos, es un problema de fuentes del sistema del
+usuario, no del paquete; comprobarlo con `QFontInfo(...).family()` sobre el
+widget y con una captura (`window.grab()`).
+
+### Cuáles valdría la pena añadir después
+
+El mejor dato no es el número de usuarios sino el esfuerzo demostrado: Blender
+lleva la cuenta de sus traducciones en `locale/languages` de su repo
+(`ID:Etiqueta:ISO:PORCENTAJE`). Una comunidad que sostiene el 100% de la
 interfaz de Blender año tras año es una que también traduciría esto.
 
 - **Al 100% o casi**: español, chino simplificado, ruso, francés, catalán,
@@ -183,20 +280,12 @@ interfaz de Blender año tras año es una que también traduciría esto.
   Unido, Alemania, Rusia, Brasil, Japón y China
   (<https://www.blender.org/news/blender-by-the-numbers-2020/>).
 
-Cruzando las dos listas: **chino simplificado, ruso y japonés** son los únicos
-que salen arriba en ambas (comunidad enorme *y* traducción mantenida). India es
-top-8 en tráfico pero el hindi está al 4%: esos usuarios trabajan en inglés.
-Alemania y Brasil son top-8 con traducciones a medias.
+**Ya hechos**: chino simplificado, ruso, japonés y portugués (BR).
+**Siguientes sugeridos**: francés → catalán → eslovaco. Solo si hay alguien que
+se comprometa a mantenerlo: cada cadena nueva hay que traducirla a *todos* los
+idiomas activos, y un idioma a medias (frases sueltas en inglés) se ve peor que
+no tenerlo.
 
-**Orden sugerido**: chino simplificado → ruso → japonés → portugués (BR).
-Y solo si hay alguien que se comprometa a mantenerlo: cada cadena nueva hay que
-traducirla a *todos* los idiomas activos, y un idioma a medias (frases sueltas
-en inglés) se ve peor que no tenerlo.
-
-Las traducciones ya están en `.json` por idioma (`src/locale/`), así que
-añadir uno es copiar el fichero y traducirlo: no hace falta tocar Python.
-Ojo: el `.spec` tiene que copiar `src/locale` al binario o el empaquetado sale
-siempre en inglés.
 
 ## Comandos
 

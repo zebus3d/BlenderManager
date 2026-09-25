@@ -32,8 +32,12 @@ updates:
 - `download.blender.org` — official Blender releases (Blender Foundation).
 - `api.github.com` and GitHub release assets (`github.com`,
   `release-assets.githubusercontent.com`) — to check for and download updates of
-  Blender Manager itself (GitHub).
-- Release notes pages on `developer.blender.org`, only when you open them.
+  Blender Manager itself (GitHub), and the UPBGE fork builds if you enable them.
+- `cloud.bforartists.de` — the Bforartists fork builds, if you enable that fork
+  in Settings. Requests use the project's **public** WebDAV share, with no
+  account of yours.
+- Release notes pages on `developer.blender.org`, and the Bforartists/UPBGE
+  sites, only when you open them.
 
 These requests carry the standard HTTP information any web request includes (your
 IP address and a `User-Agent` identifying the app); no personal data is added. The
