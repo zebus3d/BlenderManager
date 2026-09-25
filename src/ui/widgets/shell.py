@@ -19,7 +19,11 @@ PLATFORMS = {"GNU/Linux": "linux", "Windows": "windows", "macOS": "darwin"}
 PLATFORM_LABELS = {value: key for key, value in PLATFORMS.items()}
 ARCH_LABELS = ["x86_64", "arm64"]
 LANGUAGE_IDS = {"auto": "Automatic", "en": "English", "es": "Spanish"}
-MIN_ZOOM, MAX_ZOOM = 0.6, 1.8
+# El mínimo (40 %) se midió: a ese nivel el contenido de una tarjeta de rejilla
+# (logo, textos y fila de botones) sigue cabiendo en el alto fijo con 6+ px de
+# holgura, así que caben más filas sin que nada se recorte ni se solape. Por
+# debajo, el texto (que NO escala con el zoom) empieza a apretarse.
+MIN_ZOOM, MAX_ZOOM = 0.4, 1.8
 
 # Alto de la fila de filtros (la que lleva las pestañas de canal). Vive en el
 # tema porque Ajustes y Migración lo usan para dejar sus pestañas a la misma
@@ -40,11 +44,12 @@ ZOOM_STEP = 0.1
 
 # Tamaño con el que se abre la ventana la primera vez y al restablecerla, y el
 # mínimo por debajo del cual la interfaz se recorta.
-# El alto (800) no es redondo por gusto: con el zoom al 80 % y 3 columnas
-# (1120 px de ancho), 3 filas de tarjetas miden 585 px de contenido y hacen
-# falta ~741 de ventana (72+44+40 de cabecera/filtros/pie). Con los 680 de antes
-# la tercera fila quedaba cortada. Medido con `_grid_height(0.8) == 179`.
-DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT = 1120, 800
+# El alto no es redondo por gusto: con el zoom de fábrica (50 %) y 3 columnas
+# (1000 px de ancho), 3 filas de tarjetas miden `3 · _grid_height(0.5) = 444` de
+# contenido, más las separaciones y los márgenes, y caben en el hueco que dejan
+# la cabecera, los filtros y el pie (~494 px). Lo vigila un test que comprueba
+# que la rejilla no necesita scroll con este tamaño.
+DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT = 1000, 650
 MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT = 880, 540
 
 # Tooltips de los filtros de canal. Se explican para quien no sabe qué es una

@@ -115,7 +115,7 @@ def default_destination() -> Path:
 # Zoom con el que arranca la rejilla y valor de fábrica del "restablecer".
 # El usuario puede elegir a qué zoom vuelven Ctrl+0 y el clic con Ctrl en el
 # slider (``reset_zoom``); esto solo es lo que se propone la primera vez.
-DEFAULT_ZOOM = 0.6
+DEFAULT_ZOOM = 0.5
 
 # Filtros de canal que ofrece la barra. Se reexportan desde ``channels``, que
 # es donde viven: aquí solo hacen falta para validar el que se guardó la última

@@ -299,12 +299,38 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window.set_zoom(0.01)
         self.assertEqual(window.zoom, MIN_ZOOM)
 
-    def test_zoom_por_defecto_es_60(self):
+    def test_zoom_por_defecto_es_50(self):
         from services.settings import Settings
 
-        self.assertEqual(Settings().zoom, 0.6)
+        self.assertEqual(Settings().zoom, 0.5)
         # El destino del reset arranca en el mismo valor de fabrica.
-        self.assertEqual(Settings().reset_zoom, 0.6)
+        self.assertEqual(Settings().reset_zoom, 0.5)
+
+    def test_el_zoom_minimo_no_recorta_ni_solapa_el_contenido(self):
+        """Al bajar el zoom el logo y el alto encogen, pero el contenido tiene
+        que seguir cabiendo: ni el layout se aprieta por debajo de su mínimo
+        (textos solapándose) ni una tarjeta pide más ancho que su columna
+        (textos o iconos saliéndose)."""
+        from pathlib import Path
+
+        from model.build import InstalledBuild
+        from ui.widgets.cards import GridBuildCard, GridInstalledCard
+        from ui.widgets.main_window import MAX_ZOOM, MIN_ZOOM, MainWindow
+
+        ancho_minimo = MainWindow.MIN_CARD_WIDTH
+        build = _build("5.2.1", "v52", "stable")
+        entry = InstalledBuild(name="blender-5.2.1",
+                               path=Path("/tmp/blender-5.2.1"),
+                               version="5.2.1", branch="v52")
+
+        for zoom in (MIN_ZOOM, 0.5, 0.6, 0.8, 1.0, 1.4, MAX_ZOOM):
+            ancho_columna = max(int(300 * zoom), ancho_minimo)
+            for card in (GridBuildCard(build, False, False, zoom),
+                         GridInstalledCard(entry, False, zoom)):
+                self.assertLessEqual(card.layout().minimumSize().height(),
+                                     card.height(), zoom)
+                self.assertLessEqual(card.minimumSizeHint().width(),
+                                     ancho_columna, zoom)
 
     def test_ctrl_0_va_al_zoom_de_restablecimiento(self):
         """Ctrl+0 vuelve al zoom elegido en los ajustes, no siempre a 80 %.
@@ -328,9 +354,11 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertAlmostEqual(window.zoom, 1.2)
 
         # Ctrl+clic en el slider del ajuste vuelve al valor de fabrica.
+        from services.settings import DEFAULT_ZOOM
+
         window.reset_zoom_slider.setValue(150)
         window._factory_reset_zoom()
-        self.assertEqual(window.settings.reset_zoom, 0.6)
+        self.assertEqual(window.settings.reset_zoom, DEFAULT_ZOOM)
 
     def test_zoom_en_vivo_con_tope(self):
         from PySide6.QtTest import QTest
@@ -460,8 +488,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window = MainWindow()
         window.resize(900, 600)
         window.layout_mode = "grid"
-        # Un zoom intermedio: el de fábrica es ya el mínimo (60 %), así que no
-        # se puede bajar desde ahí para comprobar el paso.
+        # Un zoom intermedio: así se puede subir y bajar sin tocar los topes.
         window._set_zoom_value(1.0)
 
         window.zoom_in()
@@ -1256,13 +1283,15 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual((window.settings.window_width,
                           window.settings.window_height), (0, 0))
 
-    def test_el_tamano_por_defecto_muestra_tres_filas_al_80(self):
-        """Con el zoom al 80 % y 3 columnas, 3 filas tienen que caber enteras.
+    def test_el_tamano_por_defecto_muestra_tres_filas_al_zoom_de_fabrica(self):
+        """Con el zoom de fábrica (50 %) y 3 columnas, 3 filas caben enteras.
 
-        Con el alto por defecto anterior (680) la tercera fila quedaba cortada:
-        hacían falta ~741 px de ventana.
+        El alto por defecto (650) está medido para eso: con el anterior (680 y
+        zoom al 80 %, de cuando la rejilla venía más grande) la tercera fila
+        quedaba cortada.
         """
         from model.build import Build
+        from services.settings import DEFAULT_ZOOM
         from ui.widgets.main_window import (
             DEFAULT_WINDOW_HEIGHT,
             DEFAULT_WINDOW_WIDTH,
@@ -1278,7 +1307,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         ]
         window.channel = "all"
         window.layout_mode = "grid"
-        window.zoom = 0.8
+        window.zoom = DEFAULT_ZOOM
         window.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         window.show()
         for _ in range(5):

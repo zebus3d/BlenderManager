@@ -370,15 +370,17 @@ def _grid_height(zoom: float) -> int:
 
     No es ``196 * zoom``: las etiquetas (título, meta, "Instalada"...) NO
     escalan con el zoom, así que con poca ampliación se recortaban. Medido:
-    el contenido mide ~104·zoom + 90 px, y dejamos ~6 px de holgura para que
-    nunca se corte (para verlo más grande está el zoom).
+    el contenido mide ~104·zoom + 90 px, y dejamos ~4 px de holgura para que
+    nunca se corte (para verlo más grande está el zoom). Lo vigila
+    ``test_el_zoom_minimo_no_recorta_ni_solapa_el_contenido``, que a varios
+    niveles comprueba que el layout cabe en este alto.
 
     Lo usan las dos rejillas (tienda e instaladas): son la misma estructura
     (logo, título, meta, fila de etiqueta y fila de botones) y tienen que medir
     igual al cambiar de pestaña. La fila de la etiqueta se reserva siempre
     aunque esté vacía, que es lo que fija este alto.
     """
-    return int(104 * zoom + 96)
+    return int(104 * zoom + 94)
 
 
 class GridBuildCard(BaseBuildCard):
