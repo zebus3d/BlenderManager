@@ -404,6 +404,26 @@ class ForkUiTests(SettingsIsolated, unittest.TestCase):
         window.upbge_switch.setChecked(True)
         self.assertEqual(llamadas, [True])
 
+    def test_la_barra_ocupada_aparece_mientras_carga(self):
+        """Pedir el listado no tiene porcentaje: la barra del pie dice "en ello".
+
+        Se enseña al empezar el refresco y se esconde cuando llega el listado
+        (por señal, desde el hilo). Así, con una conexión lenta, se ve que la
+        app está trabajando y no colgada.
+        """
+        window = self._window()
+        self.assertTrue(window.busy_bar.isHidden())
+
+        window.refresh()
+        # ``isVisible`` sería False con la ventana sin enseñar (el padre
+        # esconde a los hijos): lo que importa es que no esté oculta a
+        # propósito.
+        self.assertFalse(window.busy_bar.isHidden())
+
+        # Cuando llega el listado, se esconde.
+        window._on_builds_loaded([])
+        self.assertTrue(window.busy_bar.isHidden())
+
     def test_las_casillas_de_fork_solo_salen_con_el_fork_activo(self):
         from services import channels
 

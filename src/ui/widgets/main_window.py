@@ -39,6 +39,7 @@ from ui.fonts import icon_font
 from ui.widgets.addons import AddonsView
 from ui.widgets.build_lists import BuildListsMixin
 from ui.widgets.buttons import CardButton, SideButton
+from ui.widgets.busy import BusyBar
 from ui.widgets.cards import logo_shadow
 from ui.widgets.downloads import DownloadFlowMixin
 from ui.widgets.folder_library import FolderLibraryMixin
@@ -444,6 +445,15 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.status_label = QLabel(tr("Ready"))
         self.status_label.setObjectName("Muted")
         lay.addWidget(self.status_label)
+
+        # Barra de "esto está trabajando" para lo que no tiene porcentaje: pedir
+        # el listado a internet (una descarga sí lo tiene, y usa la de abajo).
+        # Va pegada al texto de estado, en el hueco que queda a su derecha.
+        self.busy_bar = BusyBar()
+        self.busy_bar.setFixedWidth(120)
+        self.busy_bar.setVisible(False)
+        self.busy_bar.setToolTip(tr("Loading the list of versions..."))
+        lay.addWidget(self.busy_bar)
 
         # Progreso + porcentaje + cancelar van en su PROPIO contenedor con
         # stretch, y no sueltos en el pie: un widget OCULTO no aporta su stretch

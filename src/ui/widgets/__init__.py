@@ -17,6 +17,7 @@ from ui.widgets.buttons import (
     StarButton,
     SwitchPill,
 )
+from ui.widgets.busy import BusyBar
 from ui.widgets.cards import (
     BuildCard,
     GridBuildCard,
@@ -41,6 +42,7 @@ __all__ = [
     "AddonsView",
     "AppDialog",
     "BuildCard",
+    "BusyBar",
     "CardButton",
     "GridBuildCard",
     "ElidedLabel",

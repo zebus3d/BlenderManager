@@ -366,6 +366,9 @@ class BuildListsMixin:
     def refresh(self, force: bool = False) -> None:
         """Pide el listado de compilaciones y lo pinta cuando llega."""
         self._set_status(tr("Loading..."))
+        # Mientras se pide a internet, la barra del pie dice que sigue en ello
+        # (no se sabe cuánto tarda: es indeterminada, no un porcentaje).
+        self.busy_bar.setVisible(True)
 
         def worker():
             try:
@@ -380,6 +383,7 @@ class BuildListsMixin:
 
     def _on_builds_loaded(self, builds) -> None:
         self.builds = builds
+        self.busy_bar.setVisible(False)
         # Con qué forks se cargó este listado. Al cambiar un interruptor de fork
         # hay que volver a pedirlo (el listado anterior no traía sus builds), y
         # así se sabe aunque el cambio se haga con Ajustes delante.
