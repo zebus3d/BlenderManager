@@ -1322,6 +1322,36 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertIn("favorites", [key for key, _ in CHANNELS])
         self.assertEqual(window.channel_tabs.count(), len(CHANNELS))
 
+    def test_todas_las_pestanas_de_canal_son_alcanzables(self):
+        """Con los dos forks activos, las ocho pestañas no pueden quedar cortadas.
+
+        Fue el fallo que hizo pensar que no había builds de fork: a 1000 px de
+        ancho la última pestaña se recortaba contra el botón de refrescar
+        ("Bforartists" salía como "Bfor...") y parecía no existir. O caben
+        todas, o la barra ofrece botones para desplazarse a las que no.
+        """
+        from ui.widgets.main_window import (
+            DEFAULT_WINDOW_WIDTH,
+            MainWindow,
+        )
+
+        window = MainWindow()
+        window.settings.enable_bforartists = True
+        window.settings.enable_upbge = True
+        window._update_fork_tabs()
+        window.resize(DEFAULT_WINDOW_WIDTH, 670)
+        window.show()
+        self.app.processEvents()
+
+        tabs = window.channel_tabs
+        visibles = [i for i in range(tabs.count()) if tabs.isTabVisible(i)]
+        self.assertEqual(len(visibles), 8)
+        # Con el ancho de fábrica caben enteras, sin necesidad de scroll.
+        self.assertLessEqual(tabs.sizeHint().width(), tabs.width())
+        # Y todas se pueden alcanzar (caben o hay botones de scroll).
+        self.assertTrue(tabs.usesScrollButtons()
+                        or tabs.sizeHint().width() <= tabs.width())
+
     def test_la_estrella_marca_y_desmarca(self):
         from ui.widgets.buttons import StarButton
         from ui.widgets.main_window import MainWindow

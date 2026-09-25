@@ -52,14 +52,17 @@ ZOOM_STEP = 0.1
 
 # Tamaño con el que se abre la ventana la primera vez y al restablecerla, y el
 # mínimo por debajo del cual la interfaz se recorta.
-# El alto no es redondo por gusto: con el zoom de fábrica (50 %) y 3 columnas
-# (1000 px de ancho), 3 filas de tarjetas miden `3 · _grid_height(0.5) = 444` de
-# contenido, más las separaciones y los márgenes, y caben en el hueco que dejan
-# la cabecera, los filtros y el pie. Lo vigila un test que comprueba que la
-# rejilla no necesita scroll con este tamaño. Con 670 (y no 650) la pestaña
-# "Favoritos" entra entera junto al botón de refrescar, sin que se recorten.
-DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT = 1000, 670
-MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT = 880, 540
+# El alto no es redondo por gusto: con el zoom de fábrica (50 %) y 3 columnas,
+# 3 filas de tarjetas caben en el hueco que dejan la cabecera, los filtros y el
+# pie. Lo vigila un test que comprueba que la rejilla no necesita scroll.
+# El ancho (1160) es el que necesitan las **ocho** pestañas de canal cuando los
+# dos forks están activos (Todas, LTS, Estable, Diarias, Experimentales,
+# Bforartists, UPBGE, Favoritos: 718 px) más el botón de refrescar, la vista y
+# los dos combos. Con menos, la última pestaña se recortaba contra el refrescar
+# y parecía no existir. Aun así la barra lleva botones de scroll para anchos
+# menores.
+DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT = 1160, 665
+MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT = 665, 500
 
 # Tooltips de los filtros de canal. Se explican para quien no sabe qué es una
 # LTS o una compilación diaria; las claves de i18n son estos textos en inglés.

@@ -581,7 +581,14 @@ class BuildListsMixin:
         self.channel_tabs.setObjectName("ChannelTabs")
         self.channel_tabs.setExpanding(False)
         self.channel_tabs.setDrawBase(False)
-        self.channel_tabs.setUsesScrollButtons(False)
+        # Con los forks hay hasta ocho pestañas (Todas, LTS, Estable, Diarias,
+        # Experimentales, Bforartists, UPBGE, Favoritos) y no caben todas en el
+        # ancho mínimo de la ventana. Sin botones de scroll, Qt **recorta** la
+        # última ("Bforartists" salía como "Bfor...") y parece que no existe:
+        # así se descubrió que no se veían los forks. Con ellos, las que no
+        # caben quedan accesibles desplazando, en vez de desaparecer.
+        self.channel_tabs.setUsesScrollButtons(True)
+        self.channel_tabs.setElideMode(Qt.ElideNone)
         self.channel_tabs.setToolTip(tr(
             "Show only one kind of version at a time.\n"
             "\"All\" mixes them; the rest narrow the list down."))
@@ -594,8 +601,10 @@ class BuildListsMixin:
         self.channel_tabs.currentChanged.connect(self._on_channel_tab_changed)
         # Las pestañas de los forks nacen ocultas si no están activados.
         self._update_fork_tabs()
-        lay.addWidget(self.channel_tabs, 0, Qt.AlignBottom)
-        lay.addStretch()
+        # La barra de pestañas ocupa el hueco que le queda (con stretch) en vez
+        # de quedarse con su tamaño mínimo: así usa el ancho disponible y, si no
+        # cabe todo, enseña sus botones de scroll en lugar de recortar.
+        lay.addWidget(self.channel_tabs, 1, Qt.AlignBottom)
 
         # Refrescar va junto a los controles de la lista (y no en la cabecera):
         # refresca **lo que se ve**, la nube o las instaladas, y el tooltip lo
