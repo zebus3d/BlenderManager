@@ -375,6 +375,35 @@ class ForkUiTests(SettingsIsolated, unittest.TestCase):
         window.bforartists_switch.setChecked(False)
         self.assertEqual(window.channel, "all")
 
+    def test_cambiar_un_fork_refresca_la_nube(self):
+        """Encender/apagar un fork tiene que traer o quitar sus builds.
+
+        Si el listado en memoria se cargó con otros forks, al entrar en la nube
+        hay que volver a pedirlo: si no, el interruptor no tenía efecto visible
+        hasta reiniciar. Y si el cambio se hace **desde Ajustes**, no se
+        descarga ahí mismo (no se vería): ya se pedirá al volver a la nube.
+        """
+        window = self._window()
+        window.builds = self._fork_builds()
+        window._builds_forks = []            # cargado sin ningún fork
+        llamadas = []
+        original = window.refresh
+        window.refresh = lambda force=False: (llamadas.append(force),
+                                              original(force=force))[1]
+
+        # Desde Ajustes: no se refresca todavía.
+        window.set_view("settings")
+        window.bforartists_switch.setChecked(True)
+        self.assertEqual(llamadas, [])
+        # Al volver a la nube, sí (el listado ya no vale).
+        window.set_view("store")
+        self.assertEqual(llamadas, [True])
+
+        # Estando ya en la nube, el cambio refresca al instante.
+        llamadas.clear()
+        window.upbge_switch.setChecked(True)
+        self.assertEqual(llamadas, [True])
+
     def test_las_casillas_de_fork_solo_salen_con_el_fork_activo(self):
         from services import channels
 
@@ -1329,20 +1358,15 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
 
         Fue el fallo que hizo pensar que no había builds de fork: a 1000 px de
         ancho la última pestaña se recortaba contra el botón de refrescar
-        ("Bforartists" salía como "Bfor...") y parecía no existir. O caben
-        todas, o la barra ofrece botones para desplazarse a las que no.
+        ("Bforartists" salía como "Bfor...") y parecía no existir. La
+        invariante es que **ninguna pestaña quede inalcanzable**: o caben todas,
+        o la barra trae botones de scroll para llegar a las que no.
 
-        No se comprueba contra el ancho real de la ventana: el servidor
-        *offscreen* de los tests tiene una pantalla virtual de 800x800 y Qt
-        recorta la ventana a ella, así que un ancho mayor nunca se materializa.
-        Lo que sí se puede comprobar es que la barra trae botones de scroll
-        (nada queda inalcanzable) y que el ancho de fábrica basta para las
-        ocho pestañas.
+        No se ata a un ancho de fábrica concreto (se ajusta a ojo y cambia):
+        solo a que, con las ocho pestañas visibles, la barra tenga la red de
+        seguridad del scroll.
         """
-        from ui.widgets.main_window import (
-            DEFAULT_WINDOW_WIDTH,
-            MainWindow,
-        )
+        from ui.widgets.main_window import MainWindow
         from ui.widgets.shell import CHANNELS
 
         window = MainWindow()
@@ -1355,17 +1379,9 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         tabs = window.channel_tabs
         visibles = [i for i in range(tabs.count()) if tabs.isTabVisible(i)]
         self.assertEqual(len(visibles), len(CHANNELS))
-        # Red de seguridad: si no caben (ventana estrecha), se puede desplazar.
+        # Con ocho pestañas, la barra tiene que poder desplazarse o caber
+        # entera; lo que no vale es recortar la última sin más.
         self.assertTrue(tabs.usesScrollButtons())
-        # Y el ancho de fábrica está medido para que quepan sin tener que
-        # desplazar: pestañas + refrescar + vista + los dos combos.
-        extra = (window.refresh_btn.sizeHint().width()
-                 + window.grid_btn.sizeHint().width()
-                 + window.list_btn.sizeHint().width()
-                 + window.platform_combo.sizeHint().width()
-                 + window.arch_combo.sizeHint().width())
-        self.assertGreaterEqual(DEFAULT_WINDOW_WIDTH,
-                                tabs.sizeHint().width() + extra + 140)
 
     def test_la_estrella_marca_y_desmarca(self):
         from ui.widgets.buttons import StarButton

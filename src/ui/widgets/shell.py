@@ -57,31 +57,28 @@ ZOOM_STEP = 0.1
 # tamaño más pequeño al que el usuario puede encogerla sin que la interfaz se
 # recorte hasta ser inservible.
 
-# Ancho de fábrica. NO es redondo por gusto: 1160 es lo que necesitan las
-# **ocho** pestañas de canal cuando los dos forks están activos (Todas, LTS,
-# Estable, Diarias, Experimentales, Bforartists, UPBGE, Favoritos: suman 718 px)
-# más el botón de refrescar, los de vista rejilla/lista y los combos de
-# plataforma y arquitectura. Con 1000 la última pestaña se recortaba contra el
-# refrescar ("Bforartists" salía como "Bfor...") y parecía que no existía. Lo
+# Ancho de fábrica. Con los dos forks activos hay ocho pestañas de canal
+# (Todas, LTS, Estable, Diarias, Experimentales, Bforartists, UPBGE, Favoritos;
+# ~718 px solo las pestañas) más el botón de refrescar, los de vista
+# rejilla/lista y los combos de plataforma y arquitectura. Si no basta, Qt
+# **recorta** la última contra el refrescar ("Bforartists" salía como "Bfor...")
+# y parece que el fork no existe; por eso la barra lleva botones de scroll. Lo
 # vigila ``test_todas_las_pestanas_de_canal_son_alcanzables``.
-DEFAULT_WINDOW_WIDTH = 1130
+DEFAULT_WINDOW_WIDTH = 940
 
-# Alto de fábrica. 665 no es redondo por gusto: con el zoom de fábrica (50 %) y
-# 3 columnas, deja entrar **tres filas** de tarjetas de rejilla enteras (con las
-# separaciones y los márgenes que quedan entre la cabecera, los filtros y el
-# pie) y, además, la pestaña "Favoritos" de la fila de canales. Lo vigila
-# ``test_el_tamano_por_defecto_muestra_tres_filas_al_zoom_de_fabrica``.
-DEFAULT_WINDOW_HEIGHT = 660
+# Alto de fábrica. 655 deja entrar **tres filas** de tarjetas de rejilla al
+# zoom de fábrica (50 %) con 3 columnas (separaciones y márgenes incluidos).
+# Lo vigila ``test_el_tamano_por_defecto_muestra_tres_filas_al_zoom_de_fabrica``.
+DEFAULT_WINDOW_HEIGHT = 655
 
 # Ancho mínimo. Por debajo, la fila de filtros y las tarjetas se aprietan de más
 # y la interfaz empieza a recortar contenido. Las pestañas de canal que no caben
 # a este ancho se alcanzan con los botones de scroll de la propia barra.
 MIN_WINDOW_WIDTH = 700
 
-# Alto mínimo. 500 es el suelo del caso más alto de la app (la pestaña de
-# Ajustes más larga) sin que aparezca scroll vertical; por debajo, los botones
-# del pie y el contenido se solapan.
-MIN_WINDOW_HEIGHT = 500
+# Alto mínimo. El suelo del caso más alto de la app (la pestaña de Ajustes más
+# larga) sin que el contenido se recorte.
+MIN_WINDOW_HEIGHT = 440
 
 # Tooltips de los filtros de canal. Se explican para quien no sabe qué es una
 # LTS o una compilación diaria; las claves de i18n son estos textos en inglés.

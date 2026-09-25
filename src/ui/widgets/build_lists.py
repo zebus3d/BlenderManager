@@ -316,15 +316,21 @@ class BuildListsMixin:
     def apply_enabled_forks(self) -> None:
         """Reacciona al interruptor de un fork (Ajustes > Descargas).
 
-        Si el canal puesto era el de un fork que se acaba de apagar, se vuelve
-        a "Todas" (su pestaña desaparece). Y se vuelve a pedir el listado: al
-        encender un fork, sus versiones todavía no están en memoria.
+        Enseña u oculta su pestaña, y si el canal puesto era el de un fork que
+        se acaba de apagar vuelve a "Todas" (su pestaña desaparece).
+
+        El listado se vuelve a pedir **solo si la nube está a la vista**: si el
+        interruptor se cambia desde Ajustes, no tiene sentido bajarlo ahí mismo
+        (el usuario no lo vería) y ya se pedirá al volver a la nube; así no se
+        descarga dos veces. Lo decide ``MainWindow.set_view("store")`` mirando
+        ``_builds_forks``.
         """
         self._update_fork_tabs()
         if (self.channel in self._fork_channels()
                 and self.channel not in self.settings.enabled_forks()):
             self.set_channel("all")
-        self.refresh(force=True)
+        if self.view in ("store", "installed"):
+            self.refresh(force=True)
 
     def refresh_installed(self) -> None:
         """Vuelve a escanear las carpetas y repinta las instaladas."""
@@ -374,6 +380,10 @@ class BuildListsMixin:
 
     def _on_builds_loaded(self, builds) -> None:
         self.builds = builds
+        # Con qué forks se cargó este listado. Al cambiar un interruptor de fork
+        # hay que volver a pedirlo (el listado anterior no traía sus builds), y
+        # así se sabe aunque el cambio se haga con Ajustes delante.
+        self._builds_forks = list(self.settings.enabled_forks())
         self._recompute_updates()
         self._rebuild_store()
         # Las instaladas también llevan el aviso de parche, y ese aviso depende

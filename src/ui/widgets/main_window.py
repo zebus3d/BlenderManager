@@ -84,7 +84,10 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"{tr('Blender Manager')} {updater.app_version()}")
-        self.setMinimumSize(880, 540)
+        # El mínimo sale de ``shell`` (una sola definición): antes estaba a mano
+        # aquí (880x540) y pisaba el de allí, así que bajar ``MIN_WINDOW_*`` no
+        # dejaba encoger la ventana.
+        self.setMinimumSize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
 
         self.settings = settings_service.Settings.load()
         i18n.set_language(self.settings.language)
@@ -149,6 +152,10 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.launcher = Launcher()
 
         self.builds = []
+        # Forks con los que se cargó el listado en memoria (ver
+        # ``build_lists._on_builds_loaded``). Sirve para saber si, al encender o
+        # apagar un fork, lo que hay ya no vale y hay que volver a pedirlo.
+        self._builds_forks = []
         self.installed = installed_service.scan_folders(self.settings.library_roots(),
                                                         self.platform)
         self.view = "installed" if self.installed else "store"
@@ -560,6 +567,12 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             # El zoom en vivo solo reconstruye la vista visible, así que la
             # tienda puede haberse quedado con el tamaño viejo.
             self._rebuild_store()
+            # Si se encendió o apagó un fork con Ajustes delante, el listado en
+            # memoria ya no vale (le faltan sus builds o le sobran): se vuelve a
+            # pedir al entrar en la nube. Sin esto, cambiar el interruptor no
+            # tenía efecto visible hasta reiniciar la app.
+            if self._builds_forks != self.settings.enabled_forks():
+                self.refresh(force=True)
         elif view == "migrate":
             # Las instaladas pueden haber cambiado desde la última vez.
             self.migrate_view.set_installed(self.installed)
