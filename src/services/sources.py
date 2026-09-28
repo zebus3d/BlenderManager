@@ -70,8 +70,16 @@ def release_url(build) -> Optional[str]:
     """URL del release oficial de esa versión, o ``None`` si no hay.
 
     Solo las estables: las diarias y las alfas se compilan al vuelo y nunca se
-    publican como release.
+    publican como release. Y solo **Blender oficial**: Bforartists y UPBGE
+    comparten el número de versión (5.2.0 es 5.2.0 en los dos), pero
+    ``download.blender.org`` únicamente guarda el Blender de Blender. Sin esta
+    comprobación, una Bforartists estable pasaba por el release oficial, la
+    sonda veía Cloudflare mucho más rápido que su NextCloud y acababa bajando
+    el Blender oficial con el nombre de Bforartists (el checksum cuadraba
+    porque era el del release de Blender).
     """
+    if getattr(build, "fork", ""):
+        return None
     if build.risk != "stable":
         return None
     combinacion = RELEASE_NAMES.get((build.platform, build.arch))

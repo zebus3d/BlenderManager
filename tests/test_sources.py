@@ -12,10 +12,11 @@ from model.build import Build
 from services import sources
 
 
-def make_build(version="4.4.3", platform="linux", arch="x86_64", risk="stable"):
+def make_build(version="4.4.3", platform="linux", arch="x86_64", risk="stable",
+               fork=""):
     return Build(version=version, branch="v" + version[:2].replace(".", ""),
                  risk=risk, platform=platform, arch=arch, url="https://cdn/x.tar.xz",
-                 filename="x.tar.xz", size=1, checksum="aaa")
+                 filename="x.tar.xz", size=1, checksum="aaa", fork=fork)
 
 
 class ReleaseUrlTests(unittest.TestCase):
@@ -42,6 +43,14 @@ class ReleaseUrlTests(unittest.TestCase):
 
     def test_combinacion_desconocida_no_tiene_release(self):
         self.assertIsNone(sources.release_url(make_build(arch="riscv64")))
+
+    def test_un_fork_no_usa_el_release_de_blender(self):
+        # Bforartists 5.2.0 y Blender 5.2.0 comparten número, pero el release
+        # de download.blender.org es el Blender oficial. Sin esto, una BFA
+        # estable acababa bajándose del release de Blender (más rápido) y el
+        # usuario lanzaba un Blender normal creyendo que era Bforartists.
+        for fork in ("bforartists", "upbge"):
+            self.assertIsNone(sources.release_url(make_build(fork=fork)))
 
 
 class ReleaseChecksumTests(unittest.TestCase):
@@ -114,6 +123,16 @@ class ChooseTests(unittest.TestCase):
             elegida = sources.choose(make_build(risk="alpha"))
         self.assertEqual(elegida.url, "https://cdn/x.tar.xz")
         self.assertFalse(sonda.called)
+
+    def test_un_fork_baja_de_su_propia_fuente(self):
+        # Aunque sea estable, un fork solo tiene su URL: no se sonda ni se
+        # cambia por el release de Blender.
+        with mock.patch.object(sources, "_speed") as sonda, \
+                mock.patch.object(sources, "release_checksum") as checksum:
+            elegida = sources.choose(make_build(fork="bforartists"))
+        self.assertEqual(elegida.url, "https://cdn/x.tar.xz")
+        self.assertFalse(sonda.called)
+        self.assertFalse(checksum.called)
 
 
 if __name__ == "__main__":
