@@ -31,9 +31,9 @@ from ui.widgets.buttons import CardButton, CheckPill
 from ui.widgets.cards import settings_card
 from ui.widgets import dialogs
 from ui.widgets.labels import ElidedLabel
-from ui.widgets.layouts import FittedList, clear_layout
+from ui.widgets.layouts import CornerGrip, FittedList, clear_layout
 from ui.widgets.migrate.common import (DETAIL_MIN_HEIGHT, DETAIL_MIN_ROWS,
-                                           DETAIL_SCROLL_HEIGHT, _CornerGrip,
+                                           DETAIL_SCROLL_HEIGHT,
                                            _accent_button, _entry_info,
                                            _failure_block, _make_scroll)
 
@@ -454,7 +454,7 @@ class PrefsTabMixin:
         row.addWidget(self.detail_apply_btn)
         lay.addLayout(row)
         # Asa en la esquina inferior derecha de la **tarjeta** (no de la fila).
-        self.detail_grip = _CornerGrip(
+        self.detail_grip = CornerGrip(
             self._resize_detail,
             tooltip=tr("Drag the corner to make the settings list taller or "
                        "shorter."))

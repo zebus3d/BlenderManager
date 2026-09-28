@@ -23,11 +23,12 @@ from services import blender_prefs as bprefs
 from ui.widgets.buttons import CardButton
 from ui.widgets.cards import settings_card
 from ui.widgets import dialogs
-from ui.widgets.layouts import FittedList, clear_layout, list_scroll
+from ui.widgets.layouts import (CornerGrip, FittedList, clear_layout,
+                                list_scroll)
 from ui.widgets.migrate.common import (SNAPSHOT_MIN_HEIGHT,
                                            SNAPSHOT_MIN_ROWS,
                                            SNAPSHOT_SCROLL_HEIGHT,
-                                           _CornerGrip, _entry_info,
+                                           _entry_info,
                                            _make_scroll, _section_names)
 from ui.widgets.migrate.prefs_tab import _PrefRow
 
@@ -364,7 +365,7 @@ class FactoryTabMixin:
         keep_row.addWidget(self.snapshot_keep_combo)
         lay.addLayout(keep_row)
         # Asa en la esquina inferior derecha de la **tarjeta** (no de la fila).
-        self.snapshot_grip = _CornerGrip(
+        self.snapshot_grip = CornerGrip(
             self._resize_snapshots,
             tooltip=tr("Drag the corner to make the saved copies list taller "
                        "or shorter."))

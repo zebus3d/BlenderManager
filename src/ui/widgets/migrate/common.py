@@ -7,16 +7,13 @@ aquí porque las usan las tres pestañas; lo que solo usa una está en su módul
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QScrollArea, QWidget
+from PySide6.QtWidgets import QScrollArea
 
 from i18n import tr
 from services import blender_config as bc
 from services import blender_addons as baddons
 from services import blender_prefs as bprefs
 from ui import icons
-from ui import theme as t
 from ui.fonts import glyph_icon
 from ui.widgets.buttons import CardButton
 from ui.widgets.layouts import list_scroll
@@ -224,52 +221,6 @@ def _section_names(paths) -> list:
         positions.setdefault(key, order.get(key, 99))
     ordered = sorted(positions, key=lambda key: (positions[key], key))
     return [tr(bprefs.section_label(key)) for key in ordered]
-
-class _CornerGrip(QWidget):
-    """Esquinita para estirar el panel, abajo a la derecha.
-
-    Sustituye a la barra horizontal que había antes: se agarra desde la esquina
-    (donde todo el mundo busca el redimensionado) y no ocupa ninguna fila. Solo
-    manda el desplazamiento vertical; el ancho lo fija el layout.
-    """
-
-    SIZE = 14
-
-    def __init__(self, on_resize, tooltip: str = "", parent=None):
-        super().__init__(parent)
-        self._on_resize = on_resize
-        self._last = None
-        self.setFixedSize(self.SIZE, self.SIZE)
-        self.setCursor(Qt.SizeFDiagCursor)
-        if tooltip:
-            self.setToolTip(tooltip)
-
-    def paintEvent(self, event) -> None:
-        # Tres rayitas diagonales, como el grip clásico; se encienden al pasar
-        # el ratón para que se vea que se puede arrastrar.
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        color = QColor(t.ACCENT if self.underMouse() else t.MUTED)
-        painter.setPen(QPen(color, 1.4, Qt.SolidLine, Qt.RoundCap))
-        edge = self.SIZE - 1
-        for offset in (4, 7, 10):
-            painter.drawLine(edge - offset, edge, edge, edge - offset)
-        painter.end()
-
-    def mousePressEvent(self, event) -> None:
-        self._last = event.globalPosition().y()
-
-    def mouseMoveEvent(self, event) -> None:
-        if self._last is None:
-            return
-        # Posición **global**: la esquinita se mueve con el panel al crecer, así
-        # que la local daría un salto en cada fotograma.
-        current = event.globalPosition().y()
-        self._on_resize(int(current - self._last))
-        self._last = current
-
-    def mouseReleaseEvent(self, event) -> None:
-        self._last = None
 
 def _make_scroll(object_name: str, cap: int, minimum: int) -> QScrollArea:
     """Área de lista, con su alto de partida entre ``minimum`` y ``cap``.

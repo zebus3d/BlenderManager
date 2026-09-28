@@ -81,6 +81,7 @@
   "User prefs": "Настройки пользователя",
   "Drag the corner to make the settings list taller or shorter.": "Потяните за угол, чтобы список настроек стал длиннее или короче.",
   "Drag the corner to make the saved copies list taller or shorter.": "Потяните за угол, чтобы список сохранённых копий стал длиннее или короче.",
+  "Drag the corner to make the list of folders taller or shorter.": "Потяните за угол, чтобы список папок стал длиннее или короче.",
   "Launch this version with the console visible: Python output and script errors.": "Запустить эту версию с видимой консолью: вывод Python и ошибки скриптов.",
   "Pick the version whose settings you want to reset or put back.": "Выберите версию, настройки которой хотите сбросить или вернуть.",
   "The version whose settings are reset or restored.": "Версия, чьи настройки сбрасываются или восстанавливаются.",

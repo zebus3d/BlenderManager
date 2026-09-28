@@ -131,6 +131,9 @@ class SettingsViewMixin:
                 tr("Updates of BlenderManager itself."),
                 tr("Options still in development."))):
             tabs.setTabToolTip(index, tip)
+        # Al entrar en una pestaña, sus listas se ajustan al hueco que tienen:
+        # una página oculta no mide igual que recién enseñada.
+        tabs.currentChanged.connect(self._on_settings_tab_changed)
         # Las pestañas se alinean por **arriba** con la barra lateral y con los
         # tags de canal (``TABS_TOP``).
         outer.setContentsMargins(0, t.TABS_TOP, 0, 0)

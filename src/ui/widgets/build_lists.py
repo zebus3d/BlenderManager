@@ -134,6 +134,9 @@ class BuildListsMixin:
         if self.layout_mode == "grid":
             self._rebuild_store()
             self._rebuild_installed()
+        # La lista de Carpetas crece con la ventana: al cambiar el alto hay que
+        # volver a medirle el hueco (el resto de páginas no lleva listas).
+        self._fit_folder_list()
 
     def _rebuild_store(self) -> None:
         clear_layout(self.store_grid)

@@ -7,7 +7,10 @@ la única versión de cada una, con el porqué de sus detalles.
 """
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
+
+from ui import theme as t
 
 
 def clear_layout(layout, keep_stretch: bool = False) -> None:
@@ -68,6 +71,53 @@ def muted_note(text: str) -> QLabel:
     return label
 
 
+class CornerGrip(QWidget):
+    """Esquinita para estirar el panel, abajo a la derecha.
+
+    Vive flotando sobre la tarjeta (``GripCard.set_grip`` la coloca) y solo
+    manda el desplazamiento vertical; el ancho lo fija el layout. La usan las
+    listas que se pueden estirar a mano: las de Migración y la de Carpetas.
+    """
+
+    SIZE = 14
+
+    def __init__(self, on_resize, tooltip: str = "", parent=None):
+        super().__init__(parent)
+        self._on_resize = on_resize
+        self._last = None
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setCursor(Qt.SizeFDiagCursor)
+        if tooltip:
+            self.setToolTip(tooltip)
+
+    def paintEvent(self, event) -> None:
+        # Tres rayitas diagonales, como el grip clásico; se encienden al pasar
+        # el ratón para que se vea que se puede arrastrar.
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        color = QColor(t.ACCENT if self.underMouse() else t.MUTED)
+        painter.setPen(QPen(color, 1.4, Qt.SolidLine, Qt.RoundCap))
+        edge = self.SIZE - 1
+        for offset in (4, 7, 10):
+            painter.drawLine(edge - offset, edge, edge, edge - offset)
+        painter.end()
+
+    def mousePressEvent(self, event) -> None:
+        self._last = event.globalPosition().y()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._last is None:
+            return
+        # Posición **global**: la esquinita se mueve con el panel al crecer, así
+        # que la local daría un salto en cada fotograma.
+        current = event.globalPosition().y()
+        self._on_resize(int(current - self._last))
+        self._last = current
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._last = None
+
+
 class FittedList:
     """Lista con alto fijo a su contenido (hasta un tope) y estirable con un asa.
 
@@ -82,18 +132,28 @@ class FittedList:
     una constante) para que siga valiendo si cambia la fuente; sin filas vale
     ``fallback``. ``window_height`` es una función que da el alto de la ventana:
     el asa no deja estirar la lista más allá de ella.
+
+    ``cap`` es el tope del alto automático: un número fijo (Migración) o una
+    **función** que mire el hueco libre actual (Carpetas, que crece con la
+    pestaña). ``max_height``, si se pasa, limita además hasta dónde puede
+    estirar el usuario; sin él, el tope del asa es ``window_height - 200``.
     """
 
-    def __init__(self, scroll, layout, cap: int, floor_rows: int,
-                 fallback: int, window_height):
+    def __init__(self, scroll, layout, cap, floor_rows: int,
+                 fallback: int, window_height, max_height=None):
         self.scroll = scroll
         self.layout = layout
         self.cap = cap
         self.floor_rows = floor_rows
         self.fallback = fallback
         self._window_height = window_height
+        self._max_height = max_height
         # Alto elegido por el usuario con el asa; ``None`` es "el del contenido".
         self.chosen = None
+
+    def _cap_height(self) -> int:
+        """El tope del alto automático, resolviendo si ``cap`` es función."""
+        return int(self.cap()) if callable(self.cap) else int(self.cap)
 
     def content_height(self) -> int:
         """Alto que pediría el contenido, sin topes.
@@ -127,13 +187,15 @@ class FittedList:
 
     def fit(self) -> None:
         """Fija el alto: el elegido con el asa o el del contenido, sobre el suelo."""
-        height = self.chosen or min(self.content_height(), self.cap)
+        height = self.chosen or min(self.content_height(), self._cap_height())
         self.scroll.setFixedHeight(max(self.floor(), int(height)))
 
     def resize(self, delta: int) -> None:
-        """Arrastró el asa: el alto nuevo queda entre el suelo y la ventana."""
+        """Arrastró el asa: el alto nuevo queda entre el suelo y su tope."""
         minimum = self.floor()
-        maximum = max(minimum, self._window_height() - 200)
+        maximum = (self._max_height() if self._max_height is not None
+                   else self._window_height() - 200)
+        maximum = max(minimum, maximum)
         wanted = self.scroll.height() + delta
         self.chosen = max(minimum, min(int(wanted), maximum))
         self.scroll.setFixedHeight(self.chosen)

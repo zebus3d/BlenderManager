@@ -81,6 +81,7 @@
   "User prefs": "ユーザー設定",
   "Drag the corner to make the settings list taller or shorter.": "隅をドラッグして設定リストの高さを変更します。",
   "Drag the corner to make the saved copies list taller or shorter.": "隅をドラッグして保存済みコピーのリストの高さを変更します。",
+  "Drag the corner to make the list of folders taller or shorter.": "隅をドラッグしてフォルダーリストの高さを変更します。",
   "Launch this version with the console visible: Python output and script errors.": "このバージョンをコンソール表示で起動します: Python の出力とスクリプトのエラーを確認できます。",
   "Pick the version whose settings you want to reset or put back.": "設定をリセットまたは復元したいバージョンを選択します。",
   "The version whose settings are reset or restored.": "設定がリセットまたは復元されるバージョン。",

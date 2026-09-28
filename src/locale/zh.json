@@ -81,6 +81,7 @@
   "User prefs": "用户偏好",
   "Drag the corner to make the settings list taller or shorter.": "拖动角落可加高或缩短设置列表。",
   "Drag the corner to make the saved copies list taller or shorter.": "拖动角落可加高或缩短已保存副本列表。",
+  "Drag the corner to make the list of folders taller or shorter.": "拖动角落可加高或缩短文件夹列表。",
   "Launch this version with the console visible: Python output and script errors.": "在显示控制台的情况下启动此版本：Python 输出和脚本错误。",
   "Pick the version whose settings you want to reset or put back.": "选择你希望重置或恢复设置的版本。",
   "The version whose settings are reset or restored.": "设置被重置或恢复的版本。",

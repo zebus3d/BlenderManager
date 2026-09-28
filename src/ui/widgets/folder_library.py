@@ -36,7 +36,8 @@ from ui.widgets.dialogs import (AppDialog, ProgressDialog, confirm, show_error,
                                 show_info)
 from ui.widgets.folders import MAX_VISIBLE_ROWS, TYPE_LABELS, FolderRow
 from ui.widgets.labels import ElidedLabel
-from ui.widgets.layouts import clear_layout, list_scroll
+from ui.widgets.layouts import (CornerGrip, FittedList, clear_layout,
+                                list_scroll)
 from ui.widgets.shell import write_problem
 
 
@@ -95,12 +96,20 @@ class FolderLibraryMixin:
         lay.addWidget(self.simple_box)
 
         # --- modo ramificado: la lista de carpetas
+        #
+        # La lista **crece con su contenido** en vez de nacer con cuatro filas
+        # fijas: antes se quedaba con el alto que le daba Qt (media fila
+        # cortada) mientras sobraba sitio debajo. ``FittedList`` la fija al
+        # contenido y ``_folder_list_cap`` le dice cuánto cabe de verdad en la
+        # pestaña, así que si hay hueco se estira y si no, sale la barra.
         self.folder_list, self.folder_body = list_scroll(
             "FolderList", "FolderListBody", spacing=6, align_top=False)
-        self.folder_list.setMaximumHeight(
-            MAX_VISIBLE_ROWS * FolderRow.HEIGHT + (MAX_VISIBLE_ROWS - 1) * 6)
         self.folder_body.addStretch()
         lay.addWidget(self.folder_list)
+        self.folder_fit = FittedList(
+            self.folder_list, self.folder_body, self._folder_list_cap, 1,
+            MAX_VISIBLE_ROWS * FolderRow.HEIGHT + (MAX_VISIBLE_ROWS - 1) * 6,
+            self.height, max_height=self._folder_list_cap)
 
         add_row = QHBoxLayout()
         add_row.addStretch()
@@ -114,8 +123,77 @@ class FolderLibraryMixin:
         add_row.addWidget(self.add_folder_btn)
         lay.addLayout(add_row)
 
+        # Asa en la esquina inferior derecha de la tarjeta: permite bajar el
+        # alto a mano (y entonces sí aparece la barra de scroll) sin tener que
+        # encoger la ventana. Por defecto la lista se ajusta sola al hueco.
+        self.folder_grip = CornerGrip(
+            self._resize_folder_list,
+            tooltip=tr("Drag the corner to make the list of folders taller "
+                       "or shorter."))
+        card.set_grip(self.folder_grip)
+
         self._rebuild_folder_rows()
         return card
+
+    def _folder_list_cap(self) -> int:
+        """Alto que le cabe a la lista de carpetas dentro de su pestaña.
+
+        Se mide desde la página (``SettingsTabPage``) hacia abajo descontando
+        lo que ocupa el resto de la tarjeta (título, avisos y el botón de
+        añadir). Al ser una función y no un número, se recalcula en cada
+        ``fit``: si el usuario agranda la ventana, la lista usa el hueco nuevo
+        sin tocar nada.
+        """
+        page = self.folder_list
+        while page is not None and page.objectName() != "SettingsTabPage":
+            page = page.parentWidget()
+        card = self.folder_list.parentWidget()
+        fallback = MAX_VISIBLE_ROWS * FolderRow.HEIGHT + (MAX_VISIBLE_ROWS - 1) * 6
+        if page is None or card is None:
+            return fallback
+        margins = page.layout().contentsMargins()
+        available = page.height() - margins.top() - margins.bottom()
+        lay = card.layout()
+        if lay is None:
+            return max(0, available)
+        edges = lay.contentsMargins()
+        overhead = edges.top() + edges.bottom()
+        visible = 0
+        for index in range(lay.count()):
+            item = lay.itemAt(index)
+            widget = item.widget()
+            if widget is self.folder_list:
+                continue
+            if widget is not None:
+                if not widget.isVisibleTo(card):
+                    continue
+                overhead += widget.sizeHint().height()
+            else:
+                overhead += item.sizeHint().height()
+            visible += 1
+        overhead += lay.spacing() * max(0, visible - 1)
+        return max(0, available - overhead)
+
+    def _on_settings_tab_changed(self, index: int) -> None:
+        """Al abrir Carpetas, la lista se mide con la pestaña ya a su tamaño."""
+        if index == self.FOLDERS_TAB:
+            self._fit_folder_list()
+
+    def _fit_folder_list(self) -> None:
+        """Ajusta la lista al hueco actual (y respeta el alto elegido a mano)."""
+        fit = getattr(self, "folder_fit", None)
+        if fit is None:
+            return
+        cap = self._folder_list_cap()
+        # Si el usuario estiró la lista y ahora la ventana es más baja, el alto
+        # elegido ya no cabe: se recorta al hueco en vez de desbordar.
+        if fit.chosen is not None and fit.chosen > cap:
+            fit.chosen = max(fit.floor(), cap)
+        fit.fit()
+
+    def _resize_folder_list(self, delta: int) -> None:
+        """Arrastró el asa de la lista de carpetas (ver ``FittedList``)."""
+        self.folder_fit.resize(delta)
 
     def _branched(self) -> bool:
         """True si hay que enseñar la lista en vez del campo de siempre."""
@@ -130,6 +208,7 @@ class FolderLibraryMixin:
         self.simple_box.setVisible(not branched)
         self.folder_list.setVisible(branched)
         self.add_folder_btn.setVisible(branched)
+        self.folder_grip.setVisible(branched)
         self.folders_hint.setText(tr(
             "Each download goes to the folder that takes it. "
             "Locked folders are only scanned.") if branched
@@ -152,7 +231,10 @@ class FolderLibraryMixin:
             row.remove_requested.connect(self._on_folder_remove_requested)
             self.folder_body.insertWidget(self.folder_body.count() - 1, row)
             self.folder_rows[channels.normalize_path(folder.path)] = row
+        # El aviso de tipos huérfanos ocupa alto, así que se decide antes de
+        # medir el hueco que le queda a la lista.
         self._refresh_folder_warning()
+        self._fit_folder_list()
         self._refresh_dest_summary()
 
     @staticmethod
