@@ -129,6 +129,14 @@ UPDATE_INTERVALS = (1, 5, 15, 30, 60, 180)
 DEFAULT_UPDATE_INTERVAL = 30
 
 
+# Cuántas versiones de cada fork (Bforartists, UPBGE) se enseñan en la nube.
+# Los dos listados son largos (Bforartists acumula 30 y pico versiones y cada
+# una es una petición WebDAV); bajarlos todos ralentiza la pestaña sin que casi
+# nadie mire más allá de las últimas. 0 = sin límite (ver ``Settings``).
+FORK_VERSION_LIMITS = (0, 10, 25, 50)
+DEFAULT_FORK_VERSION_LIMIT = 10
+
+
 # Versión del esquema de ``settings.json``. Sube cuando cambia la forma del
 # fichero y hay que convertir el de la versión anterior. Sirve para distinguir
 # "esto viene de una app vieja" de "el usuario se quedó sin carpetas": sin el
@@ -286,6 +294,35 @@ def _clean_bool_map(value) -> dict:
             if isinstance(key, str) and key}
 
 
+def _version_key(version: str) -> tuple:
+    """Clave comparable de una versión para ordenar (``4.5.10`` > ``4.5.9``).
+
+    ``Build.sort_key`` es texto y compara "5.10" < "5.9"; aquí hace falta el
+    número de verdad para recortar las últimas versiones de un fork.
+    """
+    parts = []
+    for piece in (version or "").split("."):
+        try:
+            parts.append(int(piece))
+        except ValueError:
+            break
+    return tuple(parts) or (0,)
+
+
+def _clean_fork_limit(value) -> int:
+    """Normaliza cuántas versiones de un fork se enseñan (0 = todas).
+
+    Un valor no numérico, negativo o que no esté entre las opciones cae al de
+    fábrica: un ``settings.json`` editado a mano no puede dejar la nube sin
+    límite cuando el usuario pidió 10, ni al revés.
+    """
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_FORK_VERSION_LIMIT
+    return limit if limit in FORK_VERSION_LIMITS else DEFAULT_FORK_VERSION_LIMIT
+
+
 def _clean_snapshot_keep(value) -> int:
     """Normaliza cuántas instantáneas se conservan (0 = sin límite).
 
@@ -402,6 +439,13 @@ class Settings:
     # sus fuentes de descarga.
     enable_bforartists: bool = False
     enable_upbge: bool = False
+    # Cuántas de las versiones **más recientes** de cada fork se enseñan en la
+    # nube (0 = todas). El listado de Bforartists es largo y cada versión es
+    # una petición WebDAV: con el tope puesto la pestaña carga antes y el
+    # usuario solo ve lo que de verdad va a usar. Es un ajuste por fork, pero
+    # uno solo para los dos (si a alguien le sobran 10 Bforartists, lo mismo le
+    # vale para UPBGE).
+    fork_version_limit: int = DEFAULT_FORK_VERSION_LIMIT
     # Cuántos ajustes guardados (instantáneas) se conservan por versión. Al
     # crear uno nuevo se borran los más viejos. 0 = sin límite.
     snapshot_keep: int = 5
@@ -462,6 +506,7 @@ class Settings:
                                                 False)),
             enable_bforartists=bool(data.get("enable_bforartists", False)),
             enable_upbge=bool(data.get("enable_upbge", False)),
+            fork_version_limit=_clean_fork_limit(data.get("fork_version_limit")),
             snapshot_keep=_clean_snapshot_keep(data.get("snapshot_keep")),
         )
         # La biblioteca de carpetas: o se lee, o se convierte la del esquema
@@ -537,6 +582,38 @@ class Settings:
         if self.enable_upbge:
             forks.append(FORK_UPBGE)
         return forks
+
+    def limit_forks(self, builds) -> list:
+        """Recorta las versiones de los forks a las ``fork_version_limit`` últimas.
+
+        Con ``fork_version_limit`` a 0 (o si no hay límite que valga) devuelve
+        la lista tal cual. Las compilaciones de Blender **no se tocan**: el
+        ajuste es solo para los forks, que son los que traen decenas de
+        versiones. La comparación es por versión (mayor.menor.parche) y, en
+        empate, por fecha, que es como se ordena la nube.
+        """
+        if not self.fork_version_limit:
+            return builds
+        keep = self.fork_version_limit
+        forks = [build for build in builds if build.fork]
+        if not forks:
+            return builds
+        # Lista de versiones distintas por fork, de la más nueva a la más vieja.
+        versiones = {}
+        for build in forks:
+            versiones.setdefault(build.fork, {})
+            clave = _version_key(build.version)
+            actual = versiones[build.fork].get(clave)
+            if actual is None or build.mtime > actual:
+                versiones[build.fork][clave] = build.mtime
+        recortadas = {}
+        for fork, vistas in versiones.items():
+            ordenadas = sorted(vistas, key=lambda clave: (clave, vistas[clave]),
+                               reverse=True)
+            recortadas[fork] = set(ordenadas[:keep])
+        return [build for build in builds
+                if not build.fork
+                or _version_key(build.version) in recortadas.get(build.fork, set())]
 
     def active_build_types(self) -> tuple:
         """Tipos de carpeta con sentido con los forks que hay activados."""

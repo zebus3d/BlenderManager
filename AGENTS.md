@@ -106,7 +106,13 @@ tras las opciones experimentales, nunca como pestaña normal.
 Son **programas aparte basados en Blender**, no canales suyos. Todo el soporte
 vive en `src/services/forks.py` (sin Qt, con `urllib`) y **se activa desde
 Ajustes > Descargas** (`enable_bforartists`/`enable_upbge`, apagados por
-defecto). El identificador viaja en `model.build.FORK_LABELS`
+defecto). En esa misma tarjeta hay un tope de **cuántas versiones se enseñan**
+por fork (`fork_version_limit`: 0=Todas, 10 por defecto, 25, 50): el listado de
+Bforartists acumula 30 y pico versiones y cada una cuesta una petición WebDAV,
+así que con las últimas basta y la pestaña carga antes. El recorte lo hace
+`Settings.limit_forks` **solo en la tienda** (`build_lists._filtered`), no en
+`available_for`, para que el aviso de actualización de las instaladas siga
+viendo todas. El identificador viaja en `model.build.FORK_LABELS`
 (`""`=Blender, `bforartists`, `upbge`) y `Build.fork`/`InstalledBuild.fork` lo
 llevan; la interfaz pone el texto con `fork_label`/`fork_name`.
 
@@ -873,6 +879,14 @@ escucha en un `QLocalServer` con nombre (derivado del usuario y de la carpeta de
 config, así el modo portable no choca con la app instalada) y la segunda solo le
 pide que salga al frente y se va. `_restore_from_tray` trae la ventana al frente
 también cuando estaba escondida en la bandeja.
+
+**El icono de la bandeja está siempre visible mientras la app corre**, con la
+ventana abierta o escondida (lo crea `showEvent` → `_ensure_tray`). Antes solo
+se enseñaba mientras la ventana estaba oculta; se cambió a petición de los
+usuarios. Al restaurar desde la bandeja ya **no** se retira el icono
+(`_restore_from_tray` solo hace `showNormal`); sí se retira al cerrar la app de
+verdad, en `closeEvent`. Sin bandeja (`TrayIcon.available()`) no se crea nada y
+`_hide_to_tray` no hace nada, para no esconder la ventana sin poder volver.
 
 - **El relanzamiento del updater lleva `BLENDERMANAGER_RELAUNCH`** en el entorno
   (`updater._relaunch_env`). El binario nuevo arranca **antes** de que el viejo

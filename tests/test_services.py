@@ -1006,6 +1006,52 @@ class SettingsTests(unittest.TestCase):
         self.assertTrue(loaded.start_minimized)
         self.assertTrue(loaded.tray_hint_shown)
 
+    def test_el_tope_de_versiones_de_los_forks_se_guarda(self):
+        settings = settings_module.Settings()
+        # Por defecto se enseñan las 10 últimas de cada fork.
+        self.assertEqual(settings.fork_version_limit, 10)
+        settings.fork_version_limit = 0
+        settings.save()
+        self.assertEqual(settings_module.Settings.load().fork_version_limit, 0)
+
+    def test_un_tope_de_forks_inventado_cae_al_por_defecto(self):
+        (Path(self.tmp.name) / "settings.json").write_text(
+            json.dumps({"fork_version_limit": 7}), encoding="utf-8")
+        self.assertEqual(settings_module.Settings.load().fork_version_limit,
+                         settings_module.DEFAULT_FORK_VERSION_LIMIT)
+        (Path(self.tmp.name) / "settings.json").write_text(
+            json.dumps({"fork_version_limit": "muchas"}), encoding="utf-8")
+        self.assertEqual(settings_module.Settings.load().fork_version_limit,
+                         settings_module.DEFAULT_FORK_VERSION_LIMIT)
+
+    def test_limit_forks_recorta_solo_las_ultimas_de_cada_fork(self):
+        from model.build import FORK_BFORARTISTS, Build
+
+        def build(version, fork="", mtime=0):
+            return Build(version=version, branch=fork or "main", risk="stable",
+                         platform="linux", arch="x86_64", url="u",
+                         filename="f", fork=fork, mtime=mtime)
+
+        builds = [build("5.2"),
+                  build("5.2.0", FORK_BFORARTISTS, 100),
+                  build("5.1.0", FORK_BFORARTISTS, 90),
+                  build("5.0.0", FORK_BFORARTISTS, 80)]
+        settings = settings_module.Settings(fork_version_limit=2)
+        kept = settings.limit_forks(builds)
+        versiones = {b.version for b in kept if b.fork}
+        # Se quedan las dos últimas del fork; la de Blender no se toca.
+        self.assertEqual(versiones, {"5.2.0", "5.1.0"})
+        self.assertTrue(any(not b.fork for b in kept))
+
+    def test_limit_forks_con_todas_no_recorta(self):
+        from model.build import FORK_UPBGE, Build
+
+        builds = [Build(version="0.53", branch="upbge-weekly", risk="alpha",
+                        platform="linux", arch="x86_64", url="u",
+                        filename="f", fork=FORK_UPBGE)]
+        settings = settings_module.Settings(fork_version_limit=0)
+        self.assertEqual(len(settings.limit_forks(builds)), 1)
+
     def test_un_intervalo_inventado_cae_al_por_defecto(self):
         (Path(self.tmp.name) / "settings.json").write_text(
             json.dumps({"update_interval_min": -5}), encoding="utf-8")

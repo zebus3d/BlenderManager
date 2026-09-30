@@ -420,6 +420,10 @@ class BuildListsMixin:
         mano y los filtros de canal no filtraban nada.
         """
         builds = api.available_for(self.builds, self.platform, self.arch)
+        # El tope de versiones es solo de la tienda: el aviso de actualización
+        # de las instaladas (``available_for`` sin recortar) sigue viendo todo,
+        # o una diaria antigua de un fork dejaría de ofrecerse.
+        builds = self.settings.limit_forks(builds)
         return api.filter_builds(builds, self.channel, self.search,
                                  self.settings.favorites)
 

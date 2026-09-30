@@ -650,6 +650,17 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
 
 
 
+    def showEvent(self, event):
+        """Deja el icono en la bandeja mientras la ventana esté a la vista.
+
+        El icono vive siempre que la app corre, así que se muestra también al
+        enseñar la ventana por primera vez (la app arrancada normal, la
+        restaurada desde la bandeja o tras un ``git pull``). Si el escritorio
+        no tiene bandeja no se crea nada.
+        """
+        super().showEvent(event)
+        self._ensure_tray()
+
     def resizeEvent(self, event):
         """Refluye la rejilla al cambiar el ancho (recalcula columnas)."""
         super().resizeEvent(event)
@@ -701,21 +712,27 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         El objeto se reutiliza entre ocultados: crear y destruir el icono en
         cada uno era el camino a más de un fantasma en la bandeja.
         """
-        if self._tray is None:
+        if self._tray is None and TrayIcon.available():
             self._tray = TrayIcon(self)
             self._tray.restore_requested.connect(self._restore_from_tray)
             self._tray.quit_requested.connect(self._quit_from_tray)
+            # El icono está siempre visible mientras la app corre: con la
+            # ventana abierta y escondida. Así el usuario lo tiene a mano para
+            # volver o salir de verdad, y queda claro que la app sigue viva.
+            self._tray.show()
         return self._tray
 
     def _hide_to_tray(self) -> None:
-        """Oculta la ventana y deja el icono en la bandeja.
+        """Oculta la ventana, dejando el icono en la bandeja.
 
         El aviso de "sigue en la bandeja" se enseña **una sola vez** (y se
         recuerda en los ajustes): sin él, esconder la ventana es indistinguible
         de que la app se haya cerrado.
         """
         tray = self._ensure_tray()
-        tray.show()
+        if tray is None:
+            # Sin bandeja, esconder la ventana dejaría la app inaccesible.
+            return
         self.hide()
         if not self.settings.tray_hint_shown:
             tray.notify(
@@ -726,10 +743,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             self.settings.save()
 
     def _restore_from_tray(self) -> None:
-        """Vuelve a mostrar la ventana y retira el icono (solo está mientras
-        está oculta)."""
-        if self._tray is not None:
-            self._tray.hide()
+        """Vuelve a mostrar la ventana (el icono sigue en la bandeja)."""
         self.showNormal()
         self.raise_()
         self.activateWindow()
@@ -790,6 +804,10 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             event.ignore()
             self._hide_to_tray()
             return
+        # Cierra de verdad: el icono ya no tiene a qué volver, así que se
+        # retira. Sin esto quedaría un fantasma en la bandeja tras cerrar.
+        if self._tray is not None:
+            self._tray.hide()
         super().closeEvent(event)
 
     def _normal_geometry(self):

@@ -6,9 +6,12 @@ o el plugin *offscreen* de los tests). Por eso **todo** lo que oculta la ventana
 consulta antes ``available()``: esconder la app sin un icono al que volver la
 dejaría inaccesible, que es mucho peor que no tener bandeja.
 
-El icono solo se enseña mientras la ventana está oculta; al restaurarla se
-oculta. El menú tiene solo dos acciones —mostrar y salir de verdad— porque todo
-lo demás (tienda, ajustes...) ya vive en la ventana.
+El icono está **siempre visible** mientras la aplicación corre, tenga la ventana
+abierta o escondida: así el usuario sabe que sigue ahí y puede volver a ella o
+cerrarla de verdad desde el menú. (Antes solo se enseñaba mientras la ventana
+estaba oculta; se cambió a petición de los usuarios.) El menú tiene solo dos
+acciones —mostrar y salir de verdad— porque todo lo demás (tienda, ajustes...)
+ya vive en la ventana.
 """
 
 from PySide6.QtCore import QObject, Signal
@@ -62,15 +65,15 @@ class TrayIcon(QObject):
         return QSystemTrayIcon.isSystemTrayAvailable()
 
     def is_visible(self) -> bool:
-        """True mientras el icono está en la bandeja."""
+        """True si el icono está en la bandeja."""
         return self._tray.isVisible()
 
     def show(self) -> None:
-        """Pone el icono en la bandeja (solo está mientras la ventana se esconde)."""
+        """Pone el icono en la bandeja."""
         self._tray.show()
 
     def hide(self) -> None:
-        """Lo retira: sin ventana escondida no hay nada que restaurar."""
+        """Retira el icono."""
         self._tray.hide()
 
     def notify(self, title: str, text: str) -> None:

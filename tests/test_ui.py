@@ -368,6 +368,37 @@ class ForkUiTests(SettingsIsolated, unittest.TestCase):
         window.channel = "upbge"
         self.assertEqual([b.fork for b in window._filtered()], ["upbge"])
 
+    def test_el_tope_de_versiones_recorta_la_nube(self):
+        """Con el tope puesto solo salen las últimas versiones de cada fork."""
+        from model.build import Build
+
+        window = self._window()
+        bids = []
+        for minor in range(1, 13):
+            bids.append(Build(f"5.{minor}.0", "bforartists", "stable", "linux",
+                              "x86_64", "u", f"Bforartists-5.{minor}.0.tar.xz",
+                              mtime=minor, fork="bforartists"))
+        window.builds = bids
+        window.channel = "bforartists"
+        window.settings.fork_version_limit = 10
+        versiones = [b.version for b in window._filtered()]
+        self.assertEqual(len(versiones), 10)
+        # Son las 10 más nuevas, no las 10 primeras.
+        self.assertIn("5.12.0", versiones)
+        self.assertNotIn("5.1.0", versiones)
+        # Sin tope salen todas.
+        window.settings.fork_version_limit = 0
+        self.assertEqual(len(window._filtered()), 12)
+
+    def test_el_tope_de_versiones_se_guarda_al_elegirlo(self):
+        from services.settings import Settings
+
+        window = self._window()
+        index = window.fork_limit_combo.findData(25)
+        window.fork_limit_combo.setCurrentIndex(index)
+        self.assertEqual(window.settings.fork_version_limit, 25)
+        self.assertEqual(Settings.load().fork_version_limit, 25)
+
     def test_apagar_el_fork_saca_su_canal_puesto(self):
         window = self._window()
         window.bforartists_switch.setChecked(True)
@@ -1122,7 +1153,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
                         window.reset_zoom_slider, window.args_input,
                         window.close_tray_switch, window.autostart_switch,
                         window.update_switch, window.periodic_switch,
-                        window.experimental_switch):
+                        window.experimental_switch, window.fork_limit_combo):
             self.assertIsNotNone(control)
 
     def test_al_arrancar_no_se_asoma_ninguna_ventana_suelta(self):
@@ -3148,6 +3179,17 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         tray.quit_action.trigger()
         self.assertEqual((len(restaurar), len(salir)), (1, 1))
 
+    def test_el_icono_esta_visible_con_la_ventana_abierta(self):
+        """El icono vive siempre que la app corre, no solo escondida."""
+        window = self._window()
+        window.show()
+        self.app.processEvents()
+        self.assertIsNotNone(window._tray)
+        self.assertTrue(window._tray.is_visible())
+        # Sigue estando al restaurarla desde la bandeja.
+        window._restore_from_tray()
+        self.assertTrue(window._tray.is_visible())
+
     def test_cerrar_va_a_la_bandeja_si_esta_activado(self):
         window = self._window()
         self.assertTrue(window.close_to_tray)
@@ -3164,7 +3206,10 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         window.show()
         self.app.processEvents()
         window.close()
-        self.assertIsNone(window._tray)
+        self.assertFalse(window.isVisible())
+        # El icono ya no tiene a qué volver: se retira al cerrar de verdad.
+        if window._tray is not None:
+            self.assertFalse(window._tray.is_visible())
 
     def test_sin_bandeja_cerrar_cierra(self):
         """El fallback: sin bandeja, esconder la ventana la dejaría perdida."""
@@ -3197,7 +3242,9 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.app.processEvents()
         window.setWindowState(Qt.WindowMinimized)
         QTest.qWait(30)
-        self.assertIsNone(window._tray)
+        # El icono existe (siempre está visible con la app), pero la ventana
+        # no se escondió a la bandeja: sigue minimizada, no oculta.
+        self.assertFalse(window.isHidden())
 
     def test_el_aviso_de_la_bandeja_solo_sale_una_vez(self):
         from ui.widgets import main_window
@@ -3218,7 +3265,8 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(window._tray.is_visible())
         window._restore_from_tray()
         self.assertTrue(window.isVisible())
-        self.assertFalse(window._tray.is_visible())
+        # El icono sigue en la bandeja: está siempre que la app corre.
+        self.assertTrue(window._tray.is_visible())
 
     def test_salir_desde_la_bandeja_es_una_salida_de_verdad(self):
         window = self._window()

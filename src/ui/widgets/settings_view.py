@@ -228,6 +228,29 @@ class SettingsViewMixin:
         forks_hint.setWordWrap(True)
         lay.addWidget(forks_hint)
 
+        # Tope de versiones que se enseñan de cada fork. Bforartists acumula
+        # 30 y pico versiones y cada una cuesta una petición WebDAV; con las
+        # últimas basta para el uso normal, y quien las quiera todas pone
+        # "Todas". No afecta a Blender, solo a los forks.
+        row_limit = QHBoxLayout()
+        row_limit.addWidget(QLabel(tr("Versions per fork")))
+        row_limit.addStretch()
+        self.fork_limit_combo = QComboBox()
+        for limit in settings_service.FORK_VERSION_LIMITS:
+            self.fork_limit_combo.addItem(
+                tr("All") if limit == 0 else tr("Last {count}", count=limit),
+                limit)
+        index = self.fork_limit_combo.findData(self.settings.fork_version_limit)
+        self.fork_limit_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.fork_limit_combo.setToolTip(tr(
+            "How many of the newest Bforartists and UPBGE versions are shown "
+            "in the cloud.\nFewer versions load the tab faster; the files are "
+            "the same."))
+        self.fork_limit_combo.currentIndexChanged.connect(
+            self._on_fork_limit_changed)
+        row_limit.addWidget(self.fork_limit_combo)
+        lay.addLayout(row_limit)
+
         self._refresh_dest_summary()
         return card
 
@@ -563,6 +586,19 @@ class SettingsViewMixin:
         self.settings.save()
         self.apply_enabled_forks()
         self._rebuild_folder_rows()
+
+    def _on_fork_limit_changed(self, index: int) -> None:
+        """Guarda el tope de versiones de los forks y repinta la tienda.
+
+        No hay que volver a pedir el listado: el recorte se aplica al filtrar,
+        así que basta con reconstruir la lista que ya está en memoria.
+        """
+        limit = self.fork_limit_combo.itemData(index)
+        if limit is None:
+            return
+        self.settings.fork_version_limit = limit
+        self.settings.save()
+        self._rebuild_store()
 
     def _on_close_to_tray_toggled(self, value: bool) -> None:
         self.close_to_tray = value
