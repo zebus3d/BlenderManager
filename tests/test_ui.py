@@ -3299,8 +3299,8 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.assertFalse(window.close_tray_switch.isEnabled())
         self.assertFalse(window.minimize_tray_switch.isEnabled())
 
-    def test_sin_xwayland_no_se_ofrece_minimizar_a_la_bandeja(self):
-        """Wayland sin XWayland: el minimizado no se puede detectar siquiera."""
+    def test_sin_soporte_no_se_ofrece_minimizar_a_la_bandeja(self):
+        """Sin poder detectar el minimizado, 'cerrar' sigue; 'minimizar' no."""
         from ui.widgets import main_window
 
         with mock.patch.object(settings_view.detector,
@@ -3310,16 +3310,14 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(window.close_tray_switch.isEnabled())
         self.assertFalse(window.minimize_tray_switch.isEnabled())
 
-    def test_activar_minimizar_en_wayland_pide_reinicio(self):
+    def test_en_wayland_no_se_ofrece_minimizar_a_la_bandeja(self):
         from ui.widgets import main_window
 
         with mock.patch.object(settings_view.detector, "session_is_wayland",
                                return_value=True):
             window = self._window()
-            with mock.patch.object(window, "_show_message") as aviso:
-                window.minimize_tray_switch.setChecked(True)
-        self.assertTrue(window.settings.minimize_to_tray)
-        self.assertTrue(aviso.called)
+        self.assertTrue(window.close_tray_switch.isEnabled())
+        self.assertFalse(window.minimize_tray_switch.isEnabled())
 
     def test_arrancar_minimizado_deja_la_ventana_en_la_bandeja(self):
         from PySide6.QtTest import QTest

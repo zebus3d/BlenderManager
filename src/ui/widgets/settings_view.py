@@ -334,12 +334,6 @@ class SettingsViewMixin:
 
         minimize_tip = tr("Hide the window in the system tray when you minimize "
                           "it.\nClick the tray icon to bring it back.")
-        if detector.session_is_wayland():
-            # En Wayland el minimizado lo gestiona el compositor y no se puede
-            # detectar salvo en modo X11 (XWayland). Avisamos antes de activarlo.
-            minimize_tip = minimize_tip + "\n\n" + tr(
-                "On Wayland this needs X11 compatibility mode (XWayland); "
-                "restart the app to apply it.")
         row_tray_min = QHBoxLayout()
         row_tray_min.addWidget(QLabel(tr("Minimize to the system tray")))
         row_tray_min.addStretch()
@@ -354,8 +348,8 @@ class SettingsViewMixin:
                 switch.setEnabled(False)
                 switch.setToolTip(tray_unavailable)
         elif not detector.minimize_to_tray_supported():
-            # Wayland sin XWayland: no hay forma de enterarse de que se ha
-            # minimizado, así que la opción ni se ofrece.
+            # En Wayland no hay forma de enterarse de que se ha minimizado, así
+            # que la opción ni se ofrece.
             self.minimize_tray_switch.setEnabled(False)
             self.minimize_tray_switch.setToolTip(tr(
                 "Minimizing to the tray is not available on this desktop."))
@@ -609,11 +603,6 @@ class SettingsViewMixin:
         self.minimize_to_tray = value
         self.settings.minimize_to_tray = value
         self.settings.save()
-        if detector.session_is_wayland():
-            # El backend (Wayland o XWayland) se elige al arrancar: activar o
-            # desactivar esto no surte efecto hasta reiniciar.
-            self._show_message(
-                tr("Restart BlenderManager to apply the change."), 8)
 
     def _on_start_minimized_toggled(self, value: bool) -> None:
         self.start_minimized = value

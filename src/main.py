@@ -113,22 +113,6 @@ def _install_exception_hook() -> None:
     sys.excepthook = hook
 
 
-def _prefer_xwayland_for_tray(settings) -> None:
-    """Fuerza el backend X11 de Qt cuando "minimizar a la bandeja" lo exige.
-
-    En Wayland no existe el estado "ventana minimizada" en ``xdg-shell``: si el
-    botón de minimizar lo dibuja el compositor (KWin, decoraciones del servidor)
-    la aplicación no recibe ningún aviso, así que la ventana se queda en la
-    barra de tareas. La única forma de interceptarlo es correr bajo XWayland.
-    Como el backend de Qt se elige **antes** de crear ``QApplication``, esto se
-    decide aquí, al arrancar, y solo si el usuario activó esa opción (el resto
-    sigue en Wayland nativo). Es el equivalente a ``--ozone-platform=x11`` que
-    usan las apps Electron.
-    """
-    if detector.should_use_xwayland(settings.minimize_to_tray):
-        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
-
-
 def _start_window(window, start_minimized: bool) -> None:
     """Enseña la ventana, o la deja en la bandeja si se pidió arrancar oculto.
 
@@ -153,11 +137,10 @@ def run_ui(screenshot: str | None = None, debug: bool = False) -> int:
     """Arranca la aplicación Qt."""
     from services import settings as settings_service
 
-    # Los ajustes se leen (y el backend se decide) ANTES de importar la
-    # interfaz: Wayland o X11 tiene que quedar fijado antes de QApplication.
+    # Los ajustes se leen antes de crear la interfaz: de ahí salen el idioma y
+    # las medidas de la ventana.
     settings = settings_service.Settings.load()
     i18n.set_language(settings.language)
-    _prefer_xwayland_for_tray(settings)
 
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication

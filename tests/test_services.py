@@ -1154,29 +1154,20 @@ class DetectorTests(unittest.TestCase):
         self.assertFalse(detector.session_is_wayland({"XDG_SESSION_TYPE": "x11"}))
         self.assertFalse(detector.session_is_wayland({}))
 
-    def test_minimizar_a_la_bandeja_solo_es_imposible_sin_xwayland(self):
-        # Wayland sin DISPLAY (sin XWayland): no hay forma de detectar el
-        # minimizado del compositor, así que la opción no se puede ofrecer.
+    def test_minimizar_a_la_bandeja_no_se_ofrece_en_wayland(self):
+        # En Wayland el compositor no comunica el minimizado, ni con XWayland:
+        # correr bajo X11 es lo que choca con los atajos globales del
+        # compositor, así que la opción no se ofrece aunque haya DISPLAY.
         self.assertFalse(detector.minimize_to_tray_supported(
             {"XDG_SESSION_TYPE": "wayland"}))
-        # Wayland con XWayland: se cae a X11 y funciona.
-        self.assertTrue(detector.minimize_to_tray_supported(
+        self.assertFalse(detector.minimize_to_tray_supported(
             {"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}))
+        self.assertFalse(detector.minimize_to_tray_supported(
+            {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"}))
         # X11 de verdad, Windows o macOS: no hay problema.
         self.assertTrue(detector.minimize_to_tray_supported(
             {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}))
         self.assertTrue(detector.minimize_to_tray_supported({}))
-
-    def test_solo_se_fuerza_xwayland_si_lo_pide_el_usuario(self):
-        wayland = {"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}
-        self.assertTrue(detector.should_use_xwayland(True, wayland))
-        # Apagado, no se toca el backend aunque se esté en Wayland.
-        self.assertFalse(detector.should_use_xwayland(False, wayland))
-        # Sin XWayland no hay a dónde caer.
-        self.assertFalse(detector.should_use_xwayland(
-            True, {"XDG_SESSION_TYPE": "wayland"}))
-        # En X11, Windows o macOS no se cambia nada.
-        self.assertFalse(detector.should_use_xwayland(True, {"DISPLAY": ":0"}))
 
 
 class AutostartTests(unittest.TestCase):
@@ -1267,33 +1258,6 @@ class AutostartTests(unittest.TestCase):
         command = autostart._exec_command()
         self.assertEqual(command[0], sys.executable)
         self.assertTrue(command[1].endswith("main.py"))
-
-
-class XwaylandStartupTests(unittest.TestCase):
-    """Elegir el backend X11 al arrancar cuando la bandeja lo necesita."""
-
-    def test_se_fuerza_xwayland_solo_con_la_opcion_en_wayland(self):
-        import main
-
-        encendida = mock.Mock(minimize_to_tray=True)
-        apagada = mock.Mock(minimize_to_tray=False)
-        wayland = {"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}
-
-        with mock.patch.dict(os.environ, wayland, clear=True):
-            main._prefer_xwayland_for_tray(encendida)
-            self.assertEqual(os.environ.get("QT_QPA_PLATFORM"), "xcb")
-
-        # Con la opción apagada el backend no se toca.
-        with mock.patch.dict(os.environ, wayland, clear=True):
-            main._prefer_xwayland_for_tray(apagada)
-            self.assertIsNone(os.environ.get("QT_QPA_PLATFORM"))
-
-        # Un backend ya elegido por el usuario se respeta.
-        with mock.patch.dict(os.environ,
-                             {**wayland, "QT_QPA_PLATFORM": "wayland"},
-                             clear=True):
-            main._prefer_xwayland_for_tray(encendida)
-            self.assertEqual(os.environ["QT_QPA_PLATFORM"], "wayland")
 
 
 class ElevateTests(unittest.TestCase):
